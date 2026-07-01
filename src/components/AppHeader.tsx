@@ -1,4 +1,6 @@
 import Link from "next/link"
+import { signOut } from "@/lib/auth"
+import { LogOut } from "lucide-react"
 
 export function AppHeader({ planLabel }: { planLabel: string }) {
   return (
@@ -10,9 +12,25 @@ export function AppHeader({ planLabel }: { planLabel: string }) {
           </span>
           <span className="text-lg font-bold tracking-tight text-[#1a1a2e]">Engage Campaign</span>
         </Link>
-        <span className="rounded-full border border-border bg-[#f4f6f9] px-3 py-1 text-xs font-medium text-muted-foreground">
-          {planLabel} plan
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="rounded-full border border-border bg-[#f4f6f9] px-3 py-1 text-xs font-medium text-muted-foreground">
+            {planLabel} plan
+          </span>
+          <form
+            action={async () => {
+              "use server"
+              await signOut({ redirectTo: "/sign-in" })
+            }}
+          >
+            <button
+              type="submit"
+              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-[#1a1a2e]"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Sign out
+            </button>
+          </form>
+        </div>
       </div>
     </header>
   )

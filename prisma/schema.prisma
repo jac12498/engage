@@ -1,0 +1,234 @@
+// EngageCampaign data layer.
+//
+// IMPORTANT: every model is bound to the `engagecampaign` Postgres schema via
+// `@@schema`. This app shares the Supabase database with the existing Engage app
+// (version10.3, which owns `public`), so isolation is the safety boundary —
+// EngageCampaign's Prisma never references or migrates anything in `public`.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["engagecampaign"]
+}
+
+// ─── NextAuth ────────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+  campaign      Campaign?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@schema("engagecampaign")
+}
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+  @@schema("engagecampaign")
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@schema("engagecampaign")
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+  @@schema("engagecampaign")
+}
+
+// ─── Campaign profile + entitlement ──────────────────────────────────────────
+
+model Campaign {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Candidate / office profile (powers AI Communications + Candidate Website)
+  candidateName String
+  office        String
+  party         String?
+  bio           String? @db.Text
+  tagline       String?
+  website       String?
+
+  // Candidate knowledge — gathered via the guided interview. The richer this is,
+  // the better-grounded every generated communication (and, later, the website).
+  education          String? @db.Text
+  experience         String? @db.Text
+  whyRunning         String? @db.Text
+  coreValues         String? @db.Text
+  politicalLean      String? @db.Text // short narrative summary of the candidate's lean/positions
+  voiceTone          String? // preferred tone, e.g. "warm and plainspoken"
+  interview          Json? // raw structured interview answers (e.g. the lean questionnaire)
+  interviewUpdatedAt DateTime?
+
+  // District link — the bridge to voter records. We reuse the shared district
+  // hierarchy that the existing app owns in `public.districts` (read-only). On
+  // onboarding we snapshot the chosen district so voter-universe queries never
+  // need a cross-schema join: `districtQueryString` is the URL-encoded
+  // field=value filter (| = OR) that selects this district's voters from the
+  // voter parquet via DuckDB, exactly as version10.3 does.
+  state              String? // 2-letter or full state name; drives coverage gating (see lib/coverage)
+  district           String? // human-readable district name (e.g. "Ulster County Legislature District 23")
+  districtId         String? // UUID of the public.districts row chosen at onboarding
+  districtQueryString String? // snapshot of districts.query_string → voter-file filter
+  districtVoterCount  Int? // snapshot of districts.voter_count at selection time
+
+  // Entitlement: which plan this account is on. Default free tier = Starter.
+  plan String @default("starter") // starter | campaign | committee
+
+  // AI Communications
+  aiModel              String? // preferred generation model (Campaign+ can select); null = default Haiku
+  generationsThisMonth Int      @default(0)
+  revisionsThisMonth   Int      @default(0) // every 5th revision charges one generation credit
+  crawlsThisMonth      Int      @default(0) // website-crawl references this month
+  billingPeriodStart   DateTime @default(now())
+
+  topics       Topic[]
+  generations  Generation[]
+  contextItems ContextItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@schema("engagecampaign")
+}
+
+// ─── AI Communications ───────────────────────────────────────────────────────
+
+// A saved AI-generated communication. Ported from the archived Amplify app and
+// extended with `model` (which AI model produced it) and `newsItemId` (the news
+// item used to ground it, if any).
+model Generation {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  // Content format (e.g. speech, email, social_facebook, press_release …) and
+  // the medium it belongs to (speeches | letters | social | print).
+  type       String
+  medium     String? // grouping for the media sub-pages
+  title      String?
+  topicId    String? // optional Topic this piece is about
+  topic      Topic?  @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  issueId    String? // optional Issue used as the topic
+  newsItemId String? // optional NewsItem used as grounding
+  newsHook   String? // freeform topic / hook when no Topic is selected
+  model      String // AI model used, e.g. claude-haiku-4-5
+  prompt     String  @db.Text
+  content    String  @db.Text // current (latest) version's content
+  published  Boolean @default(false)
+
+  versions GenerationVersion[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([campaignId])
+  @@index([topicId])
+  @@schema("engagecampaign")
+}
+
+// One version in a generation's refine history. v1 = the original draft
+// (revisionNote null); each subsequent version records the note that produced
+// it, so the human↔AI collaboration is captured and browsable.
+model GenerationVersion {
+  id           String     @id @default(cuid())
+  generationId String
+  generation   Generation @relation(fields: [generationId], references: [id], onDelete: Cascade)
+  versionNo    Int
+  content      String     @db.Text
+  revisionNote String?    @db.Text
+  model        String
+  createdAt    DateTime   @default(now())
+
+  @@index([generationId])
+  @@schema("engagecampaign")
+}
+
+// A "hot topic" — a specific subject to communicate about. Mirrors v10.3's
+// CommunicationsTopic: a key message + audience + occasion + talking points that
+// a generation targets (distinct from the candidate's standing Issue positions).
+model Topic {
+  id             String       @id @default(cuid())
+  campaignId     String
+  campaign       Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  title          String
+  keyMessage     String?       @db.Text
+  targetAudience String?
+  occasion       String?
+  talkingPoints  String[] // ordered by priority (most → least important)
+  generations    Generation[]
+  contextItems   ContextItem[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([campaignId])
+  @@schema("engagecampaign")
+}
+
+// Every piece of grounding is a ContextItem. Two orthogonal dimensions:
+//   type  — "note" (plain background) | "position" (stance + keyPoints) |
+//           "reference" (press/article with url + source)
+//   scope — topicId null → GENERAL (every generation); topicId set → only when
+//           that Topic is used (mirrors v10.3's CampaignIntelligence.commTopicId).
+// Auto-injected by scope: general items + the selected topic's items.
+model ContextItem {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  topicId    String?
+  topic      Topic?   @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  type      String   @default("note")
+  title     String? // position: issue name; reference: headline; note: optional label
+  body      String   @db.Text // position: the stance; reference: summary; note: the text
+  keyPoints String[] // positions only (ordered talking points)
+  url       String? // references only
+  source    String? // references only
+  refType   String? // references only: "webpage" | "document" (PDF)
+  order     Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([campaignId])
+  @@index([topicId])
+  @@schema("engagecampaign")
+}
