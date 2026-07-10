@@ -1,6 +1,14 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import { ClipboardList, BookOpen, Lightbulb, ArrowRight, Check } from "lucide-react"
+import {
+  ClipboardList,
+  BookOpen,
+  Lightbulb,
+  ArrowRight,
+  Check,
+  GraduationCap,
+  Scale,
+} from "lucide-react"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { computeKnowledge } from "@/lib/comms/interview"
@@ -66,6 +74,21 @@ export default async function CommunicationsOverview() {
       label: "Context",
       desc: "Notes, positions & references that ground your drafts",
       meta: `${counts.contextItems} item${counts.contextItems === 1 ? "" : "s"}`,
+    },
+  ]
+
+  const learn = [
+    {
+      href: "/communications/guide",
+      icon: GraduationCap,
+      label: "Writing Guide",
+      desc: "Get the most out of AI-assisted writing in five steps",
+    },
+    {
+      href: "/communications/models",
+      icon: Scale,
+      label: "Choosing a Model",
+      desc: "The same speech from each model — and what the credits buy",
     },
   ]
 
@@ -152,6 +175,33 @@ export default async function CommunicationsOverview() {
               <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
             </Link>
           ))}
+        </div>
+      </div>
+
+      {/* Learn */}
+      <div>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          Learn
+        </h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {learn.map((l) => {
+            const Icon = l.icon
+            return (
+              <Link
+                key={l.href}
+                href={l.href}
+                className="group flex items-start gap-4 rounded-xl border border-border bg-white p-5 transition-colors hover:border-[#1b3a6b]/40"
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#1b3a6b]/5 text-[#1b3a6b] transition-colors group-hover:bg-[#1b3a6b] group-hover:text-white">
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-[#1a1a2e]">{l.label}</h3>
+                  <p className="mt-0.5 text-sm text-muted-foreground">{l.desc}</p>
+                </div>
+              </Link>
+            )
+          })}
         </div>
       </div>
 

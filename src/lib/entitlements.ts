@@ -100,40 +100,53 @@ export const PLAN_MODULES: Record<PlanId, ModuleId[]> = {
 /** The voter file (a core data surface, not a pillar module) unlocks at Campaign. */
 export const VOTER_FILE_MIN_PLAN: PlanId = "campaign"
 
-// ─── AI model selection ──────────────────────────────────────────────────────
+// ─── AI model selection & Model Credits ──────────────────────────────────────
+//
+// Every plan — including the free tier — may choose the model. Models cost
+// different numbers of Model Credits per generation, weighted to their relative
+// price: Haiku 1, Sonnet 3, Opus 5. A plan's monthly allotment (CREDIT_LIMITS)
+// is denominated in credits, so a free user gets 25 Haiku drafts, ~8 Sonnet, or
+// 5 Opus — any mix — with the same underlying cost ceiling regardless of choice.
 
 export interface AiModelDef {
   id: string
   name: string
   blurb: string
+  /** Model Credits charged per generation. */
+  credits: number
 }
 
-/** The free-tier default — cheap to serve, ideal for high generation volume. */
+/** The default model — cheap to serve, ideal for high generation volume. */
 export const DEFAULT_AI_MODEL = "claude-haiku-4-5"
 
-/** Models a user may pick from (Campaign+). Starter is pinned to the default. */
+/** Models any user may pick from, cheapest first. */
 export const SELECTABLE_AI_MODELS: AiModelDef[] = [
-  { id: "claude-haiku-4-5", name: "Haiku 4.5", blurb: "Fast and economical — great for everyday drafts." },
-  { id: "claude-sonnet-4-6", name: "Sonnet 4.6", blurb: "More nuanced writing for op-eds and longer pieces." },
+  { id: "claude-haiku-4-5", name: "Haiku 4.5", blurb: "Fast and economical — great for everyday drafts.", credits: 1 },
+  { id: "claude-sonnet-4-6", name: "Sonnet 4.6", blurb: "More nuanced writing for op-eds and longer pieces.", credits: 3 },
+  { id: "claude-opus-4-8", name: "Opus 4.8", blurb: "Our highest-quality writing for your most important pieces.", credits: 5 },
 ]
 
-/** Whether a plan may choose its generation model (vs. being pinned to Haiku). */
-export function canSelectModel(plan: PlanId): boolean {
-  return PLAN_ORDER.indexOf(plan) >= PLAN_ORDER.indexOf("campaign")
+/** Model Credits charged per generation, keyed by model id. */
+export const MODEL_CREDIT_COST: Record<string, number> = Object.fromEntries(
+  SELECTABLE_AI_MODELS.map((m) => [m.id, m.credits])
+)
+
+/** Credit cost of one generation on `modelId` (defaults to 1 for unknown ids). */
+export function creditCost(modelId: string | null | undefined): number {
+  return (modelId && MODEL_CREDIT_COST[modelId]) || 1
 }
 
 /**
- * Resolve which model a generation should actually use. Starter is always the
- * default Haiku; Campaign+ may use their saved preference if it's allowed.
+ * Resolve which model a generation should actually use: the caller's saved or
+ * requested preference if it's a known selectable model, else the default.
  */
-export function resolveModel(plan: PlanId, preferred: string | null | undefined): string {
-  if (!canSelectModel(plan)) return DEFAULT_AI_MODEL
+export function resolveModel(preferred: string | null | undefined): string {
   if (preferred && SELECTABLE_AI_MODELS.some((m) => m.id === preferred)) return preferred
   return DEFAULT_AI_MODEL
 }
 
-/** Monthly generation cap by plan (Starter is limited; paid tiers unlimited). */
-export const GENERATION_LIMITS: Record<PlanId, number | null> = {
+/** Monthly Model Credit allotment by plan (Starter is limited; paid tiers unlimited). */
+export const CREDIT_LIMITS: Record<PlanId, number | null> = {
   starter: 25,
   campaign: null,
   committee: null,

@@ -83,6 +83,7 @@ model Campaign {
   candidateName String
   office        String
   party         String?
+  committeeName String? // registered campaign committee, e.g. "Friends of Jane Candidate" — powers the legal "Paid for by" disclaimer
   bio           String? @db.Text
   tagline       String?
   website       String?
@@ -114,15 +115,18 @@ model Campaign {
   plan String @default("starter") // starter | campaign | committee
 
   // AI Communications
-  aiModel              String? // preferred generation model (Campaign+ can select); null = default Haiku
-  generationsThisMonth Int      @default(0)
-  revisionsThisMonth   Int      @default(0) // every 5th revision charges one generation credit
-  crawlsThisMonth      Int      @default(0) // website-crawl references this month
+  aiModel            String? // preferred generation model (any plan can select); null = default Haiku
+  creditsThisMonth   Int      @default(0) @map("generationsThisMonth") // Model Credits consumed this month
+  revisionsThisMonth Int      @default(0) // every 5th revision charges the model's credit cost
+  crawlsThisMonth    Int      @default(0) // website-crawl references this month
   billingPeriodStart   DateTime @default(now())
 
   topics       Topic[]
   generations  Generation[]
   contextItems ContextItem[]
+  site         Website?
+  contacts     Contact[]
+  tags         Tag[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -230,5 +234,226 @@ model ContextItem {
 
   @@index([campaignId])
   @@index([topicId])
+  @@schema("engagecampaign")
+}
+
+// ─── Candidate Website ───────────────────────────────────────────────────────
+
+// One published-or-draft website per campaign. Content is auto-drafted from the
+// campaign profile (bio, why-running, values, positions, topics) via Claude,
+// then editable. Served publicly at /c/<slug> when `published`.
+model Website {
+  id         String   @id @default(cuid())
+  campaignId String   @unique
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  slug      String  @unique // public path segment: /c/<slug>
+  published Boolean @default(false)
+
+  // Theme
+  primaryColor String  @default("#1b3a6b")
+  accentColor  String  @default("#c4910a")
+  fontTheme    String  @default("classic") // named preset: classic | modern | serif
+  headshotData Bytes?  // uploaded candidate photo, stored in-DB (served via /api/website/headshot/[campaignId])
+  headshotMime String? // content-type of the uploaded photo, e.g. image/png — null = no headshot
+
+  // Calls to action
+  donateUrl    String? // external ActBlue / WinRed / Anedot link (no payment processing here)
+  contactEmail String?
+
+  pages   Page[]
+  signups VolunteerSignup[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@schema("engagecampaign")
+}
+
+// ─── Page/Block content model (Phase 1) ──────────────────────────────────────
+// A Website has many Pages; a Page has an ordered list of Blocks. Each Block is
+// one of a closed vocabulary of types (see src/lib/website/blocks.ts) with a
+// validated `props` JSON payload. Rendering, the editor palette, and the Phase 2
+// AI builder all read that single block registry. See docs/website-phase1-spec.md.
+model Page {
+  id        String  @id @default(cuid())
+  websiteId String
+  website   Website @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  slug      String // path segment; the isHome page is served at the site root. Unique per website.
+  title     String // nav label + <title>
+  navOrder  Int     @default(0)
+  showInNav Boolean @default(true)
+  published Boolean @default(true) // draft a page without unpublishing the whole site
+  isHome    Boolean @default(false) // exactly one per site; undeletable; served at root
+
+  blocks Block[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([websiteId, slug])
+  @@index([websiteId])
+  @@schema("engagecampaign")
+}
+
+model Block {
+  id     String @id @default(cuid())
+  pageId String
+  page   Page   @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  type  String // one of the v1 vocabulary; validated on write
+  order Int    @default(0)
+  props Json   // typed, validated per-type payload (BLOCK_SPECS[type].validate)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([pageId])
+  @@schema("engagecampaign")
+}
+
+// Raw intake from the public website volunteer form. Acts as a moderation queue:
+// signups arrive `pending`, then a reviewer Accepts (promotes to a Contact) or
+// Rejects. Kept separate from Contact so unauthenticated/spam input never lands
+// directly in the CRM.
+model VolunteerSignup {
+  id        String  @id @default(cuid())
+  websiteId String
+  website   Website @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  name      String
+  email     String
+  phone     String?
+  message   String? @db.Text
+  createdAt DateTime @default(now())
+
+  // Review workflow
+  status     String    @default("pending") // pending | accepted | rejected
+  reviewedAt DateTime?
+  contactId  String? // the Contact created/linked when accepted
+  contact    Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@index([websiteId])
+  @@index([websiteId, status])
+  @@index([contactId])
+  @@schema("engagecampaign")
+}
+
+// ─── Contacts / CRM ──────────────────────────────────────────────────────────
+
+// The unified contact list for a campaign — donors, volunteers, supporters, and
+// (later) matched voters, all in one place. Website volunteer signups flow in
+// here as `source = "volunteer_signup"` contacts.
+model Contact {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  firstName String
+  lastName  String
+
+  // A contact can hold several classifications at once (a supporter who is also
+  // a donor). Values from CONTACT_TYPES (supporter|volunteer|donor|voter|prospect|other).
+  types  String[] @default([])
+  source String   @default("manual") // manual | volunteer_signup | import
+
+  emails      ContactEmail[]
+  phones      ContactPhone[]
+  addresses   ContactAddress[]
+  contactNotes ContactNote[]
+  contactTags ContactTag[]
+  volunteerSignups VolunteerSignup[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([campaignId])
+  @@index([campaignId, lastName])
+  @@schema("engagecampaign")
+}
+
+// Multiple labeled emails per contact (label required, e.g. "Personal", "Work").
+model ContactEmail {
+  id        String  @id @default(cuid())
+  contactId String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  label     String
+  email     String
+  order     Int     @default(0)
+
+  @@index([contactId])
+  @@schema("engagecampaign")
+}
+
+// Multiple labeled phone numbers per contact (label required, e.g. "Mobile").
+model ContactPhone {
+  id        String  @id @default(cuid())
+  contactId String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  label     String
+  phone     String
+  order     Int     @default(0)
+
+  @@index([contactId])
+  @@schema("engagecampaign")
+}
+
+// Multiple labeled addresses per contact (label required, e.g. "Home", "Mailing",
+// "Business"). lat/lng/placeId are populated when entered via Google Places.
+model ContactAddress {
+  id        String  @id @default(cuid())
+  contactId String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  label     String
+  line1     String
+  line2     String?
+  city      String?
+  state     String?
+  zip       String?
+  lat       Float?
+  lng       Float?
+  placeId   String? // Google Place ID, when selected from autocomplete
+  order     Int     @default(0)
+
+  @@index([contactId])
+  @@schema("engagecampaign")
+}
+
+// A timestamped note in a contact's history (append-only log; newest first in UI).
+model ContactNote {
+  id        String   @id @default(cuid())
+  contactId String
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([contactId])
+  @@schema("engagecampaign")
+}
+
+// User-defined tags, scoped to a campaign. Reused across contacts (m:n via ContactTag).
+model Tag {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  name       String
+  createdAt  DateTime @default(now())
+
+  contactTags ContactTag[]
+
+  @@unique([campaignId, name])
+  @@index([campaignId])
+  @@schema("engagecampaign")
+}
+
+// Join table linking contacts to tags.
+model ContactTag {
+  contactId String
+  tagId     String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([contactId, tagId])
+  @@index([tagId])
   @@schema("engagecampaign")
 }

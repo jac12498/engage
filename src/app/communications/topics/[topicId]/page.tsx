@@ -27,7 +27,7 @@ export default async function TopicDetailPage({
     select: {
       id: true,
       plan: true,
-      generationsThisMonth: true,
+      creditsThisMonth: true,
       billingPeriodStart: true,
       topics: { orderBy: { title: "asc" }, select: { id: true, title: true } },
     },
@@ -75,7 +75,7 @@ export default async function TopicDetailPage({
         createdAt: g.createdAt.toISOString(),
       }))}
       plan={toPlanId(campaign.plan)}
-      generationsUsed={usedThisMonth(campaign.generationsThisMonth, campaign.billingPeriodStart)}
+      creditsUsed={usedThisMonth(campaign.creditsThisMonth, campaign.billingPeriodStart)}
     />
   )
 }

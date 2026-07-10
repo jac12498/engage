@@ -32,6 +32,7 @@ const PARTY_NEEDS_CUSTOM = new Set<string>(["Independent", "Other"])
 export function OnboardingForm({ topDistricts }: { topDistricts: DistrictNode[] }) {
   const [candidateName, setCandidateName] = useState("")
   const [office, setOffice] = useState("")
+  const [committeeName, setCommitteeName] = useState("")
   const [partyChoice, setPartyChoice] = useState("")
   const [partyCustom, setPartyCustom] = useState("")
 
@@ -124,14 +125,14 @@ export function OnboardingForm({ topDistricts }: { topDistricts: DistrictNode[] 
     if (!office.trim()) return setError("Please enter the office sought.")
     if (partyChoice === "Other" && !partyCustom.trim())
       return setError("Please enter your party name.")
-    if (!selected) return setError("Please select your district.")
 
     startTransition(async () => {
       const result = await submitOnboarding({
         candidateName,
         office,
         party: resolveParty(),
-        districtId: selected.id,
+        committeeName,
+        districtId: selected?.id,
       })
       if (result && !result.ok) setError(result.error)
     })
@@ -191,19 +192,34 @@ export function OnboardingForm({ topDistricts }: { topDistricts: DistrictNode[] 
               />
             )}
           </div>
+          <div className="sm:col-span-2">
+            <Field label="Committee name (optional)">
+              <input
+                value={committeeName}
+                onChange={(e) => setCommitteeName(e.target.value)}
+                placeholder="Friends of Jane Candidate"
+                className={inputCls}
+              />
+            </Field>
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              Your registered campaign committee. Used for the &ldquo;Paid for by&rdquo; line on your
+              website and communications. You can add or change this later.
+            </p>
+          </div>
         </div>
       </section>
 
       {/* District */}
       <section className="rounded-2xl border border-border bg-white p-6">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-[#c4910a]">
-          Your district
-          <span className="ml-0.5 text-red-500">*</span>
+          Your district (optional)
         </h2>
         <p className="mt-1.5 text-sm text-muted-foreground">
           Choose a district type, then the specific district. You can stop at any level, or keep
           drilling down to a town, ward, or legislative district. This is how we match your campaign
-          to the right voters.
+          to the right voters. Voter File, Voter Outreach, and Field Tools aren&rsquo;t available in
+          every state yet — AI Communications and your website work nationwide, so you can skip this
+          and add it later.
         </p>
 
         <div className="mt-5 space-y-4">

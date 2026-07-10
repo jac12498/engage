@@ -1,8 +1,9 @@
 "use client"
 
 import { useRef, useState, useTransition } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Loader2, Copy, Check, Sparkles, Wand2, RotateCcw } from "lucide-react"
+import { Loader2, Copy, Check, Sparkles, Wand2, RotateCcw, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { RefineComments } from "./RefineComments"
 import {
@@ -14,30 +15,39 @@ import {
   type Medium,
 } from "@/lib/comms/prompts"
 import {
-  canSelectModel,
   SELECTABLE_AI_MODELS,
-  GENERATION_LIMITS,
+  CREDIT_LIMITS,
   DEFAULT_AI_MODEL,
+  creditCost,
   type PlanId,
 } from "@/lib/entitlements"
 import { saveGeneration, getGenerationForEdit } from "@/app/communications/actions"
 import { HistoryPanel } from "./HistoryPanel"
+import { UpgradeModal } from "./UpgradeModal"
 import { inputCls, type TopicDTO, type GenDTO } from "./shared"
 
 type Version = { content: string; revisionNote: string | null; model: string }
+
+/** Which model-comparison tab a given medium deep-links to on the examples page. */
+const EXAMPLE_FORMAT: Record<Medium, string> = {
+  speeches: "speech",
+  letters: "letter",
+  social: "social",
+  print: "print",
+}
 
 export function MediumGenerator({
   medium,
   mediumLabel,
   plan,
-  generationsUsed,
+  creditsUsed,
   topics,
   generations,
 }: {
   medium: Medium
   mediumLabel: string
   plan: PlanId
-  generationsUsed: number
+  creditsUsed: number
   topics: TopicDTO[]
   generations: GenDTO[]
 }) {
@@ -56,7 +66,8 @@ export function MediumGenerator({
   const [lastModel, setLastModel] = useState(DEFAULT_AI_MODEL)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [used, setUsed] = useState(generationsUsed)
+  const [used, setUsed] = useState(creditsUsed)
+  const [showUpgrade, setShowUpgrade] = useState(false)
   const [saved, setSaved] = useState(false)
   const [copied, setCopied] = useState(false)
   const [saving, startSaving] = useTransition()
@@ -73,8 +84,12 @@ export function MediumGenerator({
   // The saved piece currently loaded for continued refinement (null = new draft).
   const [editingId, setEditingId] = useState<string | null>(null)
 
-  const limit = GENERATION_LIMITS[plan]
-  const canPickModel = canSelectModel(plan)
+  const limit = CREDIT_LIMITS[plan]
+  const remaining = limit != null ? Math.max(0, limit - used) : null
+  const selectedCost = creditCost(model)
+  // Overdraft: fewer credits left than the picked model costs, but still > 0.
+  // We let it run and charge only what's left — the last-generation upsell moment.
+  const overdraft = remaining != null && remaining > 0 && remaining < selectedCost
   const noTopics = topics.length === 0
   const selectedTopic = topics.find((t) => t.id === topicId) ?? null
 
@@ -97,8 +112,7 @@ export function MediumGenerator({
       })
 
       if (res.status === 429) {
-        const d = await res.json()
-        setError(`You've used all ${d.limit} generations this month. Upgrade to Campaign for unlimited.`)
+        setShowUpgrade(true)
         return
       }
       if (!res.ok || !res.body) {
@@ -120,7 +134,7 @@ export function MediumGenerator({
       // Start a fresh version history with this draft as v1.
       setVersions([{ content: acc, revisionNote: null, model: usedModel }])
       setActiveIndex(0)
-      const usedHeader = res.headers.get("X-Generations-Used")
+      const usedHeader = res.headers.get("X-Credits-Used")
       if (usedHeader) setUsed(Number(usedHeader))
     } catch {
       setError("Generation failed. Please try again.")
@@ -148,8 +162,7 @@ export function MediumGenerator({
       })
 
       if (res.status === 429) {
-        const d = await res.json()
-        setError(`You've hit your monthly limit (${d.limit}). Upgrade to Campaign for unlimited.`)
+        setShowUpgrade(true)
         return
       }
       if (!res.ok || !res.body) {
@@ -175,7 +188,7 @@ export function MediumGenerator({
         setActiveIndex(next.length - 1)
         return next
       })
-      const usedHeader = res.headers.get("X-Generations-Used")
+      const usedHeader = res.headers.get("X-Credits-Used")
       if (usedHeader) setUsed(Number(usedHeader))
     } catch {
       setError("Revision failed. Please try again.")
@@ -369,27 +382,32 @@ export function MediumGenerator({
 
           <div className="flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              {canPickModel ? (
-                <label className="flex items-center gap-2 text-sm">
-                  <span className="font-medium text-[#1a1a2e]">Model</span>
-                  <select
-                    value={model}
-                    onChange={(e) => setModel(e.target.value)}
-                    className="rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:border-[#1b3a6b] focus:ring-2 focus:ring-[#1b3a6b]/15"
-                  >
-                    {SELECTABLE_AI_MODELS.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  Model: Haiku 4.5 ·{" "}
-                  <span className="text-[#c4910a]">Upgrade to Campaign to choose your model.</span>
+              <label className="flex items-center gap-2 text-sm">
+                <span className="font-medium text-[#1a1a2e]">Model</span>
+                <select
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  className="rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:border-[#1b3a6b] focus:ring-2 focus:ring-[#1b3a6b]/15"
+                >
+                  {SELECTABLE_AI_MODELS.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name} · {m.credits} credit{m.credits > 1 ? "s" : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {overdraft && (
+                <p className="mt-1.5 text-xs text-[#c4910a]">
+                  Uses your last {remaining} credit{remaining! > 1 ? "s" : ""}.
                 </p>
               )}
+              <Link
+                href={`/communications/models?format=${EXAMPLE_FORMAT[medium]}`}
+                className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-[#c4910a] hover:underline"
+              >
+                See examples of each model
+                <ArrowRight className="h-3 w-3" />
+              </Link>
             </div>
             <div className="flex flex-col items-stretch gap-1 sm:items-end">
               <Button onClick={generate} disabled={generating} className="sm:w-52">
@@ -405,7 +423,7 @@ export function MediumGenerator({
               </Button>
               {limit != null && (
                 <p className="text-center text-xs text-muted-foreground sm:text-right">
-                  {used} / {limit} generations this month
+                  {remaining} of {limit} credits left this month
                 </p>
               )}
             </div>
@@ -490,6 +508,8 @@ export function MediumGenerator({
         </h2>
         <HistoryPanel generations={generations} onOpen={openGeneration} />
       </div>
+
+      <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} limit={limit ?? 0} />
     </div>
   )
 }

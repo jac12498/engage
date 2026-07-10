@@ -28,7 +28,7 @@ export async function loadMediumData(medium: Medium) {
 
   return {
     plan: toPlanId(campaign.plan),
-    generationsUsed: usedThisMonth(campaign.generationsThisMonth, campaign.billingPeriodStart),
+    creditsUsed: usedThisMonth(campaign.creditsThisMonth, campaign.billingPeriodStart),
     topics: campaign.topics.map((t) => ({
       id: t.id,
       title: t.title,

@@ -28,16 +28,16 @@ export async function POST(req: Request) {
 
   const plan = toPlanId(campaign.plan)
 
-  // Revisions are ~free: only every Nth one charges a credit (and is capped).
-  const consumed = await consumeRevision(plan, campaign)
+  const usedModel = resolveModel(body.model ?? campaign.aiModel)
+
+  // Revisions are ~free: only every Nth one charges (at the model's cost, capped).
+  const consumed = await consumeRevision(plan, campaign, usedModel)
   if (!consumed.ok) {
     return Response.json(
       { error: "limit_reached", used: consumed.used, limit: consumed.limit },
       { status: 429 }
     )
   }
-
-  const usedModel = resolveModel(plan, body.model ?? campaign.aiModel)
 
   // Same scope-based context as generation: general + the piece's topic.
   const contextItems = await prisma.contextItem.findMany({
@@ -78,7 +78,7 @@ export async function POST(req: Request) {
     headers: {
       "Content-Type": "text/plain; charset=utf-8",
       "X-Model": usedModel,
-      "X-Generations-Used": String(consumed.used),
+      "X-Credits-Used": String(consumed.used),
       "X-Charged": consumed.charged ? "1" : "0",
     },
   })

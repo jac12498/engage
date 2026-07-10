@@ -51,16 +51,16 @@ export async function POST(req: Request) {
   if (body.additionalContext?.trim()) contextBits.push(body.additionalContext.trim())
   const additionalContext = contextBits.join(". ")
 
-  // Monthly cap (Starter only).
-  const consumed = await consumeGeneration(plan, campaign)
+  const usedModel = resolveModel(body.model ?? campaign.aiModel)
+
+  // Charge the model's credit cost (Starter is capped; overdraft on last credits).
+  const consumed = await consumeGeneration(plan, campaign, usedModel)
   if (!consumed.ok) {
     return Response.json(
       { error: "limit_reached", used: consumed.used, limit: consumed.limit },
       { status: 429 }
     )
   }
-
-  const usedModel = resolveModel(plan, body.model ?? campaign.aiModel)
 
   // Auto-inject context by scope: general (topicId null) + the selected topic's items.
   const contextItems = await prisma.contextItem.findMany({
@@ -101,7 +101,7 @@ export async function POST(req: Request) {
     headers: {
       "Content-Type": "text/plain; charset=utf-8",
       "X-Model": usedModel,
-      "X-Generations-Used": String(consumed.used),
+      "X-Credits-Used": String(consumed.used),
     },
   })
 }

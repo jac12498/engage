@@ -8,6 +8,7 @@
 
 export type ContentType =
   | "press_release"
+  | "press_release_quote"
   | "email"
   | "fundraising_email"
   | "letter_to_editor"
@@ -22,6 +23,7 @@ export type ContentType =
 
 export const CONTENT_TYPES: ContentType[] = [
   "press_release",
+  "press_release_quote",
   "email",
   "fundraising_email",
   "letter_to_editor",
@@ -37,6 +39,7 @@ export const CONTENT_TYPES: ContentType[] = [
 
 export const CONTENT_TYPE_LABELS: Record<ContentType, string> = {
   press_release: "Press Release",
+  press_release_quote: "Press Release Quote",
   email: "Supporter Letter",
   fundraising_email: "Fundraising Email",
   letter_to_editor: "Letter to the Editor",
@@ -52,6 +55,7 @@ export const CONTENT_TYPE_LABELS: Record<ContentType, string> = {
 
 export const CONTENT_TYPE_ICONS: Record<ContentType, string> = {
   press_release: "📰",
+  press_release_quote: "💬",
   email: "✉️",
   fundraising_email: "💸",
   letter_to_editor: "🖊️",
@@ -86,7 +90,7 @@ export const MEDIUM_TYPES: Record<Medium, ContentType[]> = {
   speeches: ["speech", "talking_points"],
   letters: ["email", "fundraising_email", "letter_to_editor"],
   social: ["social_facebook", "social_twitter", "social_instagram"],
-  print: ["press_release", "op_ed", "flyer", "event_announcement"],
+  print: ["press_release", "press_release_quote", "op_ed", "flyer", "event_announcement"],
 }
 
 export function isMedium(value: string): value is Medium {
@@ -258,6 +262,18 @@ FOR IMMEDIATE RELEASE
 ###
 
 About ${candidateName}: [One-sentence boilerplate about the candidacy]`
+
+    case "press_release_quote":
+      return `Write a quote from ${candidateName} to be dropped into a press release that someone else is writing — for example an allied organization, coalition partner, agency, or another campaign asking ${candidateName} for a statement.
+
+Topic: ${issueTopic}${ctx}
+
+Provide three options the candidate can choose from, clearly labeled:
+- SHORT: one punchy sentence — a tight pull-quote
+- STANDARD: two sentences — the recommended default
+- EXTENDED: two to three sentences that add a specific detail or a forward-looking line
+
+Guidelines: First person, in ${candidateName}'s authentic voice. Each quote must stand on its own as a pull-quote, make one concrete point, and sound like a real person speaking — no boilerplate or clichés. Do NOT add attribution such as "said ${candidateName}" or any surrounding press-release text; provide only the three labeled quotes.`
 
     case "email":
       return `Write a supporter letter/email from ${candidateName}.

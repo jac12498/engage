@@ -14,13 +14,14 @@ import {
   type ContentType,
 } from "@/lib/comms/prompts"
 import {
-  canSelectModel,
   SELECTABLE_AI_MODELS,
-  GENERATION_LIMITS,
+  CREDIT_LIMITS,
   DEFAULT_AI_MODEL,
+  creditCost,
   type PlanId,
 } from "@/lib/entitlements"
 import { saveGeneration, getGenerationForEdit } from "@/app/communications/actions"
+import { UpgradeModal } from "./UpgradeModal"
 import { inputCls } from "./shared"
 
 type Version = { content: string; revisionNote: string | null; model: string }
@@ -28,13 +29,13 @@ type Version = { content: string; revisionNote: string | null; model: string }
 export function TopicGenerateDialog({
   topic,
   plan,
-  generationsUsed,
+  creditsUsed,
   initialGenerationId,
   onClose,
 }: {
   topic: { id: string; title: string }
   plan: PlanId
-  generationsUsed: number
+  creditsUsed: number
   /** When set, open this saved generation for continued refinement. */
   initialGenerationId?: string
   onClose: () => void
@@ -49,7 +50,8 @@ export function TopicGenerateDialog({
   const [lastModel, setLastModel] = useState(DEFAULT_AI_MODEL)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [used, setUsed] = useState(generationsUsed)
+  const [used, setUsed] = useState(creditsUsed)
+  const [showUpgrade, setShowUpgrade] = useState(false)
   const [saved, setSaved] = useState(false)
   const [copied, setCopied] = useState(false)
   const [saving, startSaving] = useTransition()
@@ -66,8 +68,10 @@ export function TopicGenerateDialog({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(!!initialGenerationId)
 
-  const limit = GENERATION_LIMITS[plan]
-  const canPickModel = canSelectModel(plan)
+  const limit = CREDIT_LIMITS[plan]
+  const remaining = limit != null ? Math.max(0, limit - used) : null
+  const selectedCost = creditCost(model)
+  const overdraft = remaining != null && remaining > 0 && remaining < selectedCost
 
   // Load an existing generation to continue refining.
   useEffect(() => {
@@ -110,8 +114,7 @@ export function TopicGenerateDialog({
         body: JSON.stringify({ type, topicId: topic.id, additionalContext: message, model }),
       })
       if (res.status === 429) {
-        const d = await res.json()
-        setError(`You've used all ${d.limit} generations this month. Upgrade to Campaign for unlimited.`)
+        setShowUpgrade(true)
         return
       }
       if (!res.ok || !res.body) {
@@ -131,7 +134,7 @@ export function TopicGenerateDialog({
       }
       setVersions([{ content: acc, revisionNote: null, model: usedModel }])
       setActiveIndex(0)
-      const usedHeader = res.headers.get("X-Generations-Used")
+      const usedHeader = res.headers.get("X-Credits-Used")
       if (usedHeader) setUsed(Number(usedHeader))
     } catch {
       setError("Generation failed. Please try again.")
@@ -158,8 +161,7 @@ export function TopicGenerateDialog({
         }),
       })
       if (res.status === 429) {
-        const d = await res.json()
-        setError(`You've hit your monthly limit (${d.limit}). Upgrade to Campaign for unlimited.`)
+        setShowUpgrade(true)
         return
       }
       if (!res.ok || !res.body) {
@@ -183,7 +185,7 @@ export function TopicGenerateDialog({
         setActiveIndex(next.length - 1)
         return next
       })
-      const usedHeader = res.headers.get("X-Generations-Used")
+      const usedHeader = res.headers.get("X-Credits-Used")
       if (usedHeader) setUsed(Number(usedHeader))
     } catch {
       setError("Revision failed. Please try again.")
@@ -235,6 +237,7 @@ export function TopicGenerateDialog({
   const showControls = !editingId
 
   return (
+    <>
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 p-4" onClick={onClose}>
       <div
         className="mx-auto mt-8 w-full max-w-2xl rounded-2xl border border-border bg-white shadow-xl"
@@ -250,7 +253,7 @@ export function TopicGenerateDialog({
           <div className="flex items-center gap-3">
             {limit != null && (
               <span className="rounded-full border border-border bg-[#f4f6f9] px-3 py-1 text-xs font-medium text-muted-foreground">
-                {used} / {limit} this month
+                {remaining} of {limit} credits left
               </span>
             )}
             <button
@@ -307,23 +310,24 @@ export function TopicGenerateDialog({
 
               <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  {canPickModel ? (
-                    <label className="flex items-center gap-2 text-sm">
-                      <span className="font-medium text-[#1a1a2e]">Model</span>
-                      <select
-                        value={model}
-                        onChange={(e) => setModel(e.target.value)}
-                        className="rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:border-[#1b3a6b] focus:ring-2 focus:ring-[#1b3a6b]/15"
-                      >
-                        {SELECTABLE_AI_MODELS.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">Model: Haiku 4.5</p>
+                  <label className="flex items-center gap-2 text-sm">
+                    <span className="font-medium text-[#1a1a2e]">Model</span>
+                    <select
+                      value={model}
+                      onChange={(e) => setModel(e.target.value)}
+                      className="rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:border-[#1b3a6b] focus:ring-2 focus:ring-[#1b3a6b]/15"
+                    >
+                      {SELECTABLE_AI_MODELS.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name} · {m.credits} credit{m.credits > 1 ? "s" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {overdraft && (
+                    <p className="mt-1.5 text-xs text-[#c4910a]">
+                      Uses your last {remaining} credit{remaining! > 1 ? "s" : ""}.
+                    </p>
                   )}
                 </div>
                 <div className="flex flex-col items-stretch gap-1 sm:items-end">
@@ -418,5 +422,7 @@ export function TopicGenerateDialog({
         </div>
       </div>
     </div>
+    <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} limit={limit ?? 0} />
+    </>
   )
 }

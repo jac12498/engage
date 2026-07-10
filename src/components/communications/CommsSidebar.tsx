@@ -11,6 +11,8 @@ import {
   Mail,
   Share2,
   Newspaper,
+  GraduationCap,
+  Scale,
   type LucideIcon,
 } from "lucide-react"
 
@@ -33,6 +35,13 @@ const GROUPS: { group: string; items: Item[] }[] = [
       { href: "/communications/letters", label: "Letters", icon: Mail },
       { href: "/communications/social", label: "Social Media", icon: Share2 },
       { href: "/communications/print", label: "Print Media", icon: Newspaper },
+    ],
+  },
+  {
+    group: "Learn",
+    items: [
+      { href: "/communications/guide", label: "Writing Guide", icon: GraduationCap },
+      { href: "/communications/models", label: "Choosing a Model", icon: Scale },
     ],
   },
 ]

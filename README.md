@@ -32,3 +32,8 @@ added during the engine-port step.
 npm install
 npm run dev
 ```
+
+## Documentation
+
+- [Contacts / CRM](docs/contacts-crm.md) — contact list, detail page, tags/notes,
+  address autocomplete, and the volunteer-signup moderation queue.

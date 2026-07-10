@@ -19,14 +19,14 @@ export function TopicDetail({
   contextItems,
   generations,
   plan,
-  generationsUsed,
+  creditsUsed,
 }: {
   topic: TopicDTO
   topics: TopicRef[]
   contextItems: ContextDTO[]
   generations: GenDTO[]
   plan: PlanId
-  generationsUsed: number
+  creditsUsed: number
 }) {
   const router = useRouter()
   const [editingTopic, setEditingTopic] = useState(false)
@@ -258,7 +258,7 @@ export function TopicDetail({
         <TopicGenerateDialog
           topic={{ id: topic.id, title: topic.title }}
           plan={plan}
-          generationsUsed={generationsUsed}
+          creditsUsed={creditsUsed}
           initialGenerationId={dialog.id ?? undefined}
           onClose={() => setDialog(null)}
         />

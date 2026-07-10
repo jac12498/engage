@@ -1,8 +1,8 @@
 import "server-only"
 import { prisma } from "@/lib/prisma"
-import { GENERATION_LIMITS, WEBSITE_CRAWL_LIMITS, type PlanId } from "@/lib/entitlements"
+import { CREDIT_LIMITS, WEBSITE_CRAWL_LIMITS, creditCost, type PlanId } from "@/lib/entitlements"
 
-/** How many revisions equal one charged generation credit. */
+/** How many revisions equal one charged credit event. */
 export const REVISIONS_PER_CREDIT = 5
 
 export type ConsumeResult =
@@ -11,14 +11,14 @@ export type ConsumeResult =
 
 interface UsageCampaign {
   id: string
-  generationsThisMonth: number
+  creditsThisMonth: number
   revisionsThisMonth: number
   crawlsThisMonth: number
   billingPeriodStart: Date
 }
 
 interface MonthState {
-  generations: number
+  credits: number
   revisions: number
   crawls: number
   periodStart: Date
@@ -31,7 +31,7 @@ function monthlyState(campaign: UsageCampaign): MonthState {
   const sameMonth =
     start.getUTCFullYear() === now.getUTCFullYear() && start.getUTCMonth() === now.getUTCMonth()
   return {
-    generations: sameMonth ? campaign.generationsThisMonth : 0,
+    credits: sameMonth ? campaign.creditsThisMonth : 0,
     revisions: sameMonth ? campaign.revisionsThisMonth : 0,
     crawls: sameMonth ? campaign.crawlsThisMonth : 0,
     periodStart: sameMonth ? start : now,
@@ -44,7 +44,7 @@ function writeUsage(id: string, s: MonthState) {
   return prisma.campaign.update({
     where: { id },
     data: {
-      generationsThisMonth: s.generations,
+      creditsThisMonth: s.credits,
       revisionsThisMonth: s.revisions,
       crawlsThisMonth: s.crawls,
       billingPeriodStart: s.periodStart,
@@ -52,40 +52,54 @@ function writeUsage(id: string, s: MonthState) {
   })
 }
 
-/** Charge one generation credit (a fresh piece). */
+/**
+ * Add `cost` credits to the running total, capped at the plan limit so a user
+ * can never be charged past zero balance. On limited plans this is the
+ * "spend your last credits on any model" overdraft: a user with 4 credits left
+ * can still run Opus (cost 5) — they're charged only the 4 they have. Unlimited
+ * plans just accumulate for record-keeping.
+ */
+function applyCharge(s: MonthState, limit: number | null, cost: number) {
+  s.credits = limit != null ? Math.min(limit, s.credits + cost) : s.credits + cost
+}
+
+/** Charge a fresh generation's credit cost (by model). */
 export async function consumeGeneration(
   plan: PlanId,
-  campaign: UsageCampaign
+  campaign: UsageCampaign,
+  model: string
 ): Promise<ConsumeResult> {
-  const limit = GENERATION_LIMITS[plan]
+  const limit = CREDIT_LIMITS[plan]
   const s = monthlyState(campaign)
-  if (limit != null && s.generations >= limit) return { ok: false, used: s.generations, limit }
+  // Reject only when the balance is already exhausted — never mid-generation.
+  if (limit != null && s.credits >= limit) return { ok: false, used: s.credits, limit }
 
-  s.generations += 1
+  applyCharge(s, limit, creditCost(model))
   await writeUsage(campaign.id, s)
-  return { ok: true, used: s.generations, limit, charged: true }
+  return { ok: true, used: s.credits, limit, charged: true }
 }
 
 /**
  * Account for one revision. Only every Nth revision (REVISIONS_PER_CREDIT)
- * charges a generation credit, which is subject to the monthly cap.
+ * charges credits, at the model's per-generation cost, subject to the cap.
  */
 export async function consumeRevision(
   plan: PlanId,
-  campaign: UsageCampaign
+  campaign: UsageCampaign,
+  model: string
 ): Promise<ConsumeResult> {
-  const limit = GENERATION_LIMITS[plan]
+  const limit = CREDIT_LIMITS[plan]
   const s = monthlyState(campaign)
 
   s.revisions += 1
   const charges = s.revisions % REVISIONS_PER_CREDIT === 0
-  if (charges && limit != null && s.generations >= limit) {
-    return { ok: false, used: s.generations, limit }
+  if (charges && limit != null && s.credits >= limit) {
+    return { ok: false, used: s.credits, limit }
   }
-  if (charges) s.generations += 1
+  if (charges) applyCharge(s, limit, creditCost(model))
 
   await writeUsage(campaign.id, s)
-  return { ok: true, used: s.generations, limit, charged: charges }
+  return { ok: true, used: s.credits, limit, charged: charges }
 }
 
 /** Charge one website crawl against the monthly crawl cap. */

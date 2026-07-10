@@ -20,8 +20,13 @@ export interface CompleteOnboardingInput {
   candidateName: string
   office: string
   party?: string
-  /** Selected district id from public.districts; required. */
-  districtId: string
+  /** Registered campaign committee, e.g. "Friends of Jane Candidate". Optional. */
+  committeeName?: string
+  /**
+   * Selected district id from public.districts. Optional — voter-file features
+   * aren't supported in every state, so a candidate can onboard without one.
+   */
+  districtId?: string
 }
 
 export type OnboardingResult = { ok: true } | { ok: false; error: string }
@@ -42,18 +47,23 @@ export async function completeOnboarding(
   const office = input.office.trim()
   if (!candidateName) return { ok: false, error: "Candidate name is required." }
   if (!office) return { ok: false, error: "Office is required." }
-  if (!input.districtId) return { ok: false, error: "Please select a district." }
 
   // One Campaign per user.
   const existing = await prisma.campaign.findUnique({ where: { userId } })
   if (existing) return { ok: true }
 
-  const district = await getDistrictById(input.districtId)
-  if (!district) return { ok: false, error: "That district could not be found." }
+  // District is optional. Voter File, Voter Outreach, and Field Tools are gated
+  // by state coverage, but AI Communications + Website work nationwide — so a
+  // candidate in an unsupported state can still onboard without picking one.
+  let district = null
+  if (input.districtId) {
+    district = await getDistrictById(input.districtId)
+    if (!district) return { ok: false, error: "That district could not be found." }
+  }
 
-  // Derive a state from the district's query_string (districtState=NY). Falls
-  // back to null; coverage gating reads this.
-  const stateMatch = district.queryString?.match(/districtState=([A-Za-z]{2})/)
+  // Derive a state from the chosen district's query_string (districtState=NY)
+  // when present; null otherwise. Coverage gating reads this.
+  const stateMatch = district?.queryString?.match(/districtState=([A-Za-z]{2})/)
   const state = stateMatch ? stateMatch[1].toUpperCase() : null
 
   await prisma.campaign.create({
@@ -62,12 +72,13 @@ export async function completeOnboarding(
       candidateName,
       office,
       party: input.party?.trim() || null,
+      committeeName: input.committeeName?.trim() || null,
       plan: "starter",
       state,
-      district: district.name,
-      districtId: district.id,
-      districtQueryString: district.queryString,
-      districtVoterCount: district.voterCount,
+      district: district?.name ?? null,
+      districtId: district?.id ?? null,
+      districtQueryString: district?.queryString ?? null,
+      districtVoterCount: district?.voterCount ?? null,
     },
   })
 

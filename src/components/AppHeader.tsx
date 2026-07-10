@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { signOut } from "@/lib/auth"
-import { LogOut } from "lucide-react"
+import { LogOut, Settings } from "lucide-react"
 
 export function AppHeader({ planLabel }: { planLabel: string }) {
   return (
@@ -16,6 +16,13 @@ export function AppHeader({ planLabel }: { planLabel: string }) {
           <span className="rounded-full border border-border bg-[#f4f6f9] px-3 py-1 text-xs font-medium text-muted-foreground">
             {planLabel} plan
           </span>
+          <Link
+            href="/settings"
+            className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-[#1a1a2e]"
+          >
+            <Settings className="h-3.5 w-3.5" />
+            Settings
+          </Link>
           <form
             action={async () => {
               "use server"
