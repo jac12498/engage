@@ -2,10 +2,14 @@
 
 **Status:** ✅ **Phase 1 (Subscribers / double opt-in) DONE** · ✅ **Phase 2 (Authoring + Archive) DONE + verified** (2026-07-19, build green, tsc clean) · ⏳ Phase 3 (Sending) planned · **Author:** Jeff + Claude
 
-> ⚠️ **Uncommitted.** As of 2026-07-19 all of this (plus the In-the-News feature and the
-> conversational website builder) lives in the working tree on `master`, not yet committed.
-> The `add-newsletter-subscribers.sql` **and** `add-newsletters.sql` migrations **are already
-> applied** to the `engagecampaign` Supabase schema.
+> ✅ **Committed 2026-07-30** as `a543b92` on `master` (one atomic commit alongside In-the-News
+> and the conversational website builder — shared schema/block files made a clean per-feature
+> split infeasible without non-building intermediate commits). The `add-newsletter-subscribers.sql`
+> and `add-newsletters.sql` migrations were already applied to the `engagecampaign` Supabase schema.
+> Not yet pushed to a remote.
+>
+> 📮 **Sending domain ready:** `news.engageamplify.com` (Cloudflare DNS, verified in Resend —
+> DKIM + SPF + bounce MX + DMARC all live and DKIM-aligned). See Phase 3 below.
 
 ---
 
@@ -144,10 +148,18 @@ its own draft→publish→send lifecycle + send-tracking fields.
 
 On publish, email `active` subscribers. This is where the real work/risk lives.
 
-- **Per-campaign sending identity** — a small sending-config model (domain, from-address,
-  verification status). Build a self-serve "connect your domain" flow using Resend's Domains
-  API (create domain → show DNS records → poll verification). Recommend a **subdomain**
-  (`news.theirdomain.com`).
+- **✅ Platform sending domain configured (2026-07-30):** `news.engageamplify.com` — party-neutral
+  (chosen over `engage.democrat` so it isn't Democrat-branded), DNS on **Cloudflare**, verified in
+  Resend. DKIM (`resend._domainkey.news`), SPF + bounce MX (`send.news` → SES us-east-1), and DMARC
+  (`_dmarc.news` = `v=DMARC1; p=none; rua=mailto:dmarc@engageamplify.com`) all live; DKIM aligns with
+  the From domain. **Fresh domain → warm up gradually; keep `p=none` until aggregate reports confirm
+  alignment, then tighten to quarantine → reject.** Bulk sends go from here, **isolated from**
+  `mail.engage.democrat` (the warmed transactional/magic-link domain). From = `Campaign Name
+  <news@news.engageamplify.com>`, Reply-To = candidate inbox. Resend **Receiving** stays OFF.
+- **Launch model = platform domain for all tenants.** Every campaign's newsletter sends from
+  `news.engageamplify.com` with the committee name in the display name + reply-to. **Per-campaign
+  custom domains** (self-serve "connect your domain" via Resend's Domains API — create domain →
+  show DNS → poll verification) become a *later* premium upgrade, not needed to ship.
 - **Compliance (CAN-SPAM)** — physical mailing address in every footer (we already collect
   `committeeName`), plus the working one-click unsubscribe (P1 `unsubscribeToken` +
   `/newsletter/unsubscribe` already exist).
@@ -162,6 +174,10 @@ On publish, email `active` subscribers. This is where the real work/risk lives.
 
 ## Open questions
 
-- Sending domain: does the candidate have one? (Determines how real P3 can get.)
-- P2 storage model: reuse `Generation` vs dedicated `Newsletter` (see Phase 2).
+- ~~Sending domain: does the candidate have one?~~ **Resolved:** platform sends from
+  `news.engageamplify.com` for all tenants; per-campaign custom domains are a later premium add-on.
+- ~~P2 storage model: reuse `Generation` vs dedicated `Newsletter`?~~ **Resolved:** dedicated
+  `Newsletter` model (see Phase 2).
 - Whether active subscribers should also mirror into the Contacts CRM.
+- Resend plan/volume limits vs. realistic subscriber counts (shared-IP tier) — confirm before
+  first real send.
