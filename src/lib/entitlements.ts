@@ -187,6 +187,19 @@ export const NEWS_SEARCH_LIMITS: Record<PlanId, number | null> = {
   committee: null,
 }
 
+/**
+ * Monthly cap on newsletter recipient-emails sent (the real external cost driver —
+ * Resend bills per email). Metered by recipients per send, summed over the month, so
+ * a 400-subscriber issue counts as 400. Free tier gets a modest allowance so the
+ * feature is usable; paid tiers scale up; Committee is unlimited. Tune as pricing/
+ * Resend plan limits firm up (see newsletter-plan.md open question).
+ */
+export const NEWSLETTER_EMAIL_LIMITS: Record<PlanId, number | null> = {
+  starter: 500,
+  campaign: 10000,
+  committee: null,
+}
+
 /** Coerce a raw DB plan string into a PlanId, defaulting to the free tier. */
 export function toPlanId(value: string | null | undefined): PlanId {
   return isPlanId(value ?? undefined) ? (value as PlanId) : "starter"

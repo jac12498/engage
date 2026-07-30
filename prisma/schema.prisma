@@ -84,6 +84,7 @@ model Campaign {
   office        String
   party         String?
   committeeName String? // registered campaign committee, e.g. "Friends of Jane Candidate" — powers the legal "Paid for by" disclaimer
+  mailingAddress String? // physical postal address — required in every newsletter footer (CAN-SPAM)
   bio           String? @db.Text
   tagline       String?
   website       String?
@@ -121,6 +122,7 @@ model Campaign {
   crawlsThisMonth    Int      @default(0) // website-crawl references this month
   websiteEditsThisMonth Int   @default(0) // conversational website-builder messages this month
   newsSearchesThisMonth Int   @default(0) // "In the News" web-search discovery runs this month
+  newsletterEmailsThisMonth Int @default(0) // newsletter recipient-emails sent this month (send metering)
   billingPeriodStart   DateTime @default(now())
 
   topics       Topic[]

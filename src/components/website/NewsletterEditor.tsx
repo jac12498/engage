@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Loader2, Sparkles, Trash2, ExternalLink, Check } from "lucide-react"
+import { ArrowLeft, Loader2, Sparkles, Trash2, ExternalLink, Check, Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SELECTABLE_AI_MODELS } from "@/lib/entitlements"
 import {
@@ -12,6 +12,7 @@ import {
   publishNewsletter,
   unpublishNewsletter,
   deleteNewsletter,
+  sendNewsletter,
 } from "@/app/website/(app)/newsletters/actions"
 
 interface Editable {
@@ -21,6 +22,8 @@ interface Editable {
   body: string
   status: string
   publishedAt: string | null
+  sentAt: string | null
+  recipientCount: number | null
 }
 
 const inputCls =
@@ -30,11 +33,15 @@ export function NewsletterEditor({
   campaignId,
   sitePublished,
   defaultModel,
+  activeSubscribers,
+  hasMailingAddress,
   newsletter,
 }: {
   campaignId: string
   sitePublished: boolean
   defaultModel: string
+  activeSubscribers: number
+  hasMailingAddress: boolean
   newsletter: Editable
 }) {
   const router = useRouter()
@@ -50,10 +57,38 @@ export function NewsletterEditor({
   const [drafting, startDraft] = useTransition()
   const [pub, startPub] = useTransition()
   const [deleting, startDelete] = useTransition()
-  const busy = saving || drafting || pub || deleting
+  const [sending, startSend] = useTransition()
+  const busy = saving || drafting || pub || deleting || sending
 
   const published = newsletter.status === "published"
+  const sent = Boolean(newsletter.sentAt)
   const publicUrl = `/websites/${campaignId}/newsletter/${newsletter.id}`
+
+  function doSend() {
+    if (
+      !confirm(
+        `Email this newsletter to ${activeSubscribers} confirmed subscriber${
+          activeSubscribers === 1 ? "" : "s"
+        }? This can't be undone.`
+      )
+    )
+      return
+    setError(null)
+    setNotice(null)
+    startSend(async () => {
+      const res = await sendNewsletter(newsletter.id)
+      if (!res.ok) {
+        setError(res.error)
+        return
+      }
+      setNotice(
+        res.failed > 0
+          ? `Sent to ${res.sent} of ${res.total} subscribers (${res.failed} failed).`
+          : `Sent to ${res.sent} subscriber${res.sent === 1 ? "" : "s"}.`
+      )
+      router.refresh()
+    })
+  }
 
   function save() {
     setError(null)
@@ -263,6 +298,66 @@ export function NewsletterEditor({
           {pub ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
           {published ? "Unpublish" : "Save & publish"}
         </Button>
+      </div>
+
+      {/* Send to subscribers */}
+      <div className="mt-5 rounded-2xl border border-border bg-white p-5">
+        <div className="inline-flex items-center gap-2 font-semibold text-[#1a1a2e]">
+          <Send className="h-4 w-4 text-[#1b3a6b]" />
+          Email to subscribers
+        </div>
+
+        {sent ? (
+          <p className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-[#1e6b3a]/25 bg-[#1e6b3a]/8 px-4 py-2.5 text-sm text-[#1e6b3a]">
+            <Check className="h-4 w-4" />
+            Sent{newsletter.recipientCount != null ? ` to ${newsletter.recipientCount} subscribers` : ""} on{" "}
+            {new Date(newsletter.sentAt!).toLocaleDateString(undefined, {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+            })}
+            .
+          </p>
+        ) : (
+          <>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {published
+                ? `Send this issue to your ${activeSubscribers} confirmed subscriber${
+                    activeSubscribers === 1 ? "" : "s"
+                  }. It sends once — you can't unsend.`
+                : "Publish this newsletter first, then you can email it to your subscribers."}
+            </p>
+
+            {published && !hasMailingAddress && (
+              <p className="mt-3 rounded-lg border border-[#c4910a]/30 bg-[#f0b429]/10 px-4 py-2.5 text-sm text-[#7a5a00]">
+                Add a mailing address in{" "}
+                <Link href="/settings" className="font-medium underline">
+                  Settings
+                </Link>{" "}
+                before sending — a postal address is legally required in every email.
+              </p>
+            )}
+            {published && hasMailingAddress && activeSubscribers === 0 && (
+              <p className="mt-3 rounded-lg border border-border bg-[#f4f6f9] px-4 py-2.5 text-sm text-muted-foreground">
+                You have no confirmed subscribers yet. Once people subscribe and confirm, you can email them here.
+              </p>
+            )}
+
+            <div className="mt-3">
+              <Button
+                onClick={doSend}
+                disabled={busy || !published || !hasMailingAddress || activeSubscribers === 0}
+              >
+                {sending ? (
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="mr-1.5 h-4 w-4" />
+                )}
+                {sending ? "Sending…" : `Send to ${activeSubscribers} subscriber${activeSubscribers === 1 ? "" : "s"}`}
+              </Button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

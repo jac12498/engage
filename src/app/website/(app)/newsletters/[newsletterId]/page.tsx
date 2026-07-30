@@ -19,18 +19,29 @@ export default async function NewsletterEditorPage({
 
   const campaign = await prisma.campaign.findUnique({
     where: { userId: session.user.id },
-    select: { id: true, aiModel: true, site: { select: { published: true } } },
+    select: {
+      id: true,
+      aiModel: true,
+      mailingAddress: true,
+      site: { select: { published: true } },
+    },
   })
   if (!campaign) redirect("/onboarding")
 
   const n = await prisma.newsletter.findFirst({ where: { id: newsletterId, campaignId: campaign.id } })
   if (!n) notFound()
 
+  const activeSubscribers = await prisma.newsletterSubscriber.count({
+    where: { campaignId: campaign.id, status: "active" },
+  })
+
   return (
     <NewsletterEditor
       campaignId={campaign.id}
       sitePublished={campaign.site?.published ?? false}
       defaultModel={campaign.aiModel ?? DEFAULT_AI_MODEL}
+      activeSubscribers={activeSubscribers}
+      hasMailingAddress={Boolean(campaign.mailingAddress?.trim())}
       newsletter={{
         id: n.id,
         subject: n.subject,
@@ -38,6 +49,8 @@ export default async function NewsletterEditorPage({
         body: n.body,
         status: n.status,
         publishedAt: n.publishedAt ? n.publishedAt.toISOString() : null,
+        sentAt: n.sentAt ? n.sentAt.toISOString() : null,
+        recipientCount: n.recipientCount ?? null,
       }}
     />
   )

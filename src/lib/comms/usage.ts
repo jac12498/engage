@@ -5,6 +5,7 @@ import {
   WEBSITE_CRAWL_LIMITS,
   WEBSITE_EDIT_LIMITS,
   NEWS_SEARCH_LIMITS,
+  NEWSLETTER_EMAIL_LIMITS,
   creditCost,
   type PlanId,
 } from "@/lib/entitlements"
@@ -23,6 +24,7 @@ interface UsageCampaign {
   crawlsThisMonth: number
   websiteEditsThisMonth: number
   newsSearchesThisMonth: number
+  newsletterEmailsThisMonth: number
   billingPeriodStart: Date
 }
 
@@ -32,6 +34,7 @@ interface MonthState {
   crawls: number
   websiteEdits: number
   newsSearches: number
+  newsletterEmails: number
   periodStart: Date
 }
 
@@ -47,6 +50,7 @@ function monthlyState(campaign: UsageCampaign): MonthState {
     crawls: sameMonth ? campaign.crawlsThisMonth : 0,
     websiteEdits: sameMonth ? campaign.websiteEditsThisMonth : 0,
     newsSearches: sameMonth ? campaign.newsSearchesThisMonth : 0,
+    newsletterEmails: sameMonth ? campaign.newsletterEmailsThisMonth : 0,
     periodStart: sameMonth ? start : now,
   }
 }
@@ -62,6 +66,7 @@ function writeUsage(id: string, s: MonthState) {
       crawlsThisMonth: s.crawls,
       websiteEditsThisMonth: s.websiteEdits,
       newsSearchesThisMonth: s.newsSearches,
+      newsletterEmailsThisMonth: s.newsletterEmails,
       billingPeriodStart: s.periodStart,
     },
   })
@@ -156,6 +161,40 @@ export async function consumeNewsSearch(plan: PlanId, campaign: UsageCampaign): 
   s.newsSearches += 1
   await writeUsage(campaign.id, s)
   return { ok: true, used: s.newsSearches, limit, charged: true }
+}
+
+export type NewsletterHeadroom = { limit: number | null; used: number; remaining: number | null }
+
+/** Read remaining newsletter-email allowance this month (null limit/remaining = unlimited). */
+export function newsletterHeadroom(plan: PlanId, campaign: UsageCampaign): NewsletterHeadroom {
+  const limit = NEWSLETTER_EMAIL_LIMITS[plan]
+  const s = monthlyState(campaign)
+  return {
+    limit,
+    used: s.newsletterEmails,
+    remaining: limit == null ? null : Math.max(0, limit - s.newsletterEmails),
+  }
+}
+
+/**
+ * Reserve `count` recipient-emails against the monthly send allowance. All-or-nothing:
+ * rejects if the whole send would exceed the cap (so we never send a partial issue for
+ * metering reasons). Charged up front — before the actual Resend calls — so the meter is
+ * conservative. Unlimited plans just accumulate for record-keeping.
+ */
+export async function consumeNewsletterEmails(
+  plan: PlanId,
+  campaign: UsageCampaign,
+  count: number
+): Promise<ConsumeResult> {
+  const limit = NEWSLETTER_EMAIL_LIMITS[plan]
+  const s = monthlyState(campaign)
+  if (limit != null && s.newsletterEmails + count > limit) {
+    return { ok: false, used: s.newsletterEmails, limit }
+  }
+  s.newsletterEmails += count
+  await writeUsage(campaign.id, s)
+  return { ok: true, used: s.newsletterEmails, limit, charged: true }
 }
 
 /** Give a crawl credit back (e.g. the crawl found nothing). Best-effort. */

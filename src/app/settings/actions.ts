@@ -10,6 +10,7 @@ export interface CampaignBasicsInput {
   office: string
   party?: string
   committeeName?: string
+  mailingAddress?: string
 }
 
 export type UpdateResult = { ok: true } | { ok: false; error: string }
@@ -43,6 +44,7 @@ export async function updateCampaignBasics(
       office,
       party: input.party?.trim() || null,
       committeeName: input.committeeName?.trim() || null,
+      mailingAddress: input.mailingAddress?.trim() || null,
     },
   })
 

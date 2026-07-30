@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma"
 import { resolveModel, toPlanId } from "@/lib/entitlements"
 import { consumeGeneration } from "@/lib/comms/usage"
 import { generateNewsletterDraft, type NewsletterDraft } from "@/lib/website/newsletterDraft"
+import { sendNewsletterNow, type SendResult } from "@/lib/newsletterSend"
 
 export type NewsletterResult = { ok: true } | { ok: false; error: string }
 export type CreateResult = { ok: true; id: string } | { ok: false; error: string }
@@ -135,6 +136,19 @@ export async function unpublishNewsletter(id: string): Promise<NewsletterResult>
   await prisma.newsletter.update({ where: { id: n.id }, data: { status: "draft" } })
   revalidateAll(campaignId, id)
   return { ok: true }
+}
+
+/**
+ * Email a published newsletter to all active subscribers. Guarded against
+ * double-send (newsletter.sentAt) and metered by recipient count in the send lib.
+ */
+export async function sendNewsletter(id: string): Promise<SendResult> {
+  const campaignId = await requireCampaignId()
+  if (!campaignId) return { ok: false, error: "You must be signed in." }
+
+  const result = await sendNewsletterNow(campaignId, id)
+  if (result.ok) revalidateAll(campaignId, id)
+  return result
 }
 
 /** Permanently delete a newsletter. */

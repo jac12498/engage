@@ -83,6 +83,7 @@ async function handlePost(req: Request) {
       crawlsThisMonth: true,
       websiteEditsThisMonth: true,
       newsSearchesThisMonth: true,
+      newsletterEmailsThisMonth: true,
       billingPeriodStart: true,
     },
   })

@@ -23,6 +23,7 @@ interface Initial {
   office: string
   party: string
   committeeName: string
+  mailingAddress: string
 }
 
 interface District {
@@ -46,6 +47,7 @@ export function SettingsForm({ initial, district }: { initial: Initial; district
   const [candidateName, setCandidateName] = useState(initial.candidateName)
   const [office, setOffice] = useState(initial.office)
   const [committeeName, setCommitteeName] = useState(initial.committeeName)
+  const [mailingAddress, setMailingAddress] = useState(initial.mailingAddress)
   const [partyChoice, setPartyChoice] = useState(initParty.choice)
   const [partyCustom, setPartyCustom] = useState(initParty.custom)
 
@@ -77,6 +79,7 @@ export function SettingsForm({ initial, district }: { initial: Initial; district
         office,
         party: resolveParty(),
         committeeName,
+        mailingAddress,
       })
       if (!result.ok) {
         setError(result.error)
@@ -164,6 +167,25 @@ export function SettingsForm({ initial, district }: { initial: Initial; district
             />
             <p className="mt-1.5 text-xs text-muted-foreground">
               Your registered committee. Used for the &ldquo;Paid for by&rdquo; disclaimer.
+            </p>
+          </div>
+          <div className="block sm:col-span-2">
+            <span className="mb-1.5 block text-sm font-medium text-[#1a1a2e]">
+              Mailing address (for newsletters)
+            </span>
+            <textarea
+              value={mailingAddress}
+              onChange={(e) => {
+                setMailingAddress(e.target.value)
+                setSaved(false)
+              }}
+              rows={2}
+              placeholder="123 Main St, Kingston, NY 12401"
+              className={`${inputCls} resize-y`}
+            />
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              A physical postal address is legally required in the footer of every newsletter you
+              email (CAN-SPAM). You can&rsquo;t send a newsletter until this is set.
             </p>
           </div>
         </div>

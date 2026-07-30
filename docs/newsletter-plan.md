@@ -144,9 +144,42 @@ its own draft→publish→send lifecycle + send-tracking fields.
 
 ---
 
-## Phase 3 — Sending (planned; the hard part)
+## Phase 3 — Sending (BUILT 2026-07-30; tsc clean, build green — not yet DB-migrated/committed)
 
-On publish, email `active` subscribers. This is where the real work/risk lives.
+Email a published newsletter to `active` subscribers. Hand-rolled batched send (chosen over
+Resend Broadcasts/Audiences — reuses the P1 list + tokens instead of duplicating state into
+Resend). Verified: `tsc --noEmit` exit 0, `next build` compiles all routes incl. the webhook.
+
+**What shipped:**
+- **Send lib** `src/lib/newsletterSend.ts` — `sendNewsletterNow(campaignId, newsletterId)`: loads
+  published+unsent issue, requires a `mailingAddress`, loads `active` subscribers, meters up front,
+  then sends via **`resend.batch.send`** in chunks of 100 (paced ~600ms/batch, under Resend's ~2 rps).
+  Each message carries a **per-recipient one-click `List-Unsubscribe`** header
+  (`+ List-Unsubscribe-Post: One-Click`) and **`sid`/`nid` tags**. From = `committeeName||candidateName
+  <news@news.engageamplify.com>` (address via `NEWSLETTER_FROM_ADDRESS`), Reply-To = account email.
+  Records `sentAt` + `recipientCount`; **won't re-send** (guards on `sentAt`).
+- **Action** `sendNewsletter(id)` in the newsletters actions (auth + ownership + revalidate).
+- **Metering** — `Campaign.newsletterEmailsThisMonth` counter + `NEWSLETTER_EMAIL_LIMITS`
+  (starter 500 / campaign 10k / committee ∞, tunable) via `consumeNewsletterEmails` /
+  `newsletterHeadroom` in `lib/comms/usage.ts` (all-or-nothing: rejects a send that would exceed the cap).
+- **CAN-SPAM** — `Campaign.mailingAddress` (new, required-before-send), edited in Settings; footer
+  renders "Paid for by {committee}" + address + unsubscribe link.
+- **Bounce/complaint webhook** `POST /api/webhooks/resend` — Svix-signature verified with Node crypto
+  (no new dep; secret = `RESEND_WEBHOOK_SECRET`); `email.bounced`→`bounced`, `email.complained`→
+  `complained`, resolving the subscriber by the `sid` tag (emails aren't unique across campaigns).
+- **One-click unsubscribe** — added `POST /newsletter/unsubscribe` (RFC 8058) alongside the human GET page.
+- **UI** — NewsletterEditor "Email to subscribers" section: guards (publish first / add address /
+  no subscribers), confirm dialog, sent-state ("Sent to N on {date}").
+
+**⚠️ Remaining manual steps before a real send works:**
+1. **Apply the migration** `prisma/migrations/add-newsletter-sending.sql` to the engagecampaign
+   Supabase schema (adds `mailingAddress` + `newsletterEmailsThisMonth`). Additive/idempotent.
+2. **Set `RESEND_WEBHOOK_SECRET`** and create the Resend webhook → `{prod}/api/webhooks/resend`
+   subscribed to `email.bounced` + `email.complained`.
+3. (Optional) set `NEWSLETTER_FROM_ADDRESS` (defaults to `news@news.engageamplify.com`).
+4. Each candidate must fill in a **mailing address** in Settings; then Publish → Send.
+
+**Original plan / open items retained below:**
 
 - **✅ Platform sending domain configured (2026-07-30):** `news.engageamplify.com` — party-neutral
   (chosen over `engage.democrat` so it isn't Democrat-branded), DNS on **Cloudflare**, verified in

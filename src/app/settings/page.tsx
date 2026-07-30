@@ -19,6 +19,7 @@ export default async function SettingsPage() {
       office: true,
       party: true,
       committeeName: true,
+      mailingAddress: true,
       district: true,
       districtVoterCount: true,
       state: true,
@@ -48,6 +49,7 @@ export default async function SettingsPage() {
               office: campaign.office,
               party: campaign.party ?? "",
               committeeName: campaign.committeeName ?? "",
+              mailingAddress: campaign.mailingAddress ?? "",
             }}
             district={{
               name: campaign.district,
