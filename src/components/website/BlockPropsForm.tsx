@@ -301,8 +301,52 @@ function Fields({ type, p, set }: { type: string; p: Props; set: (patch: Props) 
           />
         </>
       )
+    case "newsletterSignup":
+      return (
+        <>
+          <TextField label="Heading" value={s(p.heading)} onChange={(v) => set({ heading: v })} />
+          <AreaField label="Intro" value={s(p.intro)} onChange={(v) => set({ intro: v })} rows={2} />
+          <TextField label="Button label" value={s(p.buttonLabel)} onChange={(v) => set({ buttonLabel: v })} />
+        </>
+      )
+    case "newsletterArchive":
+      return (
+        <>
+          <p className="rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+            Dynamic — lists your published newsletters. Write and publish them in the Newsletters manager.
+          </p>
+          <TextField label="Heading" value={s(p.heading)} onChange={(v) => set({ heading: v })} />
+          <AreaField label="Intro" value={s(p.intro)} onChange={(v) => set({ intro: v })} rows={2} />
+          <TextField
+            label="How many to show"
+            value={typeof p.limit === "number" ? String(p.limit) : "5"}
+            onChange={(v) => {
+              const n = parseInt(v, 10)
+              set({ limit: Number.isFinite(n) ? n : 5 })
+            }}
+          />
+        </>
+      )
     case "newsFeed":
       return <NewsFeedFields p={p} set={set} />
+    case "pressMentions":
+      return (
+        <>
+          <p className="rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+            Dynamic — shows approved press coverage. Find and review clips in the Press coverage manager.
+          </p>
+          <TextField label="Heading" value={s(p.heading)} onChange={(v) => set({ heading: v })} />
+          <AreaField label="Intro" value={s(p.intro)} onChange={(v) => set({ intro: v })} rows={2} />
+          <TextField
+            label="How many to show"
+            value={typeof p.limit === "number" ? String(p.limit) : "6"}
+            onChange={(v) => {
+              const n = parseInt(v, 10)
+              set({ limit: Number.isFinite(n) ? n : 6 })
+            }}
+          />
+        </>
+      )
     case "events":
       return (
         <>

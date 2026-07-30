@@ -41,6 +41,11 @@ export interface VolunteerFormProps {
   heading?: string
   intro?: string
 }
+export interface NewsletterSignupProps {
+  heading?: string
+  intro?: string
+  buttonLabel?: string
+}
 export interface CtaBandProps {
   heading?: string
   text?: string
@@ -56,6 +61,16 @@ export interface NewsFeedProps {
   heading?: string
   intro?: string
   types: string[]
+  limit: number
+}
+export interface PressMentionsProps {
+  heading?: string
+  intro?: string
+  limit: number
+}
+export interface NewsletterArchiveProps {
+  heading?: string
+  intro?: string
   limit: number
 }
 export interface EventsProps {
@@ -223,6 +238,29 @@ export const BLOCK_SPECS = {
     },
   } satisfies BlockSpec<VolunteerFormProps>,
 
+  newsletterSignup: {
+    type: "newsletterSignup",
+    label: "Newsletter signup",
+    description:
+      "An email-newsletter signup form. Visitors enter their email; they receive a confirmation link (double opt-in) and, once confirmed, get the campaign's newsletters.",
+    tier: "optional",
+    defaultProps: (): NewsletterSignupProps => ({
+      heading: "Subscribe to our newsletter",
+      buttonLabel: "Subscribe",
+    }),
+    validate: (raw: unknown): NewsletterSignupProps => {
+      const r = record(raw)
+      const props: NewsletterSignupProps = {}
+      const heading = optStr(r.heading, 200)
+      if (heading) props.heading = heading
+      const intro = optStr(r.intro, 800)
+      if (intro) props.intro = intro
+      const buttonLabel = optStr(r.buttonLabel, 80)
+      if (buttonLabel) props.buttonLabel = buttonLabel
+      return props
+    },
+  } satisfies BlockSpec<NewsletterSignupProps>,
+
   cta: {
     type: "cta",
     label: "Call to action",
@@ -299,6 +337,44 @@ export const BLOCK_SPECS = {
     },
   } satisfies BlockSpec<NewsFeedProps>,
 
+  pressMentions: {
+    type: "pressMentions",
+    label: "In the news",
+    description:
+      "Dynamic — shows approved press coverage about the candidate (found via web search or added by URL, then reviewed in the Press coverage manager). It has no manual items here.",
+    tier: "optional",
+    defaultProps: (): PressMentionsProps => ({ heading: "In the news", limit: 6 }),
+    validate: (raw: unknown): PressMentionsProps => {
+      const r = record(raw)
+      const rawLimit = typeof r.limit === "number" && Number.isFinite(r.limit) ? Math.floor(r.limit) : 6
+      const props: PressMentionsProps = { limit: Math.min(Math.max(rawLimit, 1), 20) }
+      const heading = optStr(r.heading, 200)
+      if (heading) props.heading = heading
+      const intro = optStr(r.intro, 800)
+      if (intro) props.intro = intro
+      return props
+    },
+  } satisfies BlockSpec<PressMentionsProps>,
+
+  newsletterArchive: {
+    type: "newsletterArchive",
+    label: "Newsletter archive",
+    description:
+      "Dynamic — lists the campaign's published newsletters, newest first, each linking to the full issue. Managed in the Newsletters manager.",
+    tier: "optional",
+    defaultProps: (): NewsletterArchiveProps => ({ heading: "Newsletter", limit: 5 }),
+    validate: (raw: unknown): NewsletterArchiveProps => {
+      const r = record(raw)
+      const rawLimit = typeof r.limit === "number" && Number.isFinite(r.limit) ? Math.floor(r.limit) : 5
+      const props: NewsletterArchiveProps = { limit: Math.min(Math.max(rawLimit, 1), 20) }
+      const heading = optStr(r.heading, 200)
+      if (heading) props.heading = heading
+      const intro = optStr(r.intro, 800)
+      if (intro) props.intro = intro
+      return props
+    },
+  } satisfies BlockSpec<NewsletterArchiveProps>,
+
   events: {
     type: "events",
     label: "Events",
@@ -361,9 +437,12 @@ export const BLOCK_ORDER: BlockType[] = [
   "richText",
   "issuesGrid",
   "volunteerForm",
+  "newsletterSignup",
   "cta",
   "endorsements",
   "newsFeed",
+  "pressMentions",
+  "newsletterArchive",
   "events",
   "faq",
 ]

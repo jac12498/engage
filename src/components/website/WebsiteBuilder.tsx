@@ -1,13 +1,11 @@
 "use client"
 
-import { useEffect, useRef, useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import {
   Loader2,
   Check,
-  Copy,
-  ExternalLink,
   Plus,
   Trash2,
   ArrowUp,
@@ -21,7 +19,7 @@ import {
   Home,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { regenerateSite, setPublished } from "@/app/website/actions"
+import { regenerateSite } from "@/app/website/actions"
 import {
   updateSiteSettings,
   createPage,
@@ -86,14 +84,8 @@ export function WebsiteBuilder({
 }) {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
-  const [origin, setOrigin] = useState("")
-  const [copied, setCopied] = useState(false)
-  const [publishing, startPublishing] = useTransition()
   const [regenerating, startRegen] = useTransition()
   const [busy, startBusy] = useTransition()
-
-  useEffect(() => setOrigin(window.location.origin), [])
-  const publicUrl = `${origin}/websites/${campaignId}`
 
   // Page selection (source of truth for lists = the server `site` prop).
   const pages = site.pages
@@ -114,17 +106,6 @@ export function WebsiteBuilder({
     })
   }
 
-  // ── Publish ──
-  function togglePublish() {
-    const next = !site.published
-    setError(null)
-    startPublishing(async () => {
-      const res = await setPublished(next)
-      if (res.ok) router.refresh()
-      else setError(res.error)
-    })
-  }
-
   function regenerate() {
     if (
       !confirm(
@@ -138,12 +119,6 @@ export function WebsiteBuilder({
       if (res.ok) router.refresh()
       else setError(res.error)
     })
-  }
-
-  async function copyUrl() {
-    await navigator.clipboard.writeText(publicUrl)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
   }
 
   // ── Pages ──
@@ -170,52 +145,17 @@ export function WebsiteBuilder({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-[#1a1a2e]">Candidate Website</h1>
-          <p className="mt-1 text-muted-foreground">Build your pages from blocks, then publish.</p>
+      {busy && (
+        <div className="flex justify-end">
+          <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving…
+          </span>
         </div>
-        {busy && <Loader2 className="mt-2 h-4 w-4 animate-spin text-muted-foreground" />}
-      </div>
+      )}
 
       {error && (
         <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">{error}</p>
       )}
-
-      {/* Publish bar */}
-      <div className="rounded-2xl border border-border bg-white p-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <span
-                className={`inline-flex h-2.5 w-2.5 rounded-full ${site.published ? "bg-[#1e6b3a]" : "bg-muted-foreground/40"}`}
-              />
-              <span className="font-semibold text-[#1a1a2e]">
-                {site.published ? "Live" : "Draft — not public yet"}
-              </span>
-            </div>
-            <div className="mt-2 flex items-center gap-2">
-              <code className="rounded bg-[#f4f6f9] px-2 py-1 text-xs text-muted-foreground">{publicUrl}</code>
-              <button onClick={copyUrl} className="text-muted-foreground hover:text-[#1a1a2e]" title="Copy URL">
-                {copied ? <Check className="h-4 w-4 text-[#1e6b3a]" /> : <Copy className="h-4 w-4" />}
-              </button>
-              {site.published && (
-                <a
-                  href={publicUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs font-medium text-[#c4910a] hover:underline"
-                >
-                  View live <ExternalLink className="h-3 w-3" />
-                </a>
-              )}
-            </div>
-          </div>
-          <Button variant={site.published ? "outline" : "default"} onClick={togglePublish} disabled={publishing}>
-            {publishing ? <Loader2 className="h-4 w-4 animate-spin" /> : site.published ? "Unpublish" : "Publish"}
-          </Button>
-        </div>
-      </div>
 
       {/* Pages + blocks */}
       <div className="grid gap-6 lg:grid-cols-[260px_1fr]">

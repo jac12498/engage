@@ -1,6 +1,13 @@
 import "server-only"
 import { prisma } from "@/lib/prisma"
-import { CREDIT_LIMITS, WEBSITE_CRAWL_LIMITS, creditCost, type PlanId } from "@/lib/entitlements"
+import {
+  CREDIT_LIMITS,
+  WEBSITE_CRAWL_LIMITS,
+  WEBSITE_EDIT_LIMITS,
+  NEWS_SEARCH_LIMITS,
+  creditCost,
+  type PlanId,
+} from "@/lib/entitlements"
 
 /** How many revisions equal one charged credit event. */
 export const REVISIONS_PER_CREDIT = 5
@@ -14,6 +21,8 @@ interface UsageCampaign {
   creditsThisMonth: number
   revisionsThisMonth: number
   crawlsThisMonth: number
+  websiteEditsThisMonth: number
+  newsSearchesThisMonth: number
   billingPeriodStart: Date
 }
 
@@ -21,6 +30,8 @@ interface MonthState {
   credits: number
   revisions: number
   crawls: number
+  websiteEdits: number
+  newsSearches: number
   periodStart: Date
 }
 
@@ -34,11 +45,13 @@ function monthlyState(campaign: UsageCampaign): MonthState {
     credits: sameMonth ? campaign.creditsThisMonth : 0,
     revisions: sameMonth ? campaign.revisionsThisMonth : 0,
     crawls: sameMonth ? campaign.crawlsThisMonth : 0,
+    websiteEdits: sameMonth ? campaign.websiteEditsThisMonth : 0,
+    newsSearches: sameMonth ? campaign.newsSearchesThisMonth : 0,
     periodStart: sameMonth ? start : now,
   }
 }
 
-// Write all three counters so a month-rollover triggered by one consumer also
+// Write all counters so a month-rollover triggered by one consumer also
 // resets the others.
 function writeUsage(id: string, s: MonthState) {
   return prisma.campaign.update({
@@ -47,6 +60,8 @@ function writeUsage(id: string, s: MonthState) {
       creditsThisMonth: s.credits,
       revisionsThisMonth: s.revisions,
       crawlsThisMonth: s.crawls,
+      websiteEditsThisMonth: s.websiteEdits,
+      newsSearchesThisMonth: s.newsSearches,
       billingPeriodStart: s.periodStart,
     },
   })
@@ -111,6 +126,36 @@ export async function consumeCrawl(plan: PlanId, campaign: UsageCampaign): Promi
   s.crawls += 1
   await writeUsage(campaign.id, s)
   return { ok: true, used: s.crawls, limit, charged: true }
+}
+
+/**
+ * Charge one conversational website-builder message against the monthly cap.
+ * Metered per candidate instruction, not per tool call — one message may fan out
+ * into several block edits. Rejects only when the balance is already exhausted.
+ */
+export async function consumeWebsiteEdit(plan: PlanId, campaign: UsageCampaign): Promise<ConsumeResult> {
+  const limit = WEBSITE_EDIT_LIMITS[plan]
+  const s = monthlyState(campaign)
+  if (limit != null && s.websiteEdits >= limit) return { ok: false, used: s.websiteEdits, limit }
+
+  s.websiteEdits += 1
+  await writeUsage(campaign.id, s)
+  return { ok: true, used: s.websiteEdits, limit, charged: true }
+}
+
+/**
+ * Charge one "In the News" web-search discovery run against the monthly cap.
+ * Metered per search (one instruction = one Claude+web-search call). Rejects only
+ * when the balance is already exhausted.
+ */
+export async function consumeNewsSearch(plan: PlanId, campaign: UsageCampaign): Promise<ConsumeResult> {
+  const limit = NEWS_SEARCH_LIMITS[plan]
+  const s = monthlyState(campaign)
+  if (limit != null && s.newsSearches >= limit) return { ok: false, used: s.newsSearches, limit }
+
+  s.newsSearches += 1
+  await writeUsage(campaign.id, s)
+  return { ok: true, used: s.newsSearches, limit, charged: true }
 }
 
 /** Give a crawl credit back (e.g. the crawl found nothing). Best-effort. */

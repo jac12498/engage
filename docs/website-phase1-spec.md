@@ -1,6 +1,29 @@
 # Candidate Website — Phase 1 Spec: Page/Block Model
 
-**Status:** ✅ **COMPLETE — Phase 1 (Steps 1A–1E) DONE** (2026-07-10) · Next: Phase 2 (conversational builder) · **Author:** Jeff + Claude
+**Status:** ✅ **Phase 1 (1A–1E) DONE** · ✅ **Phase 2 (conversational builder) core BUILT** (2026-07-10, build green, not yet browser-tested) · Next: Phase 3 (subdomains/custom domains) · **Author:** Jeff + Claude
+
+> **Phase 2 build note (2026-07-10).** Conversational builder shipped behind the block model.
+> Decisions (Jeff): UI = **chat + live preview primary**, manual editor kept as an "Edit blocks"
+> fallback (mode toggle in `WebsiteWorkspace`); **user-selectable model** (Haiku/Sonnet/Opus
+> picker, default Sonnet); metering = a **separate `websiteEditsThisMonth` cap** (Starter 40/mo,
+> paid unlimited) — NOT the Model Credits pool, since one instruction fans out to many edits.
+> Pieces: `src/lib/website/blockService.ts` (shared `svc*` ops, ownership-checked, no session/
+> revalidate — `blocks-actions.ts` now thin session+revalidate wrappers over it) + `getSiteSnapshot`;
+> `src/lib/website/agentTools.ts` (`WEBSITE_TOOLS` schemas + `executeTool` dispatcher +
+> `describeBlockVocabulary`); `POST /api/website/agent` (auth → `consumeWebsiteEdit` 429-gate →
+> resolve model → tool-use loop, max 12 turns, streams NDJSON `{tool|text|done|error}`, revalidates
+> preview on mutation); owner-only `/website/preview/[[...slug]]` (renders the draft via `PublicSite`);
+> `WebsiteAgent.tsx` (chat + iframe preview + page selector + model picker + inline upgrade notice on
+> 429) + `WebsiteWorkspace.tsx` (mode toggle + shared publish bar). Metering: `WEBSITE_EDIT_LIMITS`
+> in entitlements + `consumeWebsiteEdit` in usage.ts (websiteEditsThisMonth wired into the shared
+> month-rollover). **Verified end-to-end** via a throwaway campaign: agent did create_page →
+> add_block(faq) with valid props, executor mutated correctly. **Not yet browser-tested.**
+>
+> **⏸️ PAUSED 2026-07-10 (Jeff switched projects). Phase 2 is UNCOMMITTED** (working tree on
+> `master`; last commit `8f65271` = Phase 1 only). The `add-website-edits-counter.sql` migration
+> **is already applied** to the DB. Resume by: (1) browser-test chat+preview, (2) commit Phase 2,
+> (3) optional nit — preview iframe nav links point at public routes (unpublished sub-pages 404
+> inside preview; make preview-relative if wanted), then (4) Phase 3.
 **Goal of Phase 1:** replace the fixed-column, single-page website with a composable
 **Page → Block** content model and multi-page rendering — the foundation the
 conversational builder (Phase 2) and custom domains (Phase 3) both require.

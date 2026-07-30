@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { WEBSITE_EDIT_LIMITS, toPlanId } from "@/lib/entitlements"
 import { CreateSitePanel } from "@/components/website/CreateSitePanel"
-import { WebsiteBuilder, type EditorSite } from "@/components/website/WebsiteBuilder"
+import { type EditorSite } from "@/components/website/WebsiteBuilder"
+import { WebsiteWorkspace } from "@/components/website/WebsiteWorkspace"
 
 export default async function WebsitePage() {
   const session = await auth()
@@ -16,6 +18,10 @@ export default async function WebsitePage() {
       office: true,
       bio: true,
       whyRunning: true,
+      plan: true,
+      aiModel: true,
+      websiteEditsThisMonth: true,
+      billingPeriodStart: true,
       site: {
         omit: { headshotData: true }, // large; presence is tracked via headshotMime
         include: {
@@ -65,12 +71,22 @@ export default async function WebsitePage() {
     })),
   }
 
+  const plan = toPlanId(campaign.plan)
+  const now = new Date()
+  const bp = campaign.billingPeriodStart
+  const sameMonth =
+    bp.getUTCFullYear() === now.getUTCFullYear() && bp.getUTCMonth() === now.getUTCMonth()
+  const editsUsed = sameMonth ? campaign.websiteEditsThisMonth : 0
+
   return (
-    <WebsiteBuilder
+    <WebsiteWorkspace
       campaignId={campaign.id}
       hasHeadshot={!!s.headshotMime}
       site={site}
       pendingSignups={s._count.signups}
+      editsUsed={editsUsed}
+      editsLimit={WEBSITE_EDIT_LIMITS[plan]}
+      defaultModel={campaign.aiModel ?? "claude-sonnet-4-6"}
     />
   )
 }

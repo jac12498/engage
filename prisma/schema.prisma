@@ -119,6 +119,8 @@ model Campaign {
   creditsThisMonth   Int      @default(0) @map("generationsThisMonth") // Model Credits consumed this month
   revisionsThisMonth Int      @default(0) // every 5th revision charges the model's credit cost
   crawlsThisMonth    Int      @default(0) // website-crawl references this month
+  websiteEditsThisMonth Int   @default(0) // conversational website-builder messages this month
+  newsSearchesThisMonth Int   @default(0) // "In the News" web-search discovery runs this month
   billingPeriodStart   DateTime @default(now())
 
   topics       Topic[]
@@ -127,6 +129,9 @@ model Campaign {
   site         Website?
   contacts     Contact[]
   tags         Tag[]
+  newsClips    NewsClip[]
+  newsletterSubscribers NewsletterSubscriber[]
+  newsletters  Newsletter[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -336,6 +341,93 @@ model VolunteerSignup {
   @@index([websiteId])
   @@index([websiteId, status])
   @@index([contactId])
+  @@schema("engagecampaign")
+}
+
+// Press coverage ("In the News") about the candidate. Discovered via Claude web
+// search — or added by URL — then curated: clips arrive `pending`, and a reviewer
+// Approves (surfaces on the site's `pressMentions` block) or Rejects. External
+// articles are NEVER auto-published: the review step guards against false-positive
+// (wrong person / same name) or off-message hits.
+model NewsClip {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  headline    String
+  url         String
+  outlet      String? // publication name, when known
+  summary     String?   @db.Text // 1–2 sentence blurb
+  publishedAt DateTime? // article date, when known
+  source      String    @default("web_search") // web_search | manual
+
+  status     String    @default("pending") // pending | approved | rejected
+  reviewedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@unique([campaignId, url]) // dedupe repeat discovery of the same article
+  @@index([campaignId, status])
+  @@schema("engagecampaign")
+}
+
+// ─── Newsletter ──────────────────────────────────────────────────────────────
+
+// A subscriber to the campaign's periodic newsletter. Public signup uses double
+// opt-in: a signup arrives `pending` with a confirmToken; clicking the emailed
+// link flips it to `active`. Every subscriber carries a permanent unsubscribeToken
+// used in the footer of each newsletter (CAN-SPAM one-click unsubscribe). Only
+// `active` subscribers are mailed. Kept separate from Contact (a lightweight,
+// compliance-bearing mailing list), though active subscribers may also be surfaced
+// as Contacts later.
+model NewsletterSubscriber {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  email  String
+  name   String?
+  status String @default("pending") // pending | active | unsubscribed
+  source String @default("website")
+
+  confirmToken     String? @unique // double opt-in; cleared once confirmed
+  unsubscribeToken String  @unique // permanent; embedded in every send
+
+  createdAt      DateTime  @default(now())
+  confirmedAt    DateTime?
+  unsubscribedAt DateTime?
+
+  @@unique([campaignId, email])
+  @@index([campaignId, status])
+  @@schema("engagecampaign")
+}
+
+// One issue of the campaign's newsletter. Authored (optionally AI-drafted) in the
+// newsletter manager, published to the public archive, and — in Phase 3 — emailed to
+// active subscribers. `body` is plain text (blank lines = paragraphs) so it renders
+// safely in both the web archive and email. Dedicated model (not a Generation) for
+// its own draft→publish→send lifecycle + send tracking.
+model Newsletter {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  subject String  @default("") // email subject / archive title
+  preview String? // short teaser / email preheader
+  body    String  @default("") @db.Text // plain text; blank lines separate paragraphs
+  model   String? // AI model used to draft, if any
+
+  status      String    @default("draft") // draft | published
+  publishedAt DateTime?
+
+  // Phase 3 send tracking
+  sentAt         DateTime?
+  recipientCount Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([campaignId, status])
   @@schema("engagecampaign")
 }
 

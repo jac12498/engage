@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { prisma } from "@/lib/prisma"
 import { VolunteerForm } from "@/components/website/VolunteerForm"
+import { NewsletterSignupForm } from "@/components/website/NewsletterSignupForm"
 import {
   BLOCK_SPECS,
   isBlockType,
@@ -8,9 +9,12 @@ import {
   type RichTextProps,
   type IssuesGridProps,
   type VolunteerFormProps,
+  type NewsletterSignupProps,
   type CtaBandProps,
   type EndorsementsProps,
   type NewsFeedProps,
+  type PressMentionsProps,
+  type NewsletterArchiveProps,
   type EventsProps,
   type FaqProps,
 } from "@/lib/website/blocks"
@@ -144,6 +148,18 @@ function VolunteerFormBlock({ props, ctx }: { props: VolunteerFormProps; ctx: Re
 
 // ─── Optional blocks ─────────────────────────────────────────────────────────
 
+function NewsletterSignup({ props, ctx }: { props: NewsletterSignupProps; ctx: RenderCtx }) {
+  return (
+    <section id="newsletter" className="mx-auto max-w-2xl px-6 py-16">
+      <SectionHeading>{props.heading || "Subscribe to our newsletter"}</SectionHeading>
+      {props.intro && <p className="mt-3 text-lg text-[#555]">{props.intro}</p>}
+      <div className="mt-6">
+        <NewsletterSignupForm campaignId={ctx.campaignId} accent={ctx.accentColor} buttonLabel={props.buttonLabel} />
+      </div>
+    </section>
+  )
+}
+
 function CtaBand({ props }: { props: CtaBandProps; ctx: RenderCtx }) {
   return (
     <section style={{ backgroundColor: primary }} className="text-white">
@@ -217,6 +233,94 @@ async function NewsFeed({ props, ctx }: { props: NewsFeedProps; ctx: RenderCtx }
               </Link>
             )
           })}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+async function PressMentions({ props, ctx }: { props: PressMentionsProps; ctx: RenderCtx }) {
+  const clips = await prisma.newsClip.findMany({
+    where: { campaignId: ctx.campaignId, status: "approved" },
+    orderBy: [{ publishedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+    take: props.limit,
+    select: { id: true, headline: true, url: true, outlet: true, summary: true, publishedAt: true },
+  })
+  if (clips.length === 0) return null
+  return (
+    <section id="press" className="mx-auto max-w-4xl px-6 py-16">
+      {props.heading && <SectionHeading>{props.heading}</SectionHeading>}
+      {props.intro && <p className="mt-3 max-w-2xl text-lg text-[#555]">{props.intro}</p>}
+      <div className="mt-8 space-y-4">
+        {clips.map((c) => (
+          <a
+            key={c.id}
+            href={c.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block rounded-2xl border border-black/5 bg-white p-6 shadow-sm transition hover:shadow-md"
+          >
+            <p className="text-xs uppercase tracking-wider text-[#888]">
+              {[
+                c.outlet,
+                c.publishedAt
+                  ? c.publishedAt.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+            <h3 className="mt-1 text-xl font-semibold" style={{ color: primary }}>
+              {c.headline}
+            </h3>
+            {c.summary && <p className="mt-2 leading-relaxed text-[#555]">{c.summary}</p>}
+          </a>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+async function NewsletterArchive({ props, ctx }: { props: NewsletterArchiveProps; ctx: RenderCtx }) {
+  const items = await prisma.newsletter.findMany({
+    where: { campaignId: ctx.campaignId, status: "published" },
+    orderBy: [{ publishedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+    take: props.limit,
+    select: { id: true, subject: true, preview: true, publishedAt: true },
+  })
+  if (items.length === 0) return null
+  return (
+    <section id="newsletter-archive" style={{ backgroundColor: "#f7f8fa" }}>
+      <div className="mx-auto max-w-4xl px-6 py-16">
+        {props.heading && <SectionHeading>{props.heading}</SectionHeading>}
+        {props.intro && <p className="mt-3 max-w-2xl text-lg text-[#555]">{props.intro}</p>}
+        <div className="mt-8 space-y-4">
+          {items.map((n) => (
+            <Link
+              key={n.id}
+              href={`/websites/${ctx.campaignId}/newsletter/${n.id}`}
+              className="block rounded-2xl border border-black/5 bg-white p-6 shadow-sm transition hover:shadow-md"
+            >
+              {n.publishedAt && (
+                <p className="text-xs uppercase tracking-wider text-[#888]">
+                  {n.publishedAt.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}
+                </p>
+              )}
+              <h3 className="mt-1 text-xl font-semibold" style={{ color: primary }}>
+                {n.subject || "Newsletter"}
+              </h3>
+              {n.preview && <p className="mt-2 line-clamp-2 leading-relaxed text-[#555]">{n.preview}</p>}
+            </Link>
+          ))}
+        </div>
+        <div className="mt-6">
+          <Link
+            href={`/websites/${ctx.campaignId}/newsletter`}
+            className="text-sm font-semibold hover:underline"
+            style={{ color: primary }}
+          >
+            View all newsletters →
+          </Link>
         </div>
       </div>
     </section>
@@ -311,9 +415,12 @@ const BLOCK_RENDERERS: Record<string, BlockComponent> = {
   richText: RichText as BlockComponent,
   issuesGrid: IssuesGrid as BlockComponent,
   volunteerForm: VolunteerFormBlock as BlockComponent,
+  newsletterSignup: NewsletterSignup as BlockComponent,
   cta: CtaBand as BlockComponent,
   endorsements: Endorsements as BlockComponent,
   newsFeed: NewsFeed as BlockComponent,
+  pressMentions: PressMentions as BlockComponent,
+  newsletterArchive: NewsletterArchive as BlockComponent,
   events: Events as BlockComponent,
   faq: Faq as BlockComponent,
 }

@@ -163,6 +163,30 @@ export const WEBSITE_CRAWL_LIMITS: Record<PlanId, number | null> = {
   committee: null,
 }
 
+/**
+ * Monthly cap on conversational website-builder messages (one candidate instruction,
+ * which may trigger several block edits). Metered by message count — independent of
+ * the AI Communications Model Credits pool — since a single instruction can fan out
+ * into many tool calls. Free tier limited; paid tiers unlimited.
+ */
+export const WEBSITE_EDIT_LIMITS: Record<PlanId, number | null> = {
+  starter: 40,
+  campaign: null,
+  committee: null,
+}
+
+/**
+ * Monthly cap on "In the News" web-search discovery runs. Each run is one Claude
+ * call with the web-search server tool (several fetches + a summarization pass), so
+ * it's metered per search — independent of Model Credits — and kept low on the free
+ * tier. Reviewing/approving already-found clips is never metered.
+ */
+export const NEWS_SEARCH_LIMITS: Record<PlanId, number | null> = {
+  starter: 10,
+  campaign: 100,
+  committee: null,
+}
+
 /** Coerce a raw DB plan string into a PlanId, defaulting to the free tier. */
 export function toPlanId(value: string | null | undefined): PlanId {
   return isPlanId(value ?? undefined) ? (value as PlanId) : "starter"
