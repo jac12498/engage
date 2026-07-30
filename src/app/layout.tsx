@@ -5,9 +5,9 @@ import "./globals.css"
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist-sans" })
 
 export const metadata: Metadata = {
-  title: "Engage Campaign — The Complete Platform for Local Campaigns",
+  title: "Engage — The Complete Platform for Local Campaigns",
   description:
-    "AI communications, candidate websites, voter outreach, fundraising, and field tools — everything a campaign needs to win, in one platform.",
+    "AI communications, a candidate website, a newsletter, voter outreach, fundraising, and field tools — everything a campaign needs to win, in one platform.",
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

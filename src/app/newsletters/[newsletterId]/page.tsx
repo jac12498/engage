@@ -6,7 +6,7 @@ import { NewsletterEditor } from "@/components/website/NewsletterEditor"
 
 export const dynamic = "force-dynamic"
 
-export const metadata = { title: "Edit newsletter · Engage Campaign" }
+export const metadata = { title: "Edit newsletter · Engage" }
 
 export default async function NewsletterEditorPage({
   params,

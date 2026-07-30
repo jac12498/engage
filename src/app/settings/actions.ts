@@ -49,7 +49,7 @@ export async function updateCampaignBasics(
   })
 
   // Both the workspace header and any published website read these fields.
-  revalidatePath("/")
+  revalidatePath("/dashboard")
   revalidatePath("/settings")
   revalidatePath(`/websites/${campaign.id}`)
   return { ok: true }

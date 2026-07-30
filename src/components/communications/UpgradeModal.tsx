@@ -51,7 +51,7 @@ export function UpgradeModal({
 
         <div className="mt-6 flex flex-col gap-2">
           <Button asChild className="w-full">
-            <Link href="/">
+            <Link href="/dashboard">
               See {PLAN_LABELS.campaign} plans
               <ArrowRight className="ml-1.5 h-4 w-4" />
             </Link>

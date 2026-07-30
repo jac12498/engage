@@ -88,6 +88,6 @@ export async function completeOnboarding(
 /** Server-action variant used by the form to create + then route home. */
 export async function submitOnboarding(input: CompleteOnboardingInput) {
   const result = await completeOnboarding(input)
-  if (result.ok) redirect("/")
+  if (result.ok) redirect("/dashboard")
   return result
 }

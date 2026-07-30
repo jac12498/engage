@@ -337,7 +337,7 @@ export function WebsiteAgent({
               <p className="mt-1 text-[#7a5a00]/90">
                 Upgrade to {PLAN_LABELS.campaign} for unlimited website editing.
               </p>
-              <Link href="/" className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-[#1b3a6b] hover:underline">
+              <Link href="/dashboard" className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-[#1b3a6b] hover:underline">
                 See plans <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </div>

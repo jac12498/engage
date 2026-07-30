@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { toPlanId, PLAN_LABELS } from "@/lib/entitlements"
 import { AppHeader } from "@/components/AppHeader"
 
-export const metadata = { title: "Contacts · Engage Campaign" }
+export const metadata = { title: "Contacts · Engage" }
 
 export default async function ContactsLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()

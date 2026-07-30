@@ -3,7 +3,7 @@ import { redirect } from "next/navigation"
 import { auth, signIn } from "@/lib/auth"
 import { Button } from "@/components/ui/button"
 
-export const metadata = { title: "Sign in · Engage Campaign" }
+export const metadata = { title: "Sign in · Engage" }
 
 export default async function SignInPage({
   searchParams,
@@ -13,7 +13,7 @@ export default async function SignInPage({
   // Already signed in → send to the workspace (which itself routes to onboarding
   // if needed).
   const session = await auth()
-  if (session?.user) redirect("/")
+  if (session?.user) redirect("/dashboard")
 
   const { error } = await searchParams
 
@@ -21,7 +21,7 @@ export default async function SignInPage({
     "use server"
     const email = String(formData.get("email") || "").trim().toLowerCase()
     if (!email) return
-    await signIn("email", { email, redirectTo: "/" })
+    await signIn("email", { email, redirectTo: "/dashboard" })
   }
 
   return (
@@ -31,7 +31,7 @@ export default async function SignInPage({
           <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-[#f0b429] to-[#c4910a] text-base font-black text-[#0f2044]">
             E
           </span>
-          <span className="text-xl font-bold tracking-tight text-[#1a1a2e]">Engage Campaign</span>
+          <span className="text-xl font-bold tracking-tight text-[#1a1a2e]">Engage</span>
         </Link>
 
         <div className="rounded-2xl border border-border bg-white p-8 shadow-sm">

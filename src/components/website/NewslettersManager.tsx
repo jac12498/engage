@@ -42,7 +42,7 @@ export function NewslettersManager({
   return (
     <div>
       <Link
-        href="/"
+        href="/dashboard"
         className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-[#1a1a2e]"
       >
         <ArrowLeft className="h-4 w-4" />

@@ -2,7 +2,7 @@ import Link from "next/link"
 import { MailCheck } from "lucide-react"
 import { VerifyPoller } from "@/components/auth/VerifyPoller"
 
-export const metadata = { title: "Check your email · Engage Campaign" }
+export const metadata = { title: "Check your email · Engage" }
 
 export default function VerifyRequestPage() {
   return (
@@ -13,7 +13,7 @@ export default function VerifyRequestPage() {
           <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-[#f0b429] to-[#c4910a] text-base font-black text-[#0f2044]">
             E
           </span>
-          <span className="text-xl font-bold tracking-tight text-[#1a1a2e]">Engage Campaign</span>
+          <span className="text-xl font-bold tracking-tight text-[#1a1a2e]">Engage</span>
         </Link>
 
         <div className="rounded-2xl border border-border bg-white p-8 shadow-sm">

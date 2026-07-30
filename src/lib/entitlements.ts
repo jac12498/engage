@@ -1,5 +1,5 @@
 /**
- * Entitlements (stub) for the Engage Campaign pillar shell.
+ * Entitlements (stub) for the Engage pillar shell.
  *
  * The product is a unified shell over a shared CORE (account/committee, contacts/CRM,
  * and the voter file). The five pillars are MODULES gated by plan. This file is the

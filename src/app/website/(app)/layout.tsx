@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { toPlanId, PLAN_LABELS } from "@/lib/entitlements"
 import { AppHeader } from "@/components/AppHeader"
 
-export const metadata = { title: "Candidate Website · Engage Campaign" }
+export const metadata = { title: "Candidate Website · Engage" }
 
 export default async function WebsiteLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()

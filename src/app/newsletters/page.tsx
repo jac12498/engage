@@ -5,7 +5,7 @@ import { NewslettersManager, type NewsletterRow } from "@/components/website/New
 
 export const dynamic = "force-dynamic"
 
-export const metadata = { title: "Newsletters · Engage Campaign" }
+export const metadata = { title: "Newsletters · Engage" }
 
 export default async function NewslettersPage() {
   const session = await auth()

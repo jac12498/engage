@@ -6,7 +6,7 @@ import { SubscribersManager, type SubscriberRow } from "@/components/website/Sub
 
 export const dynamic = "force-dynamic"
 
-export const metadata = { title: "Newsletter subscribers · Engage Campaign" }
+export const metadata = { title: "Newsletter subscribers · Engage" }
 
 export default async function SubscribersPage() {
   const session = await auth()

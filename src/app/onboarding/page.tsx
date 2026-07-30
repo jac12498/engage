@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { getTopLevelDistricts } from "@/lib/districts"
 import { OnboardingForm } from "@/components/onboarding/OnboardingForm"
 
-export const metadata = { title: "Set up your campaign · Engage Campaign" }
+export const metadata = { title: "Set up your campaign · Engage" }
 
 export default async function OnboardingPage() {
   const session = await auth()
@@ -15,7 +15,7 @@ export default async function OnboardingPage() {
     where: { userId: session.user.id },
     select: { id: true },
   })
-  if (campaign) redirect("/")
+  if (campaign) redirect("/dashboard")
 
   const topDistricts = await getTopLevelDistricts()
 
@@ -26,7 +26,7 @@ export default async function OnboardingPage() {
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-[#f0b429] to-[#c4910a] text-sm font-black text-[#0f2044]">
             E
           </span>
-          <span className="text-lg font-bold tracking-tight text-[#1a1a2e]">Engage Campaign</span>
+          <span className="text-lg font-bold tracking-tight text-[#1a1a2e]">Engage</span>
         </div>
       </header>
 

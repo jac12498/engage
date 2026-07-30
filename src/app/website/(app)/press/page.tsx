@@ -5,7 +5,7 @@ import { PressReview, type PressRow } from "@/components/website/PressReview"
 
 export const dynamic = "force-dynamic"
 
-export const metadata = { title: "Press coverage · Engage Campaign" }
+export const metadata = { title: "Press coverage · Engage" }
 
 export default async function PressPage() {
   const session = await auth()

@@ -1,5 +1,5 @@
 /**
- * NextAuth (Auth.js v5) configuration for Engage Campaign.
+ * NextAuth (Auth.js v5) configuration for Engage.
  *
  * Email magic-link sign-in via Resend, Prisma adapter over the isolated
  * `engagecampaign` schema, JWT sessions. The session carries the account's
@@ -41,11 +41,11 @@ export const authConfig = {
           await resend.emails.send({
             from: FROM,
             to: email,
-            subject: "Sign in to Engage Campaign",
+            subject: "Sign in to Engage",
             html: `
               <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 520px; margin: 0 auto; padding: 8px;">
                 <div style="background: linear-gradient(135deg, #f0b429, #c4910a); width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #0f2044; font-size: 20px;">E</div>
-                <h2 style="color: #1a1a2e; margin-top: 20px;">Sign in to Engage Campaign</h2>
+                <h2 style="color: #1a1a2e; margin-top: 20px;">Sign in to Engage</h2>
                 <p style="color: #4a4a5e;">Click the button below to sign in. This link expires in 10 minutes.</p>
                 <p style="margin: 28px 0;">
                   <a href="${url}" style="background-color: #1b3a6b; color: #ffffff; padding: 13px 26px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: 600;">

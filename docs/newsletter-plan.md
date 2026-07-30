@@ -205,6 +205,29 @@ Resend). Verified: `tsc --noEmit` exit 0, `next build` compiles all routes incl.
 
 ---
 
+## Standalone module (BUILT 2026-07-30; commit afacfa4)
+
+Newsletter is now its **own top-level component**, split out of the Candidate Website module
+with independent plan gating. Decided with Jeff: full standalone module + a **volume-gated**
+free tier.
+- **Packaging:** new `newsletter` ModuleId in all tiers' `PLAN_MODULES` (free at Starter);
+  Newsletter tile in the Starter group on the workspace launcher.
+- **Volume gate:** `NEWSLETTER_SUBSCRIBER_LIMITS` (starter **250** / campaign+ unlimited),
+  enforced in the public subscribe route (new sign-ups blocked past the cap; existing
+  subscribers re-confirming always allowed). Manager shows list-size/cap + at-cap upgrade
+  banner. Send volume still gated by `NEWSLETTER_EMAIL_LIMITS` (starter 500 / campaign 10k / ∞).
+- **Routes moved:** `/website/newsletters` → `/newsletters`, `/website/subscribers` →
+  `/newsletters/subscribers` (+ new `app/newsletters/layout.tsx`); links/imports/revalidate
+  rewired; removed from the Website workspace header (Press stays).
+
+### ⚠️ Follow-up: public surface for users WITHOUT a website
+The free-tier hook is "collect an email list without needing a website," but the public
+subscribe route still gates on `site.published`, and the public archive lives under
+`/websites/[campaignId]/newsletter` — both tied to having a published Website. A
+newsletter-only user currently can't collect subscribers or host an archive. Next step is a
+**standalone public subscribe + archive** page independent of the website (e.g. `/n/[campaignId]`),
+which needs a small design decision (URL scheme + theming without a site). Not yet built.
+
 ## Open questions
 
 - ~~Sending domain: does the candidate have one?~~ **Resolved:** platform sends from

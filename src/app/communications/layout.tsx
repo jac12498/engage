@@ -5,7 +5,7 @@ import { toPlanId, PLAN_LABELS } from "@/lib/entitlements"
 import { AppHeader } from "@/components/AppHeader"
 import { CommsSidebar } from "@/components/communications/CommsSidebar"
 
-export const metadata = { title: "AI Communications · Engage Campaign" }
+export const metadata = { title: "AI Communications · Engage" }
 
 export default async function CommunicationsLayout({
   children,
