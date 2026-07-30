@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react"
 import Link from "next/link"
 import { ArrowLeft, Trash2, Inbox, Users } from "lucide-react"
-import { deleteSubscriber } from "@/app/website/(app)/subscribers/actions"
+import { deleteSubscriber } from "@/app/newsletters/subscribers/actions"
 
 export interface SubscriberRow {
   id: string
@@ -32,7 +32,13 @@ const STATUS_STYLE: Record<string, string> = {
   unsubscribed: "bg-[#1a1a2e]/6 text-muted-foreground",
 }
 
-export function SubscribersManager({ subscribers }: { subscribers: SubscriberRow[] }) {
+export function SubscribersManager({
+  subscribers,
+  subscriberLimit = null,
+}: {
+  subscribers: SubscriberRow[]
+  subscriberLimit?: number | null
+}) {
   const [tab, setTab] = useState<TabKey>("active")
   const [query, setQuery] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -42,6 +48,10 @@ export function SubscribersManager({ subscribers }: { subscribers: SubscriberRow
     for (const s of subscribers) m[s.status] = (m[s.status] ?? 0) + 1
     return m
   }, [subscribers])
+
+  // What counts against the free-tier cap: everyone still on the list (active + pending).
+  const listSize = counts.active + counts.pending
+  const atCap = subscriberLimit != null && listSize >= subscriberLimit
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -53,11 +63,11 @@ export function SubscribersManager({ subscribers }: { subscribers: SubscriberRow
   return (
     <div>
       <Link
-        href="/website"
+        href="/newsletters"
         className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-[#1a1a2e]"
       >
         <ArrowLeft className="h-4 w-4" />
-        Back to website
+        Back to newsletters
       </Link>
 
       <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
@@ -72,9 +82,25 @@ export function SubscribersManager({ subscribers }: { subscribers: SubscriberRow
           <Users className="h-4 w-4 text-[#1b3a6b]" />
           <span className="text-sm">
             <span className="font-semibold text-[#1a1a2e]">{counts.active}</span> active
+            {subscriberLimit != null && (
+              <span className="text-muted-foreground">
+                {" · "}
+                <span className={atCap ? "font-semibold text-[#c4910a]" : ""}>
+                  {listSize}/{subscriberLimit}
+                </span>{" "}
+                on your plan
+              </span>
+            )}
           </span>
         </div>
       </div>
+
+      {atCap && (
+        <p className="mt-4 rounded-lg border border-[#c4910a]/30 bg-[#f0b429]/10 px-4 py-2.5 text-sm text-[#7a5a00]">
+          You&apos;ve reached your plan&apos;s {subscriberLimit}-subscriber limit — new sign-ups are paused. Upgrade to
+          Campaign for an unlimited list.
+        </p>
+      )}
 
       {/* Tabs */}
       <div className="mt-6 flex flex-wrap items-center gap-2">

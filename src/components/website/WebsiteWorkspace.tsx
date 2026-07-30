@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Loader2, Check, Copy, ExternalLink, Sparkles, SlidersHorizontal, Newspaper, Mail, Send } from "lucide-react"
+import { Loader2, Check, Copy, ExternalLink, Sparkles, SlidersHorizontal, Newspaper } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { setPublished } from "@/app/website/actions"
 import { WebsiteAgent } from "./WebsiteAgent"
@@ -69,20 +69,6 @@ export function WebsiteWorkspace({
             >
               <Newspaper className="h-4 w-4" />
               Press coverage
-            </Link>
-            <Link
-              href="/website/newsletters"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-[#1b3a6b] hover:underline"
-            >
-              <Send className="h-4 w-4" />
-              Newsletters
-            </Link>
-            <Link
-              href="/website/subscribers"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-[#1b3a6b] hover:underline"
-            >
-              <Mail className="h-4 w-4" />
-              Subscribers
             </Link>
           </div>
         </div>

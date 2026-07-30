@@ -5,7 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, ArrowRight, Plus, Loader2, Mail, FileText, Inbox } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { createNewsletter } from "@/app/website/(app)/newsletters/actions"
+import { createNewsletter } from "@/app/newsletters/actions"
 
 export interface NewsletterRow {
   id: string
@@ -34,7 +34,7 @@ export function NewslettersManager({
     setError(null)
     startCreating(async () => {
       const res = await createNewsletter()
-      if (res.ok) router.push(`/website/newsletters/${res.id}`)
+      if (res.ok) router.push(`/newsletters/${res.id}`)
       else setError(res.error)
     })
   }
@@ -42,21 +42,21 @@ export function NewslettersManager({
   return (
     <div>
       <Link
-        href="/website"
+        href="/"
         className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-[#1a1a2e]"
       >
         <ArrowLeft className="h-4 w-4" />
-        Back to website
+        Back to workspace
       </Link>
 
       <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-[#1a1a2e]">Newsletters</h1>
           <p className="mt-1 text-muted-foreground">
-            Write and publish newsletter updates. Published issues appear in your website&apos;s archive.
+            Write and publish newsletter updates, then email them to your subscribers.
           </p>
           <Link
-            href="/website/subscribers"
+            href="/newsletters/subscribers"
             className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-[#1b3a6b] hover:underline"
           >
             <Mail className="h-4 w-4" />
@@ -87,7 +87,7 @@ export function NewslettersManager({
           {newsletters.map((n) => (
             <Link
               key={n.id}
-              href={`/website/newsletters/${n.id}`}
+              href={`/newsletters/${n.id}`}
               className="flex items-center justify-between gap-4 rounded-2xl border border-border bg-white p-5 transition-colors hover:border-[#1b3a6b]/40"
             >
               <div className="flex min-w-0 items-start gap-3">

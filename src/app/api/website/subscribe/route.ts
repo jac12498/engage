@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto"
 import { prisma } from "@/lib/prisma"
 import { sendMail } from "@/lib/email"
+import { NEWSLETTER_SUBSCRIBER_LIMITS, toPlanId } from "@/lib/entitlements"
 
 // Public, unauthenticated: the newsletter signup form on a published candidate site.
 // Double opt-in — a signup is filed as `pending` and a confirmation link is emailed;
@@ -41,7 +42,7 @@ export async function POST(req: Request) {
   // Only accept signups for a published site.
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId },
-    select: { candidateName: true, site: { select: { published: true } } },
+    select: { candidateName: true, plan: true, site: { select: { published: true } } },
   })
   if (!campaign || !campaign.site?.published) return new Response("Not found", { status: 404 })
 
@@ -51,6 +52,20 @@ export async function POST(req: Request) {
 
   // Already confirmed — succeed silently (don't reveal status, don't re-email).
   if (existing && existing.status === "active") return Response.json({ ok: true })
+
+  // Volume gate: a brand-new sign-up can't push the list past the plan's cap
+  // (existing subscribers re-confirming/re-subscribing are always allowed).
+  if (!existing) {
+    const cap = NEWSLETTER_SUBSCRIBER_LIMITS[toPlanId(campaign.plan)]
+    if (cap != null) {
+      const listSize = await prisma.newsletterSubscriber.count({
+        where: { campaignId, status: { in: ["active", "pending"] } },
+      })
+      if (listSize >= cap) {
+        return new Response("This newsletter isn't accepting new sign-ups right now.", { status: 403 })
+      }
+    }
+  }
 
   const confirmToken = randomUUID()
   if (existing) {

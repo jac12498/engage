@@ -28,8 +28,8 @@ async function requireCampaignId(): Promise<string | null> {
 }
 
 function revalidateAll(campaignId: string, newsletterId?: string) {
-  revalidatePath("/website/newsletters")
-  if (newsletterId) revalidatePath(`/website/newsletters/${newsletterId}`)
+  revalidatePath("/newsletters")
+  if (newsletterId) revalidatePath(`/newsletters/${newsletterId}`)
   revalidatePath(`/websites/${campaignId}/newsletter`)
   if (newsletterId) revalidatePath(`/websites/${campaignId}/newsletter/${newsletterId}`)
   revalidatePath(`/websites/${campaignId}`)
@@ -40,7 +40,7 @@ export async function createNewsletter(): Promise<CreateResult> {
   const campaignId = await requireCampaignId()
   if (!campaignId) return { ok: false, error: "You must be signed in." }
   const created = await prisma.newsletter.create({ data: { campaignId } })
-  revalidatePath("/website/newsletters")
+  revalidatePath("/newsletters")
   return { ok: true, id: created.id }
 }
 

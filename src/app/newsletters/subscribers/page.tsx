@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { NEWSLETTER_SUBSCRIBER_LIMITS, toPlanId } from "@/lib/entitlements"
 import { SubscribersManager, type SubscriberRow } from "@/components/website/SubscribersManager"
 
 export const dynamic = "force-dynamic"
@@ -13,9 +14,11 @@ export default async function SubscribersPage() {
 
   const campaign = await prisma.campaign.findUnique({
     where: { userId: session.user.id },
-    select: { id: true },
+    select: { id: true, plan: true },
   })
   if (!campaign) redirect("/onboarding")
+
+  const subscriberLimit = NEWSLETTER_SUBSCRIBER_LIMITS[toPlanId(campaign.plan)]
 
   const subs = await prisma.newsletterSubscriber.findMany({
     where: { campaignId: campaign.id },
@@ -33,5 +36,5 @@ export default async function SubscribersPage() {
     confirmedAt: s.confirmedAt ? s.confirmedAt.toISOString() : null,
   }))
 
-  return <SubscribersManager subscribers={rows} />
+  return <SubscribersManager subscribers={rows} subscriberLimit={subscriberLimit} />
 }

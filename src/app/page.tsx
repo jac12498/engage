@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import {
   Megaphone,
   Globe,
+  Mail,
   Users,
   HandCoins,
   Map,
@@ -29,6 +30,7 @@ import {
 const ICONS: Record<ModuleId, LucideIcon> = {
   "ai-communications": Megaphone,
   "candidate-websites": Globe,
+  newsletter: Mail,
   "voter-outreach": Users,
   fundraising: HandCoins,
   "field-tools": Map,
@@ -82,7 +84,12 @@ const PLAN_GROUPS: {
     blurb: "Get online and on-message — everything to launch your campaign.",
     price: "Free",
     cadence: "",
-    tiles: [moduleTile("candidate-websites"), moduleTile("ai-communications"), CONTACTS_TILE],
+    tiles: [
+      moduleTile("candidate-websites"),
+      moduleTile("ai-communications"),
+      moduleTile("newsletter"),
+      CONTACTS_TILE,
+    ],
   },
   {
     plan: "campaign",

@@ -13,7 +13,7 @@ import {
   unpublishNewsletter,
   deleteNewsletter,
   sendNewsletter,
-} from "@/app/website/(app)/newsletters/actions"
+} from "@/app/newsletters/actions"
 
 interface Editable {
   id: string
@@ -156,7 +156,7 @@ export function NewsletterEditor({
     startDelete(async () => {
       const res = await deleteNewsletter(newsletter.id)
       if (!res.ok) setError(res.error)
-      else router.push("/website/newsletters")
+      else router.push("/newsletters")
     })
   }
 
@@ -164,7 +164,7 @@ export function NewsletterEditor({
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Link
-          href="/website/newsletters"
+          href="/newsletters"
           className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-[#1a1a2e]"
         >
           <ArrowLeft className="h-4 w-4" />

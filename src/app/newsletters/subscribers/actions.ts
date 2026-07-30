@@ -28,6 +28,6 @@ export async function deleteSubscriber(subscriberId: string): Promise<Subscriber
   if (!sub) return { ok: false, error: "Subscriber not found." }
 
   await prisma.newsletterSubscriber.delete({ where: { id: sub.id } })
-  revalidatePath("/website/subscribers")
+  revalidatePath("/newsletters/subscribers")
   return { ok: true }
 }

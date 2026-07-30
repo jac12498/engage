@@ -13,6 +13,7 @@
 export type ModuleId =
   | "ai-communications"
   | "candidate-websites"
+  | "newsletter"
   | "voter-outreach"
   | "fundraising"
   | "field-tools"
@@ -40,6 +41,12 @@ export const MODULES: ModuleDef[] = [
     name: "Candidate Website",
     tagline: "A modern, mobile-ready campaign site built from your profile.",
     href: "/website",
+  },
+  {
+    id: "newsletter",
+    name: "Newsletter",
+    tagline: "Build an email list and send newsletters — free to start.",
+    href: "/newsletters",
   },
   {
     id: "multi-candidate",
@@ -85,11 +92,12 @@ export const PLAN_LABELS: Record<PlanId, string> = {
  * and Voter File & Search is gated to Campaign (see VOTER_FILE_MIN_PLAN).
  */
 export const PLAN_MODULES: Record<PlanId, ModuleId[]> = {
-  starter: ["candidate-websites", "ai-communications"],
-  campaign: ["candidate-websites", "ai-communications", "voter-outreach", "field-tools"],
+  starter: ["candidate-websites", "ai-communications", "newsletter"],
+  campaign: ["candidate-websites", "ai-communications", "newsletter", "voter-outreach", "field-tools"],
   committee: [
     "candidate-websites",
     "ai-communications",
+    "newsletter",
     "voter-outreach",
     "field-tools",
     "fundraising",
@@ -197,6 +205,17 @@ export const NEWS_SEARCH_LIMITS: Record<PlanId, number | null> = {
 export const NEWSLETTER_EMAIL_LIMITS: Record<PlanId, number | null> = {
   starter: 500,
   campaign: 10000,
+  committee: null,
+}
+
+/**
+ * Cap on total newsletter subscribers (the free-tier volume gate). Starter gets a
+ * usable free list; Campaign lifts the cap. Enforced when a new subscriber signs up
+ * (see the public subscribe route), so a free account can't grow an unbounded list.
+ */
+export const NEWSLETTER_SUBSCRIBER_LIMITS: Record<PlanId, number | null> = {
+  starter: 250,
+  campaign: null,
   committee: null,
 }
 
