@@ -95,6 +95,10 @@ model Campaign {
   mailingState   String?
   mailingZip     String?
 
+  // Campaign-level newsletter template (shared header/footer/theme across all issues).
+  // Shape: { theme, header, footer } — see lib/newsletter/template.ts. Null = defaults.
+  newsletterTemplate Json?
+
   // Candidate headshot — the candidate's photo, stored in-DB. Lives on Campaign (not
   // Website) so it's part of the profile and available before any site exists. Served
   // via /api/website/headshot/[campaignId].
@@ -432,7 +436,8 @@ model Newsletter {
 
   subject String  @default("") // email subject / archive title
   preview String? // short teaser / email preheader
-  body    String  @default("") @db.Text // plain text; blank lines separate paragraphs
+  body    String  @default("") @db.Text // LEGACY plain-text body; superseded by `blocks`
+  blocks  Json?   // ordered content blocks [{ id, type, props }]; null = legacy (use body)
   model   String? // AI model used to draft, if any
 
   status      String    @default("draft") // draft | published

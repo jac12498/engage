@@ -3,11 +3,13 @@ import { prisma } from "@/lib/prisma"
 import { resend } from "@/lib/email"
 import { toPlanId } from "@/lib/entitlements"
 import { consumeNewsletterEmails, newsletterHeadroom } from "@/lib/comms/usage"
+import { renderNewsletterEmail, hasMailingAddress, type EmailRenderCtx } from "@/lib/newsletter/renderEmail"
 
 // Phase 3: email a published newsletter to a campaign's active subscribers.
-// Reuses the Phase 1 subscriber list + permanent unsubscribeToken; sends in
-// batches of 100 via Resend with a per-recipient one-click List-Unsubscribe
-// header and a CAN-SPAM footer. Send-once (guards on newsletter.sentAt).
+// Renders via the block engine (lib/newsletter/renderEmail) from the campaign
+// template + the issue's blocks; legacy plain-text `body` renders as one text
+// block. Sends in batches of 100 via Resend with a per-recipient one-click
+// List-Unsubscribe header. Send-once (guards on newsletter.sentAt).
 
 /** Bulk sends go from the party-neutral, reputation-isolated newsletter subdomain. */
 const SEND_ADDRESS = process.env.NEWSLETTER_FROM_ADDRESS || "news@news.engageamplify.com"
@@ -21,82 +23,9 @@ function baseUrl(): string {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-}
-
 /** Header display names can't contain commas/quotes/newlines — strip them. */
 function sanitizeName(s: string): string {
   return s.replace(/["\r\n,]/g, " ").replace(/\s+/g, " ").trim()
-}
-
-/** Plain-text body (blank lines = paragraphs) → escaped HTML paragraphs. */
-function bodyToHtml(body: string): string {
-  return body
-    .split(/\n\s*\n/)
-    .map((p) => p.trim())
-    .filter(Boolean)
-    .map(
-      (p) =>
-        `<p style="margin:0 0 16px;line-height:1.6;color:#1a1a2e;font-size:16px">${escapeHtml(p).replace(/\n/g, "<br>")}</p>`
-    )
-    .join("")
-}
-
-interface MailingAddress {
-  mailingStreet: string | null
-  mailingStreet2: string | null
-  mailingCity: string | null
-  mailingState: string | null
-  mailingZip: string | null
-}
-
-interface RenderCampaign extends MailingAddress {
-  candidateName: string
-  committeeName: string | null
-  website: string | null
-}
-
-/** Compose the US postal components into a single footer line. */
-function composeAddress(c: MailingAddress): string {
-  const line1 = [c.mailingStreet, c.mailingStreet2].map((s) => s?.trim()).filter(Boolean).join(", ")
-  const cityStateZip = [
-    c.mailingCity?.trim(),
-    [c.mailingState?.trim(), c.mailingZip?.trim()].filter(Boolean).join(" "),
-  ]
-    .filter(Boolean)
-    .join(", ")
-  return [line1, cityStateZip].filter(Boolean).join(", ")
-}
-
-/** True only when we have a complete enough address to satisfy CAN-SPAM. */
-function hasMailingAddress(c: MailingAddress): boolean {
-  return Boolean(c.mailingStreet?.trim() && c.mailingCity?.trim() && c.mailingState?.trim() && c.mailingZip?.trim())
-}
-
-export function renderNewsletterHtml(
-  campaign: RenderCampaign,
-  newsletter: { subject: string; body: string },
-  unsubscribeUrl: string
-): string {
-  const paidFor = campaign.committeeName ? `Paid for by ${escapeHtml(campaign.committeeName)}. ` : ""
-  const addr = escapeHtml(composeAddress(campaign))
-  return `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:600px;margin:0 auto;padding:8px 4px">
-  <h1 style="font-size:22px;color:#1a1a2e;margin:0 0 20px">${escapeHtml(newsletter.subject)}</h1>
-  ${bodyToHtml(newsletter.body)}
-  <hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0 16px">
-  <p style="color:#8a8a99;font-size:12px;line-height:1.5;margin:0 0 8px">
-    ${paidFor}${addr}
-  </p>
-  <p style="color:#8a8a99;font-size:12px;line-height:1.5;margin:0">
-    You're receiving this because you subscribed to ${escapeHtml(campaign.candidateName)}'s newsletter.
-    <a href="${unsubscribeUrl}" style="color:#1b3a6b">Unsubscribe</a>.
-  </p>
-</div>`
 }
 
 export type SendResult =
@@ -111,7 +40,7 @@ export type SendResult =
 export async function sendNewsletterNow(campaignId: string, newsletterId: string): Promise<SendResult> {
   const newsletter = await prisma.newsletter.findFirst({
     where: { id: newsletterId, campaignId },
-    select: { id: true, subject: true, body: true, status: true, sentAt: true },
+    select: { id: true, subject: true, body: true, blocks: true, status: true, sentAt: true },
   })
   if (!newsletter) return { ok: false, error: "Newsletter not found." }
   if (newsletter.status !== "published") return { ok: false, error: "Publish the newsletter before sending." }
@@ -128,7 +57,8 @@ export async function sendNewsletterNow(campaignId: string, newsletterId: string
       mailingCity: true,
       mailingState: true,
       mailingZip: true,
-      website: true,
+      headshotMime: true,
+      newsletterTemplate: true,
       plan: true,
       creditsThisMonth: true,
       revisionsThisMonth: true,
@@ -141,9 +71,25 @@ export async function sendNewsletterNow(campaignId: string, newsletterId: string
     },
   })
   if (!campaign) return { ok: false, error: "Campaign not found." }
-  if (!hasMailingAddress(campaign)) {
+
+  const mailing = {
+    street: campaign.mailingStreet,
+    street2: campaign.mailingStreet2,
+    city: campaign.mailingCity,
+    state: campaign.mailingState,
+    zip: campaign.mailingZip,
+  }
+  if (!hasMailingAddress(mailing)) {
     return { ok: false, error: "Add a complete mailing address in Settings before sending (required by law in every email)." }
   }
+
+  // Content blocks: the issue's blocks, or legacy plain-text body as one text block.
+  const blocks =
+    Array.isArray(newsletter.blocks) && newsletter.blocks.length > 0
+      ? newsletter.blocks
+      : newsletter.body?.trim()
+        ? [{ id: "legacy", type: "text", props: { body: newsletter.body } }]
+        : []
 
   const subscribers = await prisma.newsletterSubscriber.findMany({
     where: { campaignId, status: "active" },
@@ -167,6 +113,19 @@ export async function sendNewsletterNow(campaignId: string, newsletterId: string
   const from = `${fromName} <${SEND_ADDRESS}>`
   const replyTo = campaign.user?.email || undefined
   const base = baseUrl()
+  const headshotUrl = campaign.headshotMime ? `${base}/api/website/headshot/${campaign.id}` : null
+
+  function ctxFor(unsubscribeUrl: string): EmailRenderCtx {
+    return {
+      subject: newsletter!.subject,
+      candidateName: campaign!.candidateName,
+      committeeName: campaign!.committeeName,
+      campaignId: campaign!.id,
+      mailing,
+      unsubscribeUrl,
+      headshotUrl,
+    }
+  }
 
   let sent = 0
   let failed = 0
@@ -179,7 +138,7 @@ export async function sendNewsletterNow(campaignId: string, newsletterId: string
         to: sub.email,
         replyTo,
         subject: newsletter.subject,
-        html: renderNewsletterHtml(campaign, newsletter, unsubscribeUrl),
+        html: renderNewsletterEmail(campaign.newsletterTemplate, blocks, ctxFor(unsubscribeUrl)),
         headers: {
           "List-Unsubscribe": `<${unsubscribeUrl}>`,
           "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
@@ -207,7 +166,6 @@ export async function sendNewsletterNow(campaignId: string, newsletterId: string
     if (i + BATCH_SIZE < subscribers.length) await sleep(BATCH_DELAY_MS)
   }
 
-  // Record the send. recipientCount reflects accepted messages.
   await prisma.newsletter.update({
     where: { id: newsletter.id },
     data: { sentAt: new Date(), recipientCount: sent },
