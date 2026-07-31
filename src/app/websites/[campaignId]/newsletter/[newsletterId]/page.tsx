@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma"
 import { loadPublicSite, paragraphs } from "../../_render/site"
 import { ArchiveShell } from "../../_render/ArchiveShell"
 import { ArchiveSubscribe } from "../../_render/ArchiveSubscribe"
+import { NewsletterBlocks } from "../../_render/NewsletterBlocks"
 
 export const dynamic = "force-dynamic"
 
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic"
 async function loadIssue(campaignId: string, newsletterId: string) {
   return prisma.newsletter.findFirst({
     where: { id: newsletterId, campaignId, status: "published" },
-    select: { id: true, subject: true, preview: true, body: true, publishedAt: true },
+    select: { id: true, subject: true, preview: true, body: true, blocks: true, publishedAt: true },
   })
 }
 
@@ -50,11 +51,15 @@ export default async function NewsletterIssuePage({
         <h1 className="mt-2 text-3xl font-extrabold leading-tight sm:text-4xl" style={{ color: "var(--site-primary)" }}>
           {issue.subject || "Newsletter"}
         </h1>
-        <div className="mt-8 space-y-4 text-lg leading-relaxed text-[#333]">
-          {paragraphs(issue.body).map((p, i) => (
-            <p key={i}>{p}</p>
-          ))}
-        </div>
+        {Array.isArray(issue.blocks) && issue.blocks.length > 0 ? (
+          <NewsletterBlocks raw={issue.blocks} />
+        ) : (
+          <div className="mt-8 space-y-4 text-lg leading-relaxed text-[#333]">
+            {paragraphs(issue.body).map((p, i) => (
+              <p key={i}>{p}</p>
+            ))}
+          </div>
+        )}
         <div className="mt-12 flex flex-wrap gap-6">
           <Link
             href={`/websites/${campaignId}/newsletter`}

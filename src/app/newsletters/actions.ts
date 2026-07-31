@@ -8,6 +8,8 @@ import { consumeGeneration } from "@/lib/comms/usage"
 import { generateNewsletterDraft, type NewsletterDraft } from "@/lib/website/newsletterDraft"
 import { sendNewsletterNow, type SendResult } from "@/lib/newsletterSend"
 import { formatBallotLine } from "@/lib/party"
+import { parseBlocks } from "@/lib/newsletter/blocks"
+import { type Prisma } from "@/generated/prisma/client"
 
 export type NewsletterResult = { ok: true } | { ok: false; error: string }
 export type CreateResult = { ok: true; id: string } | { ok: false; error: string }
@@ -45,22 +47,24 @@ export async function createNewsletter(): Promise<CreateResult> {
   return { ok: true, id: created.id }
 }
 
-/** Save subject / preview / body edits. */
+/** Save subject / preview / content-block edits. Blocks are validated + sanitized. */
 export async function updateNewsletter(
   id: string,
-  input: { subject?: string; preview?: string; body?: string }
+  input: { subject?: string; preview?: string; blocks?: unknown }
 ): Promise<NewsletterResult> {
   const campaignId = await requireCampaignId()
   if (!campaignId) return { ok: false, error: "You must be signed in." }
   const n = await prisma.newsletter.findFirst({ where: { id, campaignId }, select: { id: true } })
   if (!n) return { ok: false, error: "Newsletter not found." }
 
+  const blocks = input.blocks !== undefined ? parseBlocks(input.blocks) : undefined
+
   await prisma.newsletter.update({
     where: { id: n.id },
     data: {
       subject: typeof input.subject === "string" ? input.subject.slice(0, 200) : undefined,
       preview: typeof input.preview === "string" ? input.preview.slice(0, 300) || null : undefined,
-      body: typeof input.body === "string" ? input.body.slice(0, 50000) : undefined,
+      blocks: blocks === undefined ? undefined : (blocks as unknown as Prisma.InputJsonValue),
     },
   })
   revalidateAll(campaignId, id)
@@ -113,11 +117,12 @@ export async function publishNewsletter(id: string): Promise<NewsletterResult> {
   if (!campaignId) return { ok: false, error: "You must be signed in." }
   const n = await prisma.newsletter.findFirst({
     where: { id, campaignId },
-    select: { id: true, subject: true, body: true, publishedAt: true },
+    select: { id: true, subject: true, body: true, blocks: true, publishedAt: true },
   })
   if (!n) return { ok: false, error: "Newsletter not found." }
   if (!n.subject.trim()) return { ok: false, error: "Add a subject before publishing." }
-  if (!n.body.trim()) return { ok: false, error: "Write some content before publishing." }
+  const hasBlocks = Array.isArray(n.blocks) && n.blocks.length > 0
+  if (!hasBlocks && !n.body.trim()) return { ok: false, error: "Add some content before publishing." }
 
   await prisma.newsletter.update({
     where: { id: n.id },
