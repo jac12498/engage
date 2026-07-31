@@ -15,7 +15,7 @@ import {
   Check,
   type LucideIcon,
 } from "lucide-react"
-import { AppHeader } from "@/components/AppHeader"
+import { AppShell } from "@/components/AppShell"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import {
@@ -116,38 +116,28 @@ export default async function WorkspacePage() {
   // Authoritative gate: read the campaign from the DB (avoids stale-JWT loops).
   const campaign = await prisma.campaign.findUnique({
     where: { userId: session.user.id },
-    select: {
-      id: true,
-      plan: true,
-      candidateName: true,
-      committeeName: true,
-      headshotMime: true,
-      district: true,
-    },
+    select: { plan: true, candidateName: true, district: true },
   })
   if (!campaign) redirect("/onboarding")
 
   const plan: PlanId = toPlanId(campaign.plan)
 
   return (
-    <div className="min-h-screen bg-[#f4f6f9]">
-      <AppHeader campaign={campaign} />
+    <AppShell>
+      <div>
+        <h1 className="text-2xl font-bold text-[#1a1a2e]">
+          {campaign.candidateName
+            ? `${campaign.candidateName}'s workspace`
+            : "Your campaign workspace"}
+        </h1>
+        <p className="mt-1 text-muted-foreground">
+          {campaign.district ? `${campaign.district} · ` : ""}Open a module, or unlock more of the
+          platform.
+        </p>
+      </div>
 
-      <main className="mx-auto max-w-6xl px-6 py-10">
-        <div>
-          <h1 className="text-2xl font-bold text-[#1a1a2e]">
-            {campaign.candidateName
-              ? `${campaign.candidateName}'s workspace`
-              : "Your campaign workspace"}
-          </h1>
-          <p className="mt-1 text-muted-foreground">
-            {campaign.district ? `${campaign.district} · ` : ""}Open a module, or unlock more of the
-            platform.
-          </p>
-        </div>
-
-        {/* Plan sections: a banner per tier, then that tier's components below. */}
-        <div className="mt-8 space-y-10">
+      {/* Plan sections: a banner per tier, then that tier's components below. */}
+      <div className="mt-8 space-y-10">
           {PLAN_GROUPS.map((group) => {
             const unlocked = planRank(plan) >= planRank(group.plan)
             const isCurrent = plan === group.plan
@@ -185,9 +175,8 @@ export default async function WorkspacePage() {
               </section>
             )
           })}
-        </div>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   )
 }
 

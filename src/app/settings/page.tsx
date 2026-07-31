@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation"
-import { AppHeader } from "@/components/AppHeader"
+import { AppShell } from "@/components/AppShell"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { SettingsForm } from "@/components/settings/SettingsForm"
@@ -34,10 +34,8 @@ export default async function SettingsPage() {
   if (!campaign) redirect("/onboarding")
 
   return (
-    <div className="min-h-screen bg-[#f4f6f9]">
-      <AppHeader campaign={campaign} />
-
-      <main className="mx-auto max-w-2xl px-6 py-10">
+    <AppShell>
+      <div className="mx-auto max-w-2xl">
         <div>
           <h1 className="text-2xl font-bold text-[#1a1a2e]">Campaign settings</h1>
           <p className="mt-1 text-muted-foreground">
@@ -69,7 +67,7 @@ export default async function SettingsPage() {
             }}
           />
         </div>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   )
 }
