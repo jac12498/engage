@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, Settings, LogOut, Lock, Menu, X, type LucideIcon } from "lucide-react"
+import { LayoutDashboard, Settings, LogOut, Lock, Menu, X, Sparkles, type LucideIcon } from "lucide-react"
 import { NAV_MODULES, navModuleUnlocked, navUnlockPlan, activeModuleKey } from "@/lib/nav"
 import { PLAN_LABELS, type PlanId } from "@/lib/entitlements"
 import { signOutAction } from "@/app/actions/auth"
@@ -80,7 +80,7 @@ export function AppSidebar({ campaign, plan }: { campaign: SidebarCampaign; plan
               return (
                 <Link
                   key={m.key}
-                  href="/dashboard"
+                  href={`/upgrade/${m.key}`}
                   onClick={close}
                   title={`Unlock with ${PLAN_LABELS[navUnlockPlan(m)]}`}
                   className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted-foreground/70 transition-colors hover:bg-muted"
@@ -109,6 +109,7 @@ export function AppSidebar({ campaign, plan }: { campaign: SidebarCampaign; plan
 
         {/* Footer */}
         <div className="space-y-0.5 border-t border-border px-3 py-3">
+          <Row href="/plans" label="Plans" icon={Sparkles} active={isActive("/plans")} onClick={close} />
           <Row href="/settings" label="Campaign settings" icon={Settings} active={isActive("/settings")} onClick={close} />
           <form action={signOutAction}>
             <button
