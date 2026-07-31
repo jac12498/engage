@@ -20,10 +20,11 @@ export default async function WebsitePage() {
       whyRunning: true,
       plan: true,
       aiModel: true,
+      headshotMime: true, // headshot lives on Campaign now; presence tracked via mime
       websiteEditsThisMonth: true,
       billingPeriodStart: true,
       site: {
-        omit: { headshotData: true }, // large; presence is tracked via headshotMime
+        omit: { headshotData: true }, // legacy column; kept but unused
         include: {
           pages: {
             orderBy: [{ navOrder: "asc" }, { createdAt: "asc" }],
@@ -81,7 +82,7 @@ export default async function WebsitePage() {
   return (
     <WebsiteWorkspace
       campaignId={campaign.id}
-      hasHeadshot={!!s.headshotMime}
+      hasHeadshot={!!campaign.headshotMime}
       site={site}
       pendingSignups={s._count.signups}
       editsUsed={editsUsed}

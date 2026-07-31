@@ -25,8 +25,10 @@ export async function loadPublicSite(campaignId: string) {
           candidateName: true,
           office: true,
           party: true,
+          additionalParties: true,
           committeeName: true,
           state: true,
+          headshotMime: true, // headshot lives on Campaign now
         },
       },
     },

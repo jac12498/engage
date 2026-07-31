@@ -1,5 +1,6 @@
 import Link from "next/link"
 import type { CSSProperties } from "react"
+import { formatBallotLine } from "@/lib/party"
 import { FONT_STACK, type PublicSite } from "./site"
 
 // Themed header/footer chrome for the public newsletter archive pages (list + detail),
@@ -47,7 +48,10 @@ export function ArchiveShell({ site, children }: { site: PublicSite; children: R
           </p>
           <p className="mt-4 text-xs text-white/50">
             Paid for by {campaign.committeeName || `${campaign.candidateName} for ${campaign.office}`}
-            {campaign.party ? ` · ${campaign.party}` : ""}.
+            {formatBallotLine(campaign.party, campaign.additionalParties)
+              ? ` · ${formatBallotLine(campaign.party, campaign.additionalParties)}`
+              : ""}
+            .
           </p>
         </div>
       </footer>

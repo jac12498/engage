@@ -10,18 +10,18 @@ export async function GET(
   { params }: { params: Promise<{ campaignId: string }> }
 ) {
   const { campaignId } = await params
-  const site = await prisma.website.findUnique({
-    where: { campaignId },
+  const campaign = await prisma.campaign.findUnique({
+    where: { id: campaignId },
     select: { headshotData: true, headshotMime: true },
   })
-  if (!site?.headshotData || !site.headshotMime) {
+  if (!campaign?.headshotData || !campaign.headshotMime) {
     return new Response("Not found", { status: 404 })
   }
 
-  const body = Buffer.from(site.headshotData)
+  const body = Buffer.from(campaign.headshotData)
   return new Response(body, {
     headers: {
-      "Content-Type": site.headshotMime,
+      "Content-Type": campaign.headshotMime,
       "Content-Length": String(body.length),
       // Short cache; the builder busts it with ?v= after an upload.
       "Cache-Control": "public, max-age=60",

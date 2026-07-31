@@ -16,20 +16,11 @@ async function currentCampaignId(): Promise<string | null> {
   return campaign?.id ?? null
 }
 
-async function currentSiteId(campaignId: string): Promise<string | null> {
-  const site = await prisma.website.findUnique({
-    where: { campaignId },
-    select: { id: true },
-  })
-  return site?.id ?? null
-}
-
-// Upload / replace the headshot for the signed-in user's website.
+// Upload / replace the candidate headshot for the signed-in user's campaign.
+// Headshot lives on Campaign (part of the profile), so no website is required.
 export async function POST(req: Request) {
   const campaignId = await currentCampaignId()
   if (!campaignId) return new Response("Unauthorized", { status: 401 })
-  const siteId = await currentSiteId(campaignId)
-  if (!siteId) return new Response("No website found", { status: 404 })
 
   let file: File | null = null
   try {
@@ -48,11 +39,12 @@ export async function POST(req: Request) {
   }
 
   const data = Buffer.from(await file.arrayBuffer())
-  await prisma.website.update({
-    where: { id: siteId },
+  await prisma.campaign.update({
+    where: { id: campaignId },
     data: { headshotData: data, headshotMime: file.type },
   })
 
+  revalidatePath("/settings")
   revalidatePath("/website")
   revalidatePath(`/websites/${campaignId}`)
   return Response.json({ ok: true })
@@ -62,14 +54,13 @@ export async function POST(req: Request) {
 export async function DELETE() {
   const campaignId = await currentCampaignId()
   if (!campaignId) return new Response("Unauthorized", { status: 401 })
-  const siteId = await currentSiteId(campaignId)
-  if (!siteId) return new Response("No website found", { status: 404 })
 
-  await prisma.website.update({
-    where: { id: siteId },
+  await prisma.campaign.update({
+    where: { id: campaignId },
     data: { headshotData: null, headshotMime: null },
   })
 
+  revalidatePath("/settings")
   revalidatePath("/website")
   revalidatePath(`/websites/${campaignId}`)
   return Response.json({ ok: true })

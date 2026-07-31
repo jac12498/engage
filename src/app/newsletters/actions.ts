@@ -7,6 +7,7 @@ import { resolveModel, toPlanId } from "@/lib/entitlements"
 import { consumeGeneration } from "@/lib/comms/usage"
 import { generateNewsletterDraft, type NewsletterDraft } from "@/lib/website/newsletterDraft"
 import { sendNewsletterNow, type SendResult } from "@/lib/newsletterSend"
+import { formatBallotLine } from "@/lib/party"
 
 export type NewsletterResult = { ok: true } | { ok: false; error: string }
 export type CreateResult = { ok: true; id: string } | { ok: false; error: string }
@@ -89,7 +90,7 @@ export async function draftNewsletter(instruction: string, model?: string): Prom
       {
         candidateName: campaign.candidateName,
         office: campaign.office,
-        party: campaign.party,
+        party: formatBallotLine(campaign.party, campaign.additionalParties),
         district: campaign.district,
         state: campaign.state,
         bio: campaign.bio,

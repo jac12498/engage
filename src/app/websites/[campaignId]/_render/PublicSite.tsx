@@ -1,5 +1,6 @@
 import Link from "next/link"
 import type { CSSProperties } from "react"
+import { formatBallotLine } from "@/lib/party"
 import { BlockRenderer, type RenderCtx } from "./blocks"
 import { FONT_STACK, type PublicSite as Site, type PublicPage } from "./site"
 
@@ -11,7 +12,7 @@ export function PublicSite({ site, activePage }: { site: Site; activePage: Publi
   const ctx: RenderCtx = {
     campaignId: site.campaignId,
     accentColor: site.accentColor,
-    hasHeadshot: !!site.headshotMime,
+    hasHeadshot: !!campaign.headshotMime,
     candidateName: campaign.candidateName,
   }
 
@@ -83,7 +84,10 @@ export function PublicSite({ site, activePage }: { site: Site; activePage: Publi
           )}
           <p className="mt-4 text-xs text-white/50">
             Paid for by {campaign.committeeName || `${campaign.candidateName} for ${campaign.office}`}
-            {campaign.party ? ` · ${campaign.party}` : ""}.
+            {formatBallotLine(campaign.party, campaign.additionalParties)
+              ? ` · ${formatBallotLine(campaign.party, campaign.additionalParties)}`
+              : ""}
+            .
           </p>
         </div>
       </footer>

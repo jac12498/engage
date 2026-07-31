@@ -14,12 +14,19 @@ export default async function SettingsPage() {
   const campaign = await prisma.campaign.findUnique({
     where: { userId: session.user.id },
     select: {
+      id: true,
       plan: true,
       candidateName: true,
       office: true,
       party: true,
+      additionalParties: true,
       committeeName: true,
-      mailingAddress: true,
+      mailingStreet: true,
+      mailingStreet2: true,
+      mailingCity: true,
+      mailingState: true,
+      mailingZip: true,
+      headshotMime: true,
       district: true,
       districtVoterCount: true,
       state: true,
@@ -44,12 +51,19 @@ export default async function SettingsPage() {
 
         <div className="mt-8">
           <SettingsForm
+            campaignId={campaign.id}
+            hasHeadshot={!!campaign.headshotMime}
             initial={{
               candidateName: campaign.candidateName,
               office: campaign.office,
               party: campaign.party ?? "",
+              additionalParties: campaign.additionalParties,
               committeeName: campaign.committeeName ?? "",
-              mailingAddress: campaign.mailingAddress ?? "",
+              mailingStreet: campaign.mailingStreet ?? "",
+              mailingStreet2: campaign.mailingStreet2 ?? "",
+              mailingCity: campaign.mailingCity ?? "",
+              mailingState: campaign.mailingState ?? "",
+              mailingZip: campaign.mailingZip ?? "",
             }}
             district={{
               name: campaign.district,

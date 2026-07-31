@@ -47,11 +47,35 @@ function bodyToHtml(body: string): string {
     .join("")
 }
 
-interface RenderCampaign {
+interface MailingAddress {
+  mailingStreet: string | null
+  mailingStreet2: string | null
+  mailingCity: string | null
+  mailingState: string | null
+  mailingZip: string | null
+}
+
+interface RenderCampaign extends MailingAddress {
   candidateName: string
   committeeName: string | null
-  mailingAddress: string | null
   website: string | null
+}
+
+/** Compose the US postal components into a single footer line. */
+function composeAddress(c: MailingAddress): string {
+  const line1 = [c.mailingStreet, c.mailingStreet2].map((s) => s?.trim()).filter(Boolean).join(", ")
+  const cityStateZip = [
+    c.mailingCity?.trim(),
+    [c.mailingState?.trim(), c.mailingZip?.trim()].filter(Boolean).join(" "),
+  ]
+    .filter(Boolean)
+    .join(", ")
+  return [line1, cityStateZip].filter(Boolean).join(", ")
+}
+
+/** True only when we have a complete enough address to satisfy CAN-SPAM. */
+function hasMailingAddress(c: MailingAddress): boolean {
+  return Boolean(c.mailingStreet?.trim() && c.mailingCity?.trim() && c.mailingState?.trim() && c.mailingZip?.trim())
 }
 
 export function renderNewsletterHtml(
@@ -60,7 +84,7 @@ export function renderNewsletterHtml(
   unsubscribeUrl: string
 ): string {
   const paidFor = campaign.committeeName ? `Paid for by ${escapeHtml(campaign.committeeName)}. ` : ""
-  const addr = campaign.mailingAddress ? escapeHtml(campaign.mailingAddress) : ""
+  const addr = escapeHtml(composeAddress(campaign))
   return `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:600px;margin:0 auto;padding:8px 4px">
   <h1 style="font-size:22px;color:#1a1a2e;margin:0 0 20px">${escapeHtml(newsletter.subject)}</h1>
   ${bodyToHtml(newsletter.body)}
@@ -99,7 +123,11 @@ export async function sendNewsletterNow(campaignId: string, newsletterId: string
       id: true,
       candidateName: true,
       committeeName: true,
-      mailingAddress: true,
+      mailingStreet: true,
+      mailingStreet2: true,
+      mailingCity: true,
+      mailingState: true,
+      mailingZip: true,
       website: true,
       plan: true,
       creditsThisMonth: true,
@@ -113,8 +141,8 @@ export async function sendNewsletterNow(campaignId: string, newsletterId: string
     },
   })
   if (!campaign) return { ok: false, error: "Campaign not found." }
-  if (!campaign.mailingAddress?.trim()) {
-    return { ok: false, error: "Add a mailing address in Settings before sending (required by law in every email)." }
+  if (!hasMailingAddress(campaign)) {
+    return { ok: false, error: "Add a complete mailing address in Settings before sending (required by law in every email)." }
   }
 
   const subscribers = await prisma.newsletterSubscriber.findMany({

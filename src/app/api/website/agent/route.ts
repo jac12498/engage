@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma"
 import { anthropic } from "@/lib/comms/anthropic"
 import { resolveModel, toPlanId } from "@/lib/entitlements"
 import { consumeWebsiteEdit } from "@/lib/comms/usage"
+import { formatBallotLine } from "@/lib/party"
 import { WEBSITE_TOOLS, executeTool, describeBlockVocabulary } from "@/lib/website/agentTools"
 import { getSiteSnapshot } from "@/lib/website/blockService"
 
@@ -20,14 +21,20 @@ interface ClientTurn {
 }
 
 function systemPrompt(
-  campaign: { candidateName: string; office: string; party: string | null; state: string | null },
+  campaign: {
+    candidateName: string
+    office: string
+    party: string | null
+    additionalParties: string[]
+    state: string | null
+  },
   snapshot: unknown
 ): string {
   return `You are the conversational website builder for a political candidate's campaign site. You edit the site by calling tools — never claim to have made a change you didn't make with a tool.
 
 CANDIDATE
 Name: ${campaign.candidateName}
-Office: ${campaign.office}${campaign.party ? `\nParty: ${campaign.party}` : ""}${campaign.state ? `\nState: ${campaign.state}` : ""}
+Office: ${campaign.office}${formatBallotLine(campaign.party, campaign.additionalParties) ? `\nParty: ${formatBallotLine(campaign.party, campaign.additionalParties)}` : ""}${campaign.state ? `\nState: ${campaign.state}` : ""}
 
 HOW THE SITE WORKS
 The site is a set of PAGES, each an ordered list of BLOCKS. You change content by adding, editing, moving, and deleting blocks, and by creating/updating pages. Every block has a fixed set of props for its type. To edit a block you replace its full props object, so preserve fields you don't intend to change.
@@ -75,6 +82,7 @@ async function handlePost(req: Request) {
       candidateName: true,
       office: true,
       party: true,
+      additionalParties: true,
       state: true,
       plan: true,
       aiModel: true,

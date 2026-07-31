@@ -82,9 +82,25 @@ model Campaign {
   // Candidate / office profile (powers AI Communications + Candidate Website)
   candidateName String
   office        String
-  party         String?
-  committeeName String? // registered campaign committee, e.g. "Friends of Jane Candidate" — powers the legal "Paid for by" disclaimer
-  mailingAddress String? // physical postal address — required in every newsletter footer (CAN-SPAM)
+  party         String? // primary ballot line (required in the UI); null only on legacy rows
+  additionalParties String[] @default([]) // fusion endorsements, e.g. ["Working Families"] alongside a Democratic primary line
+  committeeName String? // registered campaign committee, e.g. "Friends of Jane Candidate" — powers the legal "Paid for by" disclaimer (required in the UI)
+
+  // Physical postal address — required in every newsletter footer (CAN-SPAM). Stored as
+  // standard US components; `mailingAddress` is the deprecated free-text field (unused).
+  mailingAddress String?
+  mailingStreet  String?
+  mailingStreet2 String?
+  mailingCity    String?
+  mailingState   String?
+  mailingZip     String?
+
+  // Candidate headshot — the candidate's photo, stored in-DB. Lives on Campaign (not
+  // Website) so it's part of the profile and available before any site exists. Served
+  // via /api/website/headshot/[campaignId].
+  headshotData Bytes?
+  headshotMime String?
+
   bio           String? @db.Text
   tagline       String?
   website       String?

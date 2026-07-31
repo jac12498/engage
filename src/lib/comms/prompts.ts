@@ -6,6 +6,8 @@
  * the model paraphrases what actually happened rather than inventing specifics.
  */
 
+import { formatBallotLine } from "@/lib/party"
+
 export type ContentType =
   | "press_release"
   | "press_release_quote"
@@ -107,6 +109,7 @@ export interface PromptCampaign {
   office: string
   district: string | null
   party: string | null
+  additionalParties?: string[] | null
   tagline: string | null
   bio: string | null
   // Candidate knowledge from the guided interview (all optional).
@@ -128,7 +131,8 @@ export interface ContextBundle {
 
 export function buildSystemPrompt(campaign: PromptCampaign, ctx: ContextBundle): string {
   const location = campaign.district ? ` in ${campaign.district}` : ""
-  const party = campaign.party ? ` as a ${campaign.party} candidate` : ""
+  const ballot = formatBallotLine(campaign.party, campaign.additionalParties)
+  const party = ballot ? ` as a ${ballot} candidate` : ""
 
   // Candidate knowledge from the interview — the more we know, the more the copy
   // sounds like the actual candidate rather than a generic politician.

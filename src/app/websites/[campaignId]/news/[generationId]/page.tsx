@@ -5,6 +5,7 @@ import type { CSSProperties } from "react"
 import { prisma } from "@/lib/prisma"
 import { CONTENT_TYPE_LABELS, type ContentType } from "@/lib/comms/prompts"
 import { WEBSITE_NEWS_TYPES } from "@/lib/website/blocks"
+import { formatBallotLine } from "@/lib/party"
 import { loadPublicSite, FONT_STACK, paragraphs } from "../../_render/site"
 
 export const dynamic = "force-dynamic"
@@ -107,7 +108,10 @@ export default async function NewsDetailPage({
           </p>
           <p className="mt-4 text-xs text-white/50">
             Paid for by {campaign.committeeName || `${campaign.candidateName} for ${campaign.office}`}
-            {campaign.party ? ` · ${campaign.party}` : ""}.
+            {formatBallotLine(campaign.party, campaign.additionalParties)
+              ? ` · ${formatBallotLine(campaign.party, campaign.additionalParties)}`
+              : ""}
+            .
           </p>
         </div>
       </footer>
