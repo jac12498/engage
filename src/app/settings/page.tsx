@@ -2,7 +2,6 @@ import { redirect } from "next/navigation"
 import { AppHeader } from "@/components/AppHeader"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { PLAN_LABELS, toPlanId } from "@/lib/entitlements"
 import { SettingsForm } from "@/components/settings/SettingsForm"
 
 export const dynamic = "force-dynamic"
@@ -34,11 +33,9 @@ export default async function SettingsPage() {
   })
   if (!campaign) redirect("/onboarding")
 
-  const plan = toPlanId(campaign.plan)
-
   return (
     <div className="min-h-screen bg-[#f4f6f9]">
-      <AppHeader planLabel={PLAN_LABELS[plan]} />
+      <AppHeader campaign={campaign} />
 
       <main className="mx-auto max-w-2xl px-6 py-10">
         <div>

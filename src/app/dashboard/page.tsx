@@ -116,7 +116,14 @@ export default async function WorkspacePage() {
   // Authoritative gate: read the campaign from the DB (avoids stale-JWT loops).
   const campaign = await prisma.campaign.findUnique({
     where: { userId: session.user.id },
-    select: { plan: true, candidateName: true, district: true },
+    select: {
+      id: true,
+      plan: true,
+      candidateName: true,
+      committeeName: true,
+      headshotMime: true,
+      district: true,
+    },
   })
   if (!campaign) redirect("/onboarding")
 
@@ -124,7 +131,7 @@ export default async function WorkspacePage() {
 
   return (
     <div className="min-h-screen bg-[#f4f6f9]">
-      <AppHeader planLabel={PLAN_LABELS[plan]} />
+      <AppHeader campaign={campaign} />
 
       <main className="mx-auto max-w-6xl px-6 py-10">
         <div>
