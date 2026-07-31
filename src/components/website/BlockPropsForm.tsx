@@ -457,7 +457,7 @@ function NewsFeedFields({ p, set }: { p: Props; set: (patch: Props) => void }) {
           ))}
         </div>
         <p className="mt-1.5 text-xs text-muted-foreground">
-          Only published pieces of these types appear. Publish a piece from AI Communications to show it here.
+          Only published pieces of these types appear. Publish a piece from Communications to show it here.
         </p>
       </div>
       <label className="block max-w-[10rem]">

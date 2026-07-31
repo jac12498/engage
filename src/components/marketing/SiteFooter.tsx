@@ -4,7 +4,7 @@ const COLUMNS = [
   {
     title: "Platform",
     links: [
-      { label: "AI Communications", href: "/platform/ai-communications" },
+      { label: "Communications", href: "/platform/ai-communications" },
       { label: "Candidate Websites", href: "/platform/candidate-websites" },
       { label: "Newsletter", href: "/platform/newsletter" },
       { label: "Voter Outreach", href: "/platform/voter-outreach" },

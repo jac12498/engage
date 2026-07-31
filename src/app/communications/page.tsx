@@ -95,7 +95,7 @@ export default async function CommunicationsOverview() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-[#1a1a2e]">AI Communications</h1>
+        <h1 className="text-2xl font-bold text-[#1a1a2e]">Communications</h1>
         <p className="mt-1 text-muted-foreground">
           Draft speeches, letters, social posts, and print — in {campaign.candidateName}&apos;s voice.
         </p>

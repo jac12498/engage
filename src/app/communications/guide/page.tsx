@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { ArrowRight, Check, X } from "lucide-react"
 
-export const metadata = { title: "Writing guide · AI Communications" }
+export const metadata = { title: "Writing guide · Communications" }
 
 const STEPS = [
   {

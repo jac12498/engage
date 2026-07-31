@@ -32,7 +32,7 @@ export interface ModuleDef {
 export const MODULES: ModuleDef[] = [
   {
     id: "ai-communications",
-    name: "AI Communications",
+    name: "Communications",
     tagline: "Letters, op-eds, posts, and speeches drafted in your voice.",
     href: "/communications",
   },
@@ -85,7 +85,7 @@ export const PLAN_LABELS: Record<PlanId, string> = {
 /**
  * Which modules each plan unlocks (cumulative by tier). Mirrors the marketing
  * site's pricing bullets:
- *   Starter  = Candidate Website (basic) + AI Communications
+ *   Starter  = Candidate Website (basic) + Communications
  *   Campaign = + Voter Outreach + Field & canvassing tools
  *   Committee= + Fundraising + Multi-Candidate / Slate
  * Note: the always-on data surfaces aren't modules — Contacts/CRM is Starter,
@@ -174,7 +174,7 @@ export const WEBSITE_CRAWL_LIMITS: Record<PlanId, number | null> = {
 /**
  * Monthly cap on conversational website-builder messages (one candidate instruction,
  * which may trigger several block edits). Metered by message count — independent of
- * the AI Communications Model Credits pool — since a single instruction can fan out
+ * the Communications Model Credits pool — since a single instruction can fan out
  * into many tool calls. Free tier limited; paid tiers unlimited.
  */
 export const WEBSITE_EDIT_LIMITS: Record<PlanId, number | null> = {

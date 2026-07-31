@@ -94,7 +94,7 @@ const PILLARS: {
 }[] = [
   {
     icon: Megaphone,
-    title: "AI Communications",
+    title: "Communications",
     description:
       "Draft press releases, emails, social posts, and talking points in your voice — in seconds, not hours.",
     href: "/platform/ai-communications",

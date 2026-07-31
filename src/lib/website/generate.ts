@@ -2,7 +2,7 @@ import "server-only"
 import { anthropic } from "@/lib/comms/anthropic"
 
 // Website copy is a one-time-ish, quality-sensitive draft, so it uses a strong
-// model and is NOT metered against AI Communications' Model Credits (the website
+// model and is NOT metered against Communications' Model Credits (the website
 // is a separate product surface). Editable after generation.
 const WEBSITE_MODEL = "claude-sonnet-4-6"
 

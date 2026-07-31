@@ -14,7 +14,7 @@ const TIERS: { plan: PlanId; price: string; cadence: string; blurb: string; feat
     price: "Free",
     cadence: "",
     blurb: "Get online and on-message.",
-    features: ["AI Communications", "Candidate website", "Newsletter", "Contacts / CRM"],
+    features: ["Communications", "Candidate website", "Newsletter", "Contacts / CRM"],
   },
   {
     plan: "campaign",

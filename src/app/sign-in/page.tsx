@@ -67,7 +67,7 @@ export default async function SignInPage({
           </form>
 
           <p className="mt-6 text-center text-xs text-muted-foreground">
-            The free Starter plan includes AI Communications — no card required.
+            The free Starter plan includes Communications — no card required.
           </p>
         </div>
 

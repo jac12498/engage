@@ -77,9 +77,9 @@ export async function computeHomeTasks(userId: string): Promise<HomeData | null>
     {
       id: "communication",
       title: "Write your first communication",
-      detail: "Draft a letter, op-ed, or social post in your voice with AI Communications.",
+      detail: "Draft a letter, op-ed, or social post in your voice with Communications.",
       href: "/communications",
-      cta: "Open AI Communications",
+      cta: "Open Communications",
       done: generations > 0,
     },
     {

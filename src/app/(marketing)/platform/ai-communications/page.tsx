@@ -29,7 +29,7 @@ import { SiteFooter } from "@/components/marketing/SiteFooter"
 const APP_URL = "/sign-in"
 
 export const metadata: Metadata = {
-  title: "AI Communications — Engage",
+  title: "Communications — Engage",
   description:
     "Draft letters, op-eds, social posts, speeches, and print in your candidate's voice — in seconds. Trained on your writing samples, issue positions, and the latest campaign intelligence.",
 }
@@ -73,7 +73,7 @@ function Hero() {
             <Megaphone className="h-6 w-6" />
           </span>
           <span className="text-sm font-semibold uppercase tracking-wider text-[#f0b429]">
-            AI Communications
+            Communications
           </span>
         </div>
 

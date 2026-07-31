@@ -59,7 +59,7 @@ export interface NavModule {
 export const NAV_MODULES: NavModule[] = [
   {
     key: "ai-communications",
-    name: "AI Communications",
+    name: "Communications",
     href: "/communications",
     icon: Megaphone,
     match: "/communications",

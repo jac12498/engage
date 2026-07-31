@@ -33,7 +33,7 @@ export default async function OnboardingPage() {
       <main className="mx-auto max-w-3xl px-6 py-10">
         <h1 className="text-2xl font-bold text-[#1a1a2e]">Set up your campaign</h1>
         <p className="mt-1.5 text-muted-foreground">
-          A few details about you and your campaign. This powers your AI Communications and ties your
+          A few details about you and your campaign. This powers your Communications and ties your
           workspace to the right voters.
         </p>
 

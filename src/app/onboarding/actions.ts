@@ -71,7 +71,7 @@ export async function completeOnboarding(
   if (existing) return { ok: true }
 
   // District is optional. Voter File, Voter Outreach, and Field Tools are gated
-  // by state coverage, but AI Communications + Website work nationwide — so a
+  // by state coverage, but Communications + Website work nationwide — so a
   // candidate in an unsupported state can still onboard without picking one.
   let district = null
   if (input.districtId) {

@@ -277,7 +277,7 @@ export function OnboardingForm({ topDistricts }: { topDistricts: DistrictNode[] 
           Choose a district type, then the specific district. You can stop at any level, or keep
           drilling down to a town, ward, or legislative district. This is how we match your campaign
           to the right voters. Voter File, Voter Outreach, and Field Tools aren&rsquo;t available in
-          every state yet — AI Communications and your website work nationwide, so you can skip this
+          every state yet — Communications and your website work nationwide, so you can skip this
           and add it later.
         </p>
 

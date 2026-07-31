@@ -1,5 +1,5 @@
 /**
- * Prompt engine for AI Communications.
+ * Prompt engine for Communications.
  *
  * Ported from the archived Amplify app and extended with optional "Candidate in
  * the News" grounding: selected news items are folded into the system prompt so

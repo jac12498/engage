@@ -176,7 +176,7 @@ const FEATURES = [
     icon: Sparkles,
     title: "AI-drafted issues",
     description:
-      "Describe what to cover and get a full first draft in your voice — the same engine behind your AI Communications, tuned for email.",
+      "Describe what to cover and get a full first draft in your voice — the same engine behind your Communications, tuned for email.",
   },
   {
     icon: Archive,

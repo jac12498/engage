@@ -335,7 +335,7 @@ function Preview() {
           </Link>{" "}
           and an ask drafted by{" "}
           <Link href="/platform/ai-communications" className="font-medium text-[#1b3a6b] underline">
-            AI Communications
+            Communications
           </Link>
           .
         </p>

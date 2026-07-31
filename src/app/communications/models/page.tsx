@@ -3,7 +3,7 @@ import { Sparkles, ArrowRight } from "lucide-react"
 import { ModelComparisonExplorer } from "@/components/communications/ModelComparisonExplorer"
 import { MODELS } from "./samples"
 
-export const metadata = { title: "Choosing a model · AI Communications" }
+export const metadata = { title: "Choosing a model · Communications" }
 
 export default async function ModelComparisonPage({
   searchParams,
