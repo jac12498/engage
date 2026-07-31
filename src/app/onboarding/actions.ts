@@ -19,9 +19,12 @@ export async function fetchChildDistricts(parentId: string): Promise<DistrictNod
 export interface CompleteOnboardingInput {
   candidateName: string
   office: string
-  party?: string
-  /** Registered campaign committee, e.g. "Friends of Jane Candidate". Optional. */
-  committeeName?: string
+  /** Primary ballot line — required. */
+  party: string
+  /** Fusion endorsements alongside the primary line, e.g. ["Working Families"]. */
+  additionalParties: string[]
+  /** Registered campaign committee, e.g. "Friends of Jane Candidate" — required. */
+  committeeName: string
   /**
    * Selected district id from public.districts. Optional — voter-file features
    * aren't supported in every state, so a candidate can onboard without one.
@@ -45,8 +48,23 @@ export async function completeOnboarding(
 
   const candidateName = input.candidateName.trim()
   const office = input.office.trim()
+  const party = input.party.trim()
+  const committeeName = input.committeeName.trim()
   if (!candidateName) return { ok: false, error: "Candidate name is required." }
   if (!office) return { ok: false, error: "Office is required." }
+  if (!party) return { ok: false, error: "Party is required." }
+  if (!committeeName) return { ok: false, error: "Committee name is required." }
+
+  // Clean endorsements: trim, drop blanks, drop the primary party, de-dupe.
+  const seen = new Set<string>([party.toLowerCase()])
+  const additionalParties = (input.additionalParties ?? [])
+    .map((p) => p.trim())
+    .filter((p) => {
+      const k = p.toLowerCase()
+      if (!p || seen.has(k)) return false
+      seen.add(k)
+      return true
+    })
 
   // One Campaign per user.
   const existing = await prisma.campaign.findUnique({ where: { userId } })
@@ -71,8 +89,9 @@ export async function completeOnboarding(
       userId,
       candidateName,
       office,
-      party: input.party?.trim() || null,
-      committeeName: input.committeeName?.trim() || null,
+      party,
+      additionalParties,
+      committeeName,
       plan: "starter",
       state,
       district: district?.name ?? null,

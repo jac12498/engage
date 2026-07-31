@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState, useTransition } from "react"
-import { CheckCircle2, X, Loader2 } from "lucide-react"
+import { CheckCircle2, X, Loader2, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { fetchChildDistricts, submitOnboarding } from "@/app/onboarding/actions"
 import type { DistrictNode } from "@/lib/districts"
@@ -28,6 +28,8 @@ const PARTY_OPTIONS = [
 ] as const
 
 const PARTY_NEEDS_CUSTOM = new Set<string>(["Independent", "Other"])
+// Endorsements are named party lines (fusion voting), so exclude the free-text options.
+const ENDORSEMENT_OPTIONS = PARTY_OPTIONS.filter((p) => !PARTY_NEEDS_CUSTOM.has(p))
 
 export function OnboardingForm({ topDistricts }: { topDistricts: DistrictNode[] }) {
   const [candidateName, setCandidateName] = useState("")
@@ -35,6 +37,8 @@ export function OnboardingForm({ topDistricts }: { topDistricts: DistrictNode[] 
   const [committeeName, setCommitteeName] = useState("")
   const [partyChoice, setPartyChoice] = useState("")
   const [partyCustom, setPartyCustom] = useState("")
+  const [endorsements, setEndorsements] = useState<string[]>([])
+  const [endorsePick, setEndorsePick] = useState("")
 
   const showCustomParty = PARTY_NEEDS_CUSTOM.has(partyChoice)
 
@@ -47,6 +51,18 @@ export function OnboardingForm({ topDistricts }: { topDistricts: DistrictNode[] 
       return partyCustom.trim() || (partyChoice === "Independent" ? "Independent" : "")
     }
     return partyChoice
+  }
+
+  const availableEndorsements = ENDORSEMENT_OPTIONS.filter(
+    (p) => p !== resolveParty() && !endorsements.includes(p)
+  )
+  function addEndorsement() {
+    if (!endorsePick) return
+    setEndorsements((prev) => [...prev, endorsePick])
+    setEndorsePick("")
+  }
+  function removeEndorsement(p: string) {
+    setEndorsements((prev) => prev.filter((x) => x !== p))
   }
 
   const [levels, setLevels] = useState<Level[]>([
@@ -123,14 +139,17 @@ export function OnboardingForm({ topDistricts }: { topDistricts: DistrictNode[] 
     setError(null)
     if (!candidateName.trim()) return setError("Please enter the candidate's name.")
     if (!office.trim()) return setError("Please enter the office sought.")
+    if (!partyChoice) return setError("Please select a party.")
     if (partyChoice === "Other" && !partyCustom.trim())
       return setError("Please enter your party name.")
+    if (!committeeName.trim()) return setError("Please enter a committee name.")
 
     startTransition(async () => {
       const result = await submitOnboarding({
         candidateName,
         office,
         party: resolveParty(),
+        additionalParties: endorsements,
         committeeName,
         districtId: selected?.id,
       })
@@ -162,13 +181,14 @@ export function OnboardingForm({ topDistricts }: { topDistricts: DistrictNode[] 
           </Field>
           <div className="block">
             <span className="mb-1.5 block text-sm font-medium text-[#1a1a2e]">
-              Party (optional)
+              Party<span className="ml-0.5 text-red-500">*</span>
             </span>
             <select
               value={partyChoice}
               onChange={(e) => {
                 setPartyChoice(e.target.value)
                 if (!PARTY_NEEDS_CUSTOM.has(e.target.value)) setPartyCustom("")
+                setEndorsements((prev) => prev.filter((x) => x !== e.target.value))
               }}
               className={selectCls}
             >
@@ -193,7 +213,7 @@ export function OnboardingForm({ topDistricts }: { topDistricts: DistrictNode[] 
             )}
           </div>
           <div className="sm:col-span-2">
-            <Field label="Committee name (optional)">
+            <Field label="Committee name" required>
               <input
                 value={committeeName}
                 onChange={(e) => setCommitteeName(e.target.value)}
@@ -202,8 +222,47 @@ export function OnboardingForm({ topDistricts }: { topDistricts: DistrictNode[] 
               />
             </Field>
             <p className="mt-1.5 text-xs text-muted-foreground">
-              Your registered campaign committee. Used for the &ldquo;Paid for by&rdquo; line on your
-              website and communications. You can add or change this later.
+              Used for the &ldquo;Paid for by&rdquo; line on your website and communications. If you
+              haven&rsquo;t set up an official committee yet, enter your intended name — you can update
+              it later to match the official name if it ends up different.
+            </p>
+          </div>
+
+          {/* Party endorsements */}
+          <div className="block sm:col-span-2">
+            <span className="mb-1.5 block text-sm font-medium text-[#1a1a2e]">
+              Additional party endorsements (optional)
+            </span>
+            {endorsements.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-2">
+                {endorsements.map((p) => (
+                  <span key={p} className="inline-flex items-center gap-1.5 rounded-full bg-[#1b3a6b]/8 px-3 py-1 text-sm font-medium text-[#1b3a6b]">
+                    {p}
+                    <button type="button" onClick={() => removeEndorsement(p)} className="text-[#1b3a6b]/60 hover:text-[#1b3a6b]" aria-label={`Remove ${p}`}>
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <select
+                value={endorsePick}
+                onChange={(e) => setEndorsePick(e.target.value)}
+                disabled={availableEndorsements.length === 0}
+                className={`${selectCls} flex-1`}
+              >
+                <option value="">{availableEndorsements.length ? "Add an endorsing party…" : "No more parties to add"}</option>
+                {availableEndorsements.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+              <Button type="button" variant="outline" onClick={addEndorsement} disabled={!endorsePick}>
+                <Plus className="mr-1 h-4 w-4" /> Add
+              </Button>
+            </div>
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              For fusion voting — e.g. running on both the Democratic and Working Families lines.
             </p>
           </div>
         </div>
