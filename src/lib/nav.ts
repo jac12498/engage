@@ -21,6 +21,7 @@ import {
   Settings,
   FileText,
   Inbox,
+  LayoutTemplate,
   type LucideIcon,
 } from "lucide-react"
 import { PLAN_MODULES, VOTER_FILE_MIN_PLAN, PLAN_ORDER, type PlanId } from "@/lib/entitlements"
@@ -97,6 +98,7 @@ export const NAV_MODULES: NavModule[] = [
     sections: [
       { href: "/newsletters", label: "Newsletters", icon: FileText, exact: true },
       { href: "/newsletters/subscribers", label: "Subscribers", icon: Users },
+      { href: "/newsletters/template", label: "Template", icon: LayoutTemplate },
     ],
   },
   {

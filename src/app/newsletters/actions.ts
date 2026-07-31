@@ -9,6 +9,7 @@ import { generateNewsletterDraft, type NewsletterDraft } from "@/lib/website/new
 import { sendNewsletterNow, type SendResult } from "@/lib/newsletterSend"
 import { formatBallotLine } from "@/lib/party"
 import { parseBlocks } from "@/lib/newsletter/blocks"
+import { parseTemplate } from "@/lib/newsletter/template"
 import { type Prisma } from "@/generated/prisma/client"
 
 export type NewsletterResult = { ok: true } | { ok: false; error: string }
@@ -36,6 +37,19 @@ function revalidateAll(campaignId: string, newsletterId?: string) {
   revalidatePath(`/websites/${campaignId}/newsletter`)
   if (newsletterId) revalidatePath(`/websites/${campaignId}/newsletter/${newsletterId}`)
   revalidatePath(`/websites/${campaignId}`)
+}
+
+/** Save the campaign-level newsletter template (shared header/footer/theme). */
+export async function updateNewsletterTemplate(raw: unknown): Promise<NewsletterResult> {
+  const campaignId = await requireCampaignId()
+  if (!campaignId) return { ok: false, error: "You must be signed in." }
+  const template = parseTemplate(raw)
+  await prisma.campaign.update({
+    where: { id: campaignId },
+    data: { newsletterTemplate: template as unknown as Prisma.InputJsonValue },
+  })
+  revalidatePath("/newsletters/template")
+  return { ok: true }
 }
 
 /** Create an empty draft and return its id (the manager navigates to the editor). */
