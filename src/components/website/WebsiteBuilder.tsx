@@ -1,11 +1,10 @@
 "use client"
 
-import { useRef, useState, useTransition } from "react"
+import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import {
   Loader2,
-  Check,
   Plus,
   Trash2,
   ArrowUp,
@@ -13,7 +12,6 @@ import {
   RefreshCw,
   ArrowRight,
   Inbox,
-  Image as ImageIcon,
   Eye,
   EyeOff,
   Home,
@@ -21,7 +19,6 @@ import {
 import { Button } from "@/components/ui/button"
 import { regenerateSite } from "@/app/website/actions"
 import {
-  updateSiteSettings,
   createPage,
   updatePage,
   deletePage,
@@ -56,11 +53,6 @@ export interface EditorSite {
 const inputCls =
   "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:border-[#1b3a6b] focus:ring-2 focus:ring-[#1b3a6b]/15"
 
-const FONT_THEMES = [
-  { id: "classic", label: "Classic (sans-serif)" },
-  { id: "modern", label: "Modern (geometric)" },
-  { id: "serif", label: "Serif (traditional)" },
-]
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -72,13 +64,9 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 }
 
 export function WebsiteBuilder({
-  campaignId,
-  hasHeadshot: initialHasHeadshot,
   site,
   pendingSignups,
 }: {
-  campaignId: string
-  hasHeadshot: boolean
   site: EditorSite
   pendingSignups: number
 }) {
@@ -278,8 +266,8 @@ export function WebsiteBuilder({
         </div>
       </div>
 
-      {/* Site settings */}
-      <SiteSettings campaignId={campaignId} site={site} hasHeadshot={initialHasHeadshot} onError={setError} />
+      {/* Site theme, donate link, and contact email now live on their own page:
+          /website/settings (reachable from the header + workspace links). */}
 
       {/* Regenerate */}
       <Card title="Start over">
@@ -390,168 +378,5 @@ function PageSettings({
         </div>
       </div>
     </div>
-  )
-}
-
-// ─── Site settings (theme + headshot + links) ────────────────────────────────
-
-function SiteSettings({
-  campaignId,
-  site,
-  hasHeadshot: initialHasHeadshot,
-  onError,
-}: {
-  campaignId: string
-  site: EditorSite
-  hasHeadshot: boolean
-  onError: (e: string | null) => void
-}) {
-  const router = useRouter()
-  const [primaryColor, setPrimary] = useState(site.primaryColor)
-  const [accentColor, setAccent] = useState(site.accentColor)
-  const [fontTheme, setFont] = useState(site.fontTheme)
-  const [donateUrl, setDonate] = useState(site.donateUrl)
-  const [contactEmail, setEmail] = useState(site.contactEmail)
-  const [saving, startSaving] = useTransition()
-  const [saved, setSaved] = useState(false)
-
-  const [hasHeadshot, setHasHeadshot] = useState(initialHasHeadshot)
-  const [headshotVersion, setHeadshotVersion] = useState(0)
-  const [uploading, setUploading] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
-  function saveSettings() {
-    onError(null)
-    startSaving(async () => {
-      const res = await updateSiteSettings({ primaryColor, accentColor, fontTheme, donateUrl, contactEmail })
-      if (res.ok) {
-        setSaved(true)
-        router.refresh()
-        setTimeout(() => setSaved(false), 1500)
-      } else {
-        onError(res.error)
-      }
-    })
-  }
-
-  async function onHeadshotChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    e.target.value = ""
-    if (!file) return
-    onError(null)
-    setUploading(true)
-    try {
-      const fd = new FormData()
-      fd.append("file", file)
-      const res = await fetch("/api/website/headshot", { method: "POST", body: fd })
-      if (res.ok) {
-        setHasHeadshot(true)
-        setHeadshotVersion((v) => v + 1)
-        router.refresh()
-      } else onError((await res.text()) || "Upload failed.")
-    } catch {
-      onError("Upload failed.")
-    } finally {
-      setUploading(false)
-    }
-  }
-
-  async function removeHeadshot() {
-    onError(null)
-    setUploading(true)
-    try {
-      const res = await fetch("/api/website/headshot", { method: "DELETE" })
-      if (res.ok) {
-        setHasHeadshot(false)
-        setHeadshotVersion((v) => v + 1)
-        router.refresh()
-      } else onError((await res.text()) || "Couldn't remove the photo.")
-    } catch {
-      onError("Couldn't remove the photo.")
-    } finally {
-      setUploading(false)
-    }
-  }
-
-  return (
-    <Card title="Site settings">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium text-[#1a1a2e]">Primary color</span>
-          <div className="flex items-center gap-2">
-            <input type="color" value={primaryColor} onChange={(e) => setPrimary(e.target.value)} className="h-9 w-14 cursor-pointer rounded border border-border" />
-            <input value={primaryColor} onChange={(e) => setPrimary(e.target.value)} className={inputCls} />
-          </div>
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium text-[#1a1a2e]">Accent color</span>
-          <div className="flex items-center gap-2">
-            <input type="color" value={accentColor} onChange={(e) => setAccent(e.target.value)} className="h-9 w-14 cursor-pointer rounded border border-border" />
-            <input value={accentColor} onChange={(e) => setAccent(e.target.value)} className={inputCls} />
-          </div>
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium text-[#1a1a2e]">Font style</span>
-          <select value={fontTheme} onChange={(e) => setFont(e.target.value)} className={inputCls}>
-            {FONT_THEMES.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium text-[#1a1a2e]">Headshot</span>
-          <div className="flex items-center gap-4">
-            {hasHeadshot ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={`/api/website/headshot/${campaignId}?v=${headshotVersion}`}
-                alt="Candidate headshot"
-                className="h-16 w-16 rounded-lg border border-border object-cover"
-              />
-            ) : (
-              <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-dashed border-border text-muted-foreground">
-                <ImageIcon className="h-5 w-5" />
-              </div>
-            )}
-            <div className="flex items-center gap-2">
-              <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={onHeadshotChange} className="hidden" />
-              <Button type="button" variant="outline" size="sm" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
-                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : hasHeadshot ? "Replace" : "Upload"}
-              </Button>
-              {hasHeadshot && (
-                <Button type="button" variant="ghost" size="sm" disabled={uploading} onClick={removeHeadshot}>
-                  Remove
-                </Button>
-              )}
-            </div>
-          </div>
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium text-[#1a1a2e]">Donate link</span>
-          <input value={donateUrl} onChange={(e) => setDonate(e.target.value)} placeholder="https://secure.actblue.com/…" className={inputCls} />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium text-[#1a1a2e]">Contact email</span>
-          <input value={contactEmail} onChange={(e) => setEmail(e.target.value)} placeholder="hello@campaign.org" className={inputCls} />
-        </label>
-      </div>
-      <div className="mt-4">
-        <Button onClick={saveSettings} disabled={saving}>
-          {saving ? (
-            <>
-              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Saving…
-            </>
-          ) : saved ? (
-            <>
-              <Check className="mr-1.5 h-4 w-4" /> Saved
-            </>
-          ) : (
-            "Save settings"
-          )}
-        </Button>
-      </div>
-    </Card>
   )
 }

@@ -82,7 +82,6 @@ export default async function WebsitePage() {
   return (
     <WebsiteWorkspace
       campaignId={campaign.id}
-      hasHeadshot={!!campaign.headshotMime}
       site={site}
       pendingSignups={s._count.signups}
       editsUsed={editsUsed}

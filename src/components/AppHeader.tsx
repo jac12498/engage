@@ -22,7 +22,7 @@ export interface HeaderModule {
  * entry here when a module gains a settings page.
  */
 const MODULE_SETTINGS: Record<string, string> = {
-  // "candidate-websites": "/website/settings",  // (none yet)
+  "candidate-websites": "/website/settings",
 }
 
 /**
