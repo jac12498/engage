@@ -646,6 +646,17 @@ function BlockFields({ block, onChange }: { block: EditorBlock; onChange: (patch
       return <textarea value={p.body ?? ""} onChange={(e) => onChange({ body: e.target.value })} rows={5} placeholder="Write your text… Blank line between paragraphs." className={`${inputCls} resize-y leading-relaxed`} />
     case "image":
       return <ImageField props={p} onChange={onChange} />
+    case "imageText":
+      return (
+        <div className="space-y-2">
+          <select value={p.side ?? "left"} onChange={(e) => onChange({ side: e.target.value })} className={inputCls}>
+            <option value="left">Image left · text wraps on the right</option>
+            <option value="right">Image right · text wraps on the left</option>
+          </select>
+          <ImageField props={p} onChange={onChange} />
+          <textarea value={p.body ?? ""} onChange={(e) => onChange({ body: e.target.value })} rows={5} placeholder="Text that wraps around the image… Blank line between paragraphs." className={`${inputCls} resize-y leading-relaxed`} />
+        </div>
+      )
     case "button":
       return (
         <div className="space-y-2">

@@ -5,6 +5,7 @@ import {
   type HeadingProps,
   type TextProps,
   type ImageProps,
+  type ImageTextProps,
   type ButtonProps,
   type SpacerProps,
   type TwoColumnProps,
@@ -59,6 +60,26 @@ function OneBlock({ block }: { block: NlBlock }) {
         </a>
       ) : (
         img
+      )
+    }
+    case "imageText": {
+      const p = block.props as ImageTextProps
+      if (!p.src && !p.body.trim()) return null
+      const floatCls = p.side === "right" ? "float-right ml-5 mb-2" : "float-left mr-5 mb-2"
+      // eslint-disable-next-line @next/next/no-img-element
+      const img = p.src ? <img src={p.src} alt={p.alt ?? ""} className={`${floatCls} w-40 rounded-lg sm:w-56`} /> : null
+      const framed = p.href && img ? (
+        <a href={p.href} target="_blank" rel="noopener noreferrer">{img}</a>
+      ) : (
+        img
+      )
+      // overflow-hidden establishes a block formatting context so the container
+      // grows to contain the float when the image is taller than the text.
+      return (
+        <div className="my-4 overflow-hidden">
+          {framed}
+          <TextBlock body={p.body} />
+        </div>
       )
     }
     case "button": {

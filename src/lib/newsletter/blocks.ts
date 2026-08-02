@@ -18,6 +18,13 @@ export interface ImageProps {
   alt?: string
   href?: string
 }
+export interface ImageTextProps {
+  src: string
+  alt?: string
+  href?: string
+  body: string // plain text; blank lines separate paragraphs
+  side: "left" | "right" // which side the image sits on; text wraps the other side
+}
 export interface ButtonProps {
   label: string
   href: string
@@ -112,6 +119,26 @@ export const NL_BLOCK_SPECS = {
     },
   } satisfies NlBlockSpec<ImageProps>,
 
+  imageText: {
+    type: "imageText",
+    label: "Image + text",
+    description: "An image with text wrapping around it, on the left or right.",
+    defaultProps: (): ImageTextProps => ({ src: "", body: "", side: "left" }),
+    validate: (raw: unknown): ImageTextProps => {
+      const r = record(raw)
+      const props: ImageTextProps = {
+        src: safeHref(r.src) ?? "",
+        body: str(r.body, 20000),
+        side: r.side === "right" ? "right" : "left",
+      }
+      const alt = optStr(r.alt, 300)
+      if (alt) props.alt = alt
+      const href = safeHref(r.href)
+      if (href) props.href = href
+      return props
+    },
+  } satisfies NlBlockSpec<ImageTextProps>,
+
   button: {
     type: "button",
     label: "Button",
@@ -193,6 +220,7 @@ export const NL_BLOCK_ORDER: NlBlockType[] = [
   "heading",
   "text",
   "image",
+  "imageText",
   "button",
   "quote",
   "twoColumn",

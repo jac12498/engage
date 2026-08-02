@@ -3,6 +3,7 @@ import type {
   HeadingProps,
   TextProps,
   ImageProps,
+  ImageTextProps,
   ButtonProps,
   SpacerProps,
   TwoColumnProps,
@@ -133,6 +134,18 @@ function renderBlock(block: NlBlock, tpl: NewsletterTemplate, baseUrl: string): 
       const img = `<img src="${esc(src)}" alt="${esc(p.alt ?? "")}" width="544" style="display:block;width:100%;max-width:544px;height:auto;border:0;border-radius:8px" />`
       const inner = p.href ? `<a href="${esc(p.href)}" target="_blank">${img}</a>` : img
       return `<tr><td style="${pad}">${inner}</td></tr>`
+    }
+    case "imageText": {
+      const p = block.props as ImageTextProps
+      const paras = paragraphsHtml(p.body)
+      if (!p.src) return paras ? `<tr><td style="${pad}">${paras}</td></tr>` : ""
+      const src = absolutize(p.src, baseUrl)
+      const align = p.side === "right" ? "right" : "left"
+      // `align` on <img> is the one wrap technique that survives Outlook.
+      const margin = align === "right" ? "0 0 8px 16px" : "0 16px 8px 0"
+      const img = `<img align="${align}" src="${esc(src)}" alt="${esc(p.alt ?? "")}" width="220" style="width:220px;max-width:45%;height:auto;border:0;border-radius:8px;margin:${margin}" />`
+      const inner = p.href ? `<a href="${esc(p.href)}" target="_blank">${img}</a>` : img
+      return `<tr><td style="${pad}">${inner}${paras}</td></tr>`
     }
     case "button": {
       const p = block.props as ButtonProps
