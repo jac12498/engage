@@ -163,6 +163,13 @@ function renderHeader(tpl: NewsletterTemplate, ctx: EmailRenderCtx): string {
   </td></tr>`
 }
 
+/** The issue title, printed at the top of the body (empty when no title set). */
+function renderTitle(tpl: NewsletterTemplate, ctx: EmailRenderCtx): string {
+  const t = ctx.subject.trim()
+  if (!t) return ""
+  return `<tr><td style="padding:24px 28px 4px"><h1 style="margin:0;font-size:26px;line-height:1.25;font-weight:700;color:${tpl.theme.primaryColor}">${esc(t)}</h1></td></tr>`
+}
+
 function renderFooter(tpl: NewsletterTemplate, ctx: EmailRenderCtx): string {
   const paidFor = ctx.committeeName ? `Paid for by ${esc(ctx.committeeName)}. ` : ""
   const addr = esc(composeAddress(ctx.mailing))
@@ -199,6 +206,7 @@ export function renderNewsletterEmail(
   <tr><td align="center" style="padding:24px 12px">
     <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden">
       ${renderHeader(tpl, ctx)}
+      ${renderTitle(tpl, ctx)}
       ${body}
       ${renderFooter(tpl, ctx)}
     </table>
