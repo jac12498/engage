@@ -385,9 +385,7 @@ export function NewsletterEditor({
       {notice && <p className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-[#1e6b3a]/25 bg-[#1e6b3a]/8 px-4 py-2.5 text-sm text-[#1e6b3a]"><Check className="h-4 w-4" /> {notice}</p>}
       {error && <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">{error}</p>}
 
-      <div className="mt-5 grid gap-6 lg:grid-cols-[1fr_1fr]">
-        {/* Editor column */}
-        <div className="space-y-5">
+      <div className="mt-5 space-y-5">
           {/* AI draft */}
           <div className="rounded-2xl border border-border bg-white p-5">
             <div className="inline-flex items-center gap-2 font-semibold text-[#1a1a2e]"><Sparkles className="h-4 w-4 text-[#c4910a]" /> Draft with AI</div>
@@ -414,6 +412,12 @@ export function NewsletterEditor({
               <span className="mb-1 block text-sm font-medium text-[#1a1a2e]">Newsletter Preview</span>
               <input value={preview} onChange={(e) => setPreview(e.target.value)} placeholder="Short teaser for the inbox preview (optional)" className={inputCls} />
             </label>
+          </div>
+
+          {/* Live preview (full-width row, above the building blocks) */}
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Live preview</p>
+            <iframe title="Newsletter preview" srcDoc={previewHtml} className="h-[70vh] w-full rounded-2xl border border-border bg-white" />
           </div>
 
           {/* Blocks */}
@@ -508,13 +512,6 @@ export function NewsletterEditor({
               </>
             )}
           </div>
-        </div>
-
-        {/* Preview column */}
-        <div className="lg:sticky lg:top-6 lg:self-start">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Live preview</p>
-          <iframe title="Newsletter preview" srcDoc={previewHtml} className="h-[70vh] w-full rounded-2xl border border-border bg-white" />
-        </div>
       </div>
     </div>
   )
