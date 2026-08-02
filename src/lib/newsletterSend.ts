@@ -32,6 +32,85 @@ export type SendResult =
   | { ok: true; sent: number; failed: number; total: number }
   | { ok: false; error: string; limitHit?: boolean }
 
+export type TestSendResult = { ok: true; to: string } | { ok: false; error: string }
+
+/**
+ * Send a single test copy of a newsletter (rendered exactly as subscribers would
+ * get it) to the account owner's email. No metering, no subscriber list, no
+ * publish/sent requirement — works on a draft so you can preview before sending.
+ */
+export async function sendTestNewsletterNow(campaignId: string, newsletterId: string): Promise<TestSendResult> {
+  const newsletter = await prisma.newsletter.findFirst({
+    where: { id: newsletterId, campaignId },
+    select: { subject: true, body: true, blocks: true },
+  })
+  if (!newsletter) return { ok: false, error: "Newsletter not found." }
+
+  const campaign = await prisma.campaign.findUnique({
+    where: { id: campaignId },
+    select: {
+      id: true,
+      candidateName: true,
+      committeeName: true,
+      mailingStreet: true,
+      mailingStreet2: true,
+      mailingCity: true,
+      mailingState: true,
+      mailingZip: true,
+      headshotMime: true,
+      newsletterTemplate: true,
+      user: { select: { email: true } },
+    },
+  })
+  if (!campaign) return { ok: false, error: "Campaign not found." }
+  const to = campaign.user?.email
+  if (!to) return { ok: false, error: "No account email to send the test to." }
+
+  const blocks =
+    Array.isArray(newsletter.blocks) && newsletter.blocks.length > 0
+      ? newsletter.blocks
+      : newsletter.body?.trim()
+        ? [{ id: "legacy", type: "text", props: { body: newsletter.body } }]
+        : []
+
+  const base = baseUrl()
+  const html = renderNewsletterEmail(campaign.newsletterTemplate, blocks, {
+    subject: newsletter.subject,
+    candidateName: campaign.candidateName,
+    committeeName: campaign.committeeName,
+    campaignId: campaign.id,
+    mailing: {
+      street: campaign.mailingStreet,
+      street2: campaign.mailingStreet2,
+      city: campaign.mailingCity,
+      state: campaign.mailingState,
+      zip: campaign.mailingZip,
+    },
+    unsubscribeUrl: "#",
+    headshotUrl: campaign.headshotMime ? `${base}/api/website/headshot/${campaign.id}` : null,
+    baseUrl: base,
+  })
+
+  const fromName = sanitizeName(campaign.committeeName || campaign.candidateName) || "Newsletter"
+  try {
+    const { error } = await resend.emails.send({
+      from: `${fromName} <${SEND_ADDRESS}>`,
+      to,
+      replyTo: to,
+      subject: `[Test] ${newsletter.subject || "Newsletter"}`,
+      html,
+    })
+    if (error) {
+      console.error("[newsletterSend] test send error:", error)
+      return { ok: false, error: "Could not send the test email." }
+    }
+  } catch (e) {
+    console.error("[newsletterSend] test send threw:", e)
+    return { ok: false, error: "Could not send the test email." }
+  }
+  return { ok: true, to }
+}
+
 /**
  * Send a published newsletter to all `active` subscribers. Idempotent-guarded by
  * `newsletter.sentAt` (won't re-send). Meters recipient-emails against the plan cap

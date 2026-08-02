@@ -28,6 +28,7 @@ import {
   unpublishNewsletter,
   deleteNewsletter,
   sendNewsletter,
+  sendTestNewsletter,
 } from "@/app/newsletters/actions"
 
 type Props = Record<string, string>
@@ -97,7 +98,8 @@ export function NewsletterEditor({
   const [pub, startPub] = useTransition()
   const [deleting, startDelete] = useTransition()
   const [sending, startSend] = useTransition()
-  const busy = saving || drafting || pub || deleting || sending
+  const [testing, startTest] = useTransition()
+  const busy = saving || drafting || pub || deleting || sending || testing
 
   const published = newsletter.status === "published"
   const sent = Boolean(newsletter.sentAt)
@@ -209,6 +211,26 @@ export function NewsletterEditor({
     })
   }
 
+  function doTest() {
+    setError(null)
+    setNotice(null)
+    startTest(async () => {
+      // Save current edits first so the test reflects what's on screen.
+      const saved = await updateNewsletter(newsletter.id, {
+        subject,
+        preview,
+        blocks: blocks.map((b) => ({ id: b.id, type: b.type, props: b.props })),
+      })
+      if (!saved.ok) {
+        setError(saved.error)
+        return
+      }
+      const res = await sendTestNewsletter(newsletter.id)
+      if (!res.ok) setError(res.error)
+      else setNotice(`Test sent to ${res.to} — check your inbox.`)
+    })
+  }
+
   function doSend() {
     if (!confirm(`Email this newsletter to ${activeSubscribers} confirmed subscriber${activeSubscribers === 1 ? "" : "s"}? This can't be undone.`)) return
     setError(null)
@@ -312,6 +334,10 @@ export function NewsletterEditor({
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={() => save()} disabled={busy}>{saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null} Save</Button>
             <Button variant={published ? "outline" : "default"} onClick={togglePublish} disabled={busy}>{pub ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}{published ? "Unpublish" : "Save & publish"}</Button>
+            <Button variant="outline" onClick={doTest} disabled={busy || blocks.length === 0}>
+              {testing ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />}
+              Send test to me
+            </Button>
           </div>
 
           {/* Send */}

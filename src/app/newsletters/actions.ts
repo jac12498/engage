@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma"
 import { resolveModel, toPlanId } from "@/lib/entitlements"
 import { consumeGeneration } from "@/lib/comms/usage"
 import { generateNewsletterDraft, type NewsletterDraft } from "@/lib/website/newsletterDraft"
-import { sendNewsletterNow, type SendResult } from "@/lib/newsletterSend"
+import { sendNewsletterNow, sendTestNewsletterNow, type SendResult, type TestSendResult } from "@/lib/newsletterSend"
 import { formatBallotLine } from "@/lib/party"
 import { parseBlocks } from "@/lib/newsletter/blocks"
 import { parseTemplate } from "@/lib/newsletter/template"
@@ -169,6 +169,13 @@ export async function sendNewsletter(id: string): Promise<SendResult> {
   const result = await sendNewsletterNow(campaignId, id)
   if (result.ok) revalidateAll(campaignId, id)
   return result
+}
+
+/** Email a single test copy of the newsletter to the account owner. */
+export async function sendTestNewsletter(id: string): Promise<TestSendResult> {
+  const campaignId = await requireCampaignId()
+  if (!campaignId) return { ok: false, error: "You must be signed in." }
+  return sendTestNewsletterNow(campaignId, id)
 }
 
 /** Permanently delete a newsletter. */
