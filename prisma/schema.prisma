@@ -155,6 +155,7 @@ model Campaign {
   newsletterSubscribers NewsletterSubscriber[]
   newsletters  Newsletter[]
   newsletterImages NewsletterImage[]
+  newsletterPresets NewsletterPreset[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -439,6 +440,24 @@ model NewsletterImage {
   @@schema("engagecampaign")
 }
 
+// A saved newsletter preset — a full starting point bundling branding (theme/
+// header/footer) + a starting block layout. Users start a new issue from one, or
+// "save as template" from any issue. Built-in presets live in lib/newsletter/presets.ts.
+model NewsletterPreset {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  name     String
+  template Json // branding: { theme, header, footer }
+  blocks   Json // starting content blocks [{ id, type, props }]
+
+  createdAt DateTime @default(now())
+
+  @@index([campaignId])
+  @@schema("engagecampaign")
+}
+
 // One issue of the campaign's newsletter. Authored (optionally AI-drafted) in the
 // newsletter manager, published to the public archive, and — in Phase 3 — emailed to
 // active subscribers. `body` is plain text (blank lines = paragraphs) so it renders
@@ -453,6 +472,7 @@ model Newsletter {
   preview String? // short teaser / email preheader
   body    String  @default("") @db.Text // LEGACY plain-text body; superseded by `blocks`
   blocks  Json?   // ordered content blocks [{ id, type, props }]; null = legacy (use body)
+  template Json?  // per-issue branding override (from a preset); null = campaign default
   model   String? // AI model used to draft, if any
 
   status      String    @default("draft") // draft | published

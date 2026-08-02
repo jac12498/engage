@@ -42,7 +42,7 @@ export type TestSendResult = { ok: true; to: string } | { ok: false; error: stri
 export async function sendTestNewsletterNow(campaignId: string, newsletterId: string): Promise<TestSendResult> {
   const newsletter = await prisma.newsletter.findFirst({
     where: { id: newsletterId, campaignId },
-    select: { subject: true, body: true, blocks: true },
+    select: { subject: true, body: true, blocks: true, template: true },
   })
   if (!newsletter) return { ok: false, error: "Newsletter not found." }
 
@@ -74,7 +74,7 @@ export async function sendTestNewsletterNow(campaignId: string, newsletterId: st
         : []
 
   const base = baseUrl()
-  const html = renderNewsletterEmail(campaign.newsletterTemplate, blocks, {
+  const html = renderNewsletterEmail(newsletter.template ?? campaign.newsletterTemplate, blocks, {
     subject: newsletter.subject,
     candidateName: campaign.candidateName,
     committeeName: campaign.committeeName,
@@ -119,7 +119,7 @@ export async function sendTestNewsletterNow(campaignId: string, newsletterId: st
 export async function sendNewsletterNow(campaignId: string, newsletterId: string): Promise<SendResult> {
   const newsletter = await prisma.newsletter.findFirst({
     where: { id: newsletterId, campaignId },
-    select: { id: true, subject: true, body: true, blocks: true, status: true, sentAt: true },
+    select: { id: true, subject: true, body: true, blocks: true, template: true, status: true, sentAt: true },
   })
   if (!newsletter) return { ok: false, error: "Newsletter not found." }
   if (newsletter.status !== "published") return { ok: false, error: "Publish the newsletter before sending." }
@@ -218,7 +218,7 @@ export async function sendNewsletterNow(campaignId: string, newsletterId: string
         to: sub.email,
         replyTo,
         subject: newsletter.subject,
-        html: renderNewsletterEmail(campaign.newsletterTemplate, blocks, ctxFor(unsubscribeUrl)),
+        html: renderNewsletterEmail(newsletter.template ?? campaign.newsletterTemplate, blocks, ctxFor(unsubscribeUrl)),
         headers: {
           "List-Unsubscribe": `<${unsubscribeUrl}>`,
           "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",

@@ -29,6 +29,7 @@ import {
   deleteNewsletter,
   sendNewsletter,
   sendTestNewsletter,
+  saveAsPreset,
 } from "@/app/newsletters/actions"
 
 type Props = Record<string, string>
@@ -211,6 +212,27 @@ export function NewsletterEditor({
     })
   }
 
+  function doSaveAsPreset() {
+    const name = window.prompt("Name this template (saves the branding + this layout to reuse):")
+    if (!name?.trim()) return
+    setError(null)
+    setNotice(null)
+    startSave(async () => {
+      const saved = await updateNewsletter(newsletter.id, {
+        subject,
+        preview,
+        blocks: blocks.map((b) => ({ id: b.id, type: b.type, props: b.props })),
+      })
+      if (!saved.ok) {
+        setError(saved.error)
+        return
+      }
+      const res = await saveAsPreset(newsletter.id, name.trim())
+      if (!res.ok) setError(res.error)
+      else setNotice(`Saved as template “${name.trim()}”.`)
+    })
+  }
+
   function doTest() {
     setError(null)
     setNotice(null)
@@ -337,6 +359,9 @@ export function NewsletterEditor({
             <Button variant="outline" onClick={doTest} disabled={busy || blocks.length === 0}>
               {testing ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />}
               Send test to me
+            </Button>
+            <Button variant="ghost" onClick={doSaveAsPreset} disabled={busy || blocks.length === 0}>
+              Save as template
             </Button>
           </div>
 

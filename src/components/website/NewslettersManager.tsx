@@ -3,9 +3,10 @@
 import { useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, ArrowRight, Plus, Loader2, Mail, FileText, Inbox } from "lucide-react"
+import { ArrowLeft, ArrowRight, Plus, Loader2, Mail, FileText, Inbox, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { createNewsletter } from "@/app/newsletters/actions"
+import { BUILTIN_PRESETS } from "@/lib/newsletter/presets"
 
 export interface NewsletterRow {
   id: string
@@ -22,18 +23,22 @@ function formatDay(iso: string) {
 export function NewslettersManager({
   newsletters,
   activeSubscribers,
+  presets,
 }: {
   newsletters: NewsletterRow[]
   activeSubscribers: number
+  presets: { id: string; name: string }[]
 }) {
   const router = useRouter()
   const [creating, startCreating] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
 
-  function create() {
+  function create(presetKey?: string) {
+    setMenuOpen(false)
     setError(null)
     startCreating(async () => {
-      const res = await createNewsletter()
+      const res = await createNewsletter(presetKey)
       if (res.ok) router.push(`/newsletters/${res.id}`)
       else setError(res.error)
     })
@@ -63,10 +68,33 @@ export function NewslettersManager({
             {activeSubscribers} active subscriber{activeSubscribers === 1 ? "" : "s"}
           </Link>
         </div>
-        <Button onClick={create} disabled={creating}>
-          {creating ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Plus className="mr-1.5 h-4 w-4" />}
-          New newsletter
-        </Button>
+        <div className="relative">
+          <Button onClick={() => setMenuOpen((v) => !v)} disabled={creating}>
+            {creating ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Plus className="mr-1.5 h-4 w-4" />}
+            New newsletter
+            <ChevronDown className="ml-1.5 h-4 w-4" />
+          </Button>
+          {menuOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+              <div className="absolute right-0 z-20 mt-1 w-64 overflow-hidden rounded-xl border border-border bg-white py-1 shadow-lg">
+                <MenuItem label="Blank newsletter" onClick={() => create()} />
+                <p className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Start from a template</p>
+                {BUILTIN_PRESETS.map((p) => (
+                  <MenuItem key={p.key} label={p.name} sub={p.description} onClick={() => create(`builtin:${p.key}`)} />
+                ))}
+                {presets.length > 0 && (
+                  <>
+                    <p className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Your templates</p>
+                    {presets.map((p) => (
+                      <MenuItem key={p.id} label={p.name} onClick={() => create(`saved:${p.id}`)} />
+                    ))}
+                  </>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -116,5 +144,14 @@ export function NewslettersManager({
         </div>
       )}
     </div>
+  )
+}
+
+function MenuItem({ label, sub, onClick }: { label: string; sub?: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="block w-full px-3 py-2 text-left transition-colors hover:bg-muted">
+      <span className="block text-sm font-medium text-[#1a1a2e]">{label}</span>
+      {sub && <span className="block text-xs text-muted-foreground">{sub}</span>}
+    </button>
   )
 }

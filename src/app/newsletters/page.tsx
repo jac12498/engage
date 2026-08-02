@@ -17,13 +17,18 @@ export default async function NewslettersPage() {
   })
   if (!campaign) redirect("/onboarding")
 
-  const [items, activeSubscribers] = await Promise.all([
+  const [items, activeSubscribers, presets] = await Promise.all([
     prisma.newsletter.findMany({
       where: { campaignId: campaign.id },
       orderBy: { updatedAt: "desc" },
       select: { id: true, subject: true, status: true, updatedAt: true, publishedAt: true },
     }),
     prisma.newsletterSubscriber.count({ where: { campaignId: campaign.id, status: "active" } }),
+    prisma.newsletterPreset.findMany({
+      where: { campaignId: campaign.id },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, name: true },
+    }),
   ])
 
   const rows: NewsletterRow[] = items.map((n) => ({
@@ -34,5 +39,5 @@ export default async function NewslettersPage() {
     publishedAt: n.publishedAt ? n.publishedAt.toISOString() : null,
   }))
 
-  return <NewslettersManager newsletters={rows} activeSubscribers={activeSubscribers} />
+  return <NewslettersManager newsletters={rows} activeSubscribers={activeSubscribers} presets={presets} />
 }

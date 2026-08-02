@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { parseTemplate } from "@/lib/newsletter/template"
 import { NewsletterTemplateEditor } from "@/components/website/NewsletterTemplateEditor"
+import { SavedPresets } from "@/components/website/SavedPresets"
 
 export const dynamic = "force-dynamic"
 export const metadata = { title: "Newsletter template · Engage" }
@@ -28,7 +29,14 @@ export default async function NewsletterTemplatePage() {
   })
   if (!campaign) redirect("/onboarding")
 
+  const presets = await prisma.newsletterPreset.findMany({
+    where: { campaignId: campaign.id },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, name: true },
+  })
+
   return (
+    <>
     <NewsletterTemplateEditor
       campaignId={campaign.id}
       campaign={{
@@ -45,5 +53,7 @@ export default async function NewsletterTemplatePage() {
       }}
       template={parseTemplate(campaign.newsletterTemplate)}
     />
+    <SavedPresets presets={presets} />
+    </>
   )
 }

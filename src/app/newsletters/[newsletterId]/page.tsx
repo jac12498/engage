@@ -80,7 +80,7 @@ export default async function NewsletterEditorPage({
           zip: campaign.mailingZip,
         },
       }}
-      template={parseTemplate(campaign.newsletterTemplate)}
+      template={parseTemplate(n.template ?? campaign.newsletterTemplate)}
       newsletter={{
         id: n.id,
         subject: n.subject,
