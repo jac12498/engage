@@ -34,6 +34,7 @@ const EXAMPLE_FORMAT: Record<Medium, string> = {
   letters: "letter",
   social: "social",
   print: "print",
+  newsletter: "letter", // no dedicated example set; a letter is the closest prose analog
 }
 
 export function MediumGenerator({

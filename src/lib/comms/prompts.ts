@@ -81,15 +81,16 @@ export function isContentType(value: string): value is ContentType {
 
 // ─── Media grouping (drives the sub-pages) ───────────────────────────────────
 
-export type Medium = "speeches" | "letters" | "social" | "print"
+export type Medium = "speeches" | "letters" | "social" | "print" | "newsletter"
 
-export const MEDIA: Medium[] = ["speeches", "letters", "social", "print"]
+export const MEDIA: Medium[] = ["speeches", "letters", "social", "print", "newsletter"]
 
 export const MEDIUM_LABELS: Record<Medium, string> = {
   speeches: "Speeches",
   letters: "Letters",
   social: "Social Media",
   print: "Print Media",
+  newsletter: "Newsletter Articles",
 }
 
 export const MEDIUM_TYPES: Record<Medium, ContentType[]> = {
@@ -97,6 +98,7 @@ export const MEDIUM_TYPES: Record<Medium, ContentType[]> = {
   letters: ["email", "fundraising_email", "letter_to_editor"],
   social: ["social_facebook", "social_twitter", "social_instagram"],
   print: ["press_release", "press_release_quote", "op_ed", "flyer", "event_announcement"],
+  newsletter: ["newsletter_article"],
 }
 
 export function isMedium(value: string): value is Medium {

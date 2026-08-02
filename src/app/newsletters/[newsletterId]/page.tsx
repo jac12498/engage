@@ -34,6 +34,7 @@ export default async function NewsletterEditorPage({
       headshotMime: true,
       newsletterTemplate: true,
       site: { select: { published: true } },
+      topics: { orderBy: { updatedAt: "desc" }, select: { id: true, title: true } },
     },
   })
   if (!campaign) redirect("/onboarding")
@@ -68,6 +69,7 @@ export default async function NewsletterEditorPage({
       defaultModel={campaign.aiModel ?? DEFAULT_AI_MODEL}
       activeSubscribers={activeSubscribers}
       hasMailingAddress={hasMailingAddress}
+      topics={campaign.topics}
       campaign={{
         candidateName: campaign.candidateName,
         committeeName: campaign.committeeName,

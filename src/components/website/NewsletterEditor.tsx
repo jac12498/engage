@@ -110,6 +110,7 @@ export function NewsletterEditor({
   defaultModel,
   activeSubscribers,
   hasMailingAddress,
+  topics,
   campaign,
   template,
   newsletter,
@@ -119,6 +120,7 @@ export function NewsletterEditor({
   defaultModel: string
   activeSubscribers: number
   hasMailingAddress: boolean
+  topics: { id: string; title: string }[]
   campaign: EditorCampaign
   template: NewsletterTemplate
   newsletter: Editable
@@ -457,7 +459,7 @@ export function NewsletterEditor({
 
           {/* 3. Create article with AI (collapsible) */}
           <CollapsibleCard title="Create Article with AI" icon={<Sparkles className="h-4 w-4 text-[#c4910a]" />} defaultOpen={false}>
-            <ArticleAiPanel mode="create" defaultModel={defaultModel} onAccept={insertArticleFromAi} />
+            <ArticleAiPanel mode="create" defaultModel={defaultModel} topics={topics} onAccept={insertArticleFromAi} />
           </CollapsibleCard>
 
           {/* 4. Content blocks / groups (collapsible) */}
@@ -492,6 +494,7 @@ export function NewsletterEditor({
                         <ArticleAiPanel
                           mode="assist"
                           defaultModel={defaultModel}
+                          topics={topics}
                           initialDraft={groupProse(rowBlocks)}
                           onAccept={(title, body) => { applyAiToGroup(gid, title, body); setAssistGroup(null) }}
                           onClose={() => setAssistGroup(null)}
