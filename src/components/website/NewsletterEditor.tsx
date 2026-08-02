@@ -171,7 +171,7 @@ export function NewsletterEditor({
       }
       setSubject(res.draft.subject)
       setPreview(res.draft.preview)
-      setBlocks([{ id: genId(), type: "text", props: { body: res.draft.body } }])
+      setBlocks(res.draft.blocks.map((b) => ({ id: genId(), type: b.type, props: { ...(b.props as Props) } })))
       setNotice("Draft ready — edit the blocks, then Save.")
     })
   }

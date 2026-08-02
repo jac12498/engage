@@ -1,8 +1,10 @@
 import "server-only"
 import { anthropic } from "@/lib/comms/anthropic"
+import { parseBlocks, type NlBlock } from "@/lib/newsletter/blocks"
 
 // AI drafting for a newsletter issue — mirrors the website generate.ts approach:
-// one structured Claude call, profile-grounded, tolerant JSON parse. The candidate
+// one structured Claude call, profile-grounded, tolerant JSON parse. Emits a
+// composed set of content blocks (heading / text / button / divider). The candidate
 // reviews/edits the draft before saving, so this returns the draft (never persists).
 
 export interface NewsletterProfile {
@@ -20,7 +22,7 @@ export interface NewsletterProfile {
 export interface NewsletterDraft {
   subject: string
   preview: string
-  body: string
+  blocks: NlBlock[]
 }
 
 function profileBlock(p: NewsletterProfile): string {
@@ -47,13 +49,21 @@ export async function generateNewsletterDraft(
   instruction: string,
   model: string
 ): Promise<NewsletterDraft> {
-  const user = `Draft a newsletter email from this candidate to their supporters. Return a single JSON object with EXACTLY these keys:
+  const user = `Draft a newsletter email from this candidate to their supporters as a set of content BLOCKS. Return a single JSON object with EXACTLY these keys:
 
 {
   "subject": "a compelling email subject line, under 80 characters",
   "preview": "a one-sentence preview/preheader that entices the reader to open",
-  "body": "the newsletter body in the candidate's first-person voice: 3-6 short paragraphs separated by \\n\\n. Open with a warm greeting, share the update, and close with a clear call to action (volunteer, donate, attend, or share). Plain text only — no markdown, no headings, no hyperlinks."
+  "blocks": [ /* an ordered array of content blocks (see types below) */ ]
 }
+
+BLOCK TYPES (each block is { "type": ..., "props": {...} }):
+- { "type": "heading", "props": { "text": "short section heading" } }
+- { "type": "text", "props": { "body": "one or more paragraphs, plain text, \\n\\n between paragraphs" } }
+- { "type": "button", "props": { "label": "Donate", "href": "#" } }  — a call to action; ALWAYS use "#" for href (the candidate fills in the real link)
+- { "type": "divider", "props": {} }  — a visual separator
+
+COMPOSE A REAL ISSUE: open with a warm first-person "text" greeting + the update (use 1-3 "text" blocks, optionally a "heading" to break up sections), then end with ONE "button" call to action (Donate / Volunteer / RSVP). Keep paragraphs short. Write in the candidate's authentic voice. Never invent facts, endorsements, poll numbers, or events the material doesn't support.
 
 WHAT THIS NEWSLETTER IS ABOUT
 ${instruction}
@@ -86,9 +96,11 @@ function parseDraft(text: string): NewsletterDraft {
   }
   const o = raw as Record<string, unknown>
   const str = (v: unknown, f = ""): string => (typeof v === "string" ? v.trim() : f)
+  const blocks = parseBlocks(o.blocks)
   return {
     subject: str(o.subject).slice(0, 200),
     preview: str(o.preview).slice(0, 300),
-    body: str(o.body),
+    // Fall back to a single text block if the model returned nothing usable.
+    blocks: blocks.length > 0 ? blocks : [{ id: "draft", type: "text", props: { body: str(o.body) } }],
   }
 }
