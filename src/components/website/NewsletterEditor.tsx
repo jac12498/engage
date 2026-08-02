@@ -168,6 +168,17 @@ export function NewsletterEditor({
     setBlocks((prev) => [...prev, ...added])
     setNotice(null)
   }
+  /** Append a new block into an existing group, right after its last block. */
+  function addBlockToGroup(groupId: string, type: NlBlockType) {
+    setBlocks((prev) => {
+      const row = computeRows(prev).find((r) => r.groupId === groupId)
+      const nb: EditorBlock = { id: genId(), type, props: { ...(NL_BLOCK_SPECS[type].defaultProps() as Props) }, groupId }
+      if (!row) return [...prev, nb]
+      const at = row.start + row.len
+      return [...prev.slice(0, at), nb, ...prev.slice(at)]
+    })
+    setNotice(null)
+  }
   function updateProps(id: string, patch: Props) {
     setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, props: { ...b.props, ...patch } } : b)))
   }
@@ -450,10 +461,12 @@ export function NewsletterEditor({
                       collapsed={isCollapsed}
                       first={ri === 0}
                       last={ri === rows.length - 1}
+                      busy={busy}
                       onToggle={() => toggleCollapse(gid)}
                       onMove={(d) => moveGroup(gid, d)}
                       onUngroup={() => ungroup(gid)}
                       onRemove={() => removeGroup(gid)}
+                      onAddBlock={(type) => addBlockToGroup(gid, type)}
                     >
                       {rowBlocks.map((b, bi) => (
                         <BlockCard key={b.id} block={b} first={bi === 0} last={bi === rowBlocks.length - 1} onChange={(patch) => updateProps(b.id, patch)} onMove={(d) => moveBlock(b.id, d)} onRemove={() => removeBlock(b.id)} />
@@ -569,10 +582,12 @@ function GroupCard({
   collapsed,
   first,
   last,
+  busy,
   onToggle,
   onMove,
   onUngroup,
   onRemove,
+  onAddBlock,
   children,
 }: {
   label: string
@@ -580,10 +595,12 @@ function GroupCard({
   collapsed: boolean
   first: boolean
   last: boolean
+  busy: boolean
   onToggle: () => void
   onMove: (dir: -1 | 1) => void
   onUngroup: () => void
   onRemove: () => void
+  onAddBlock: (type: NlBlockType) => void
   children: ReactNode
 }) {
   return (
@@ -602,7 +619,19 @@ function GroupCard({
           <button onClick={onRemove} className="rounded p-1 text-muted-foreground hover:bg-red-50 hover:text-red-600" aria-label="Delete article" title="Delete the article and its blocks"><Trash2 className="h-4 w-4" /></button>
         </div>
       </div>
-      {!collapsed && <div className="mt-3 space-y-3">{children}</div>}
+      {!collapsed && (
+        <div className="mt-3 space-y-3">
+          {children}
+          <div className="flex flex-wrap gap-1.5 rounded-xl border border-dashed border-[#1b3a6b]/30 p-2">
+            <span className="mr-1 inline-flex items-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Add to article:</span>
+            {NL_BLOCK_ORDER.map((type) => (
+              <button key={type} onClick={() => onAddBlock(type)} disabled={busy} className="inline-flex items-center gap-1 rounded-md border border-border bg-white px-2 py-1 text-xs font-medium text-[#1a1a2e] transition-colors hover:border-[#1b3a6b]/40 disabled:opacity-50">
+                <Plus className="h-3 w-3 text-muted-foreground" /> {NL_BLOCK_SPECS[type].label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
