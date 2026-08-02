@@ -22,6 +22,7 @@ export type ContentType =
   | "op_ed"
   | "flyer"
   | "event_announcement"
+  | "newsletter_article"
 
 export const CONTENT_TYPES: ContentType[] = [
   "press_release",
@@ -37,6 +38,7 @@ export const CONTENT_TYPES: ContentType[] = [
   "op_ed",
   "flyer",
   "event_announcement",
+  "newsletter_article",
 ]
 
 export const CONTENT_TYPE_LABELS: Record<ContentType, string> = {
@@ -53,6 +55,7 @@ export const CONTENT_TYPE_LABELS: Record<ContentType, string> = {
   op_ed: "Op-Ed",
   flyer: "Flyer / Handout",
   event_announcement: "Event Announcement",
+  newsletter_article: "Newsletter Article",
 }
 
 export const CONTENT_TYPE_ICONS: Record<ContentType, string> = {
@@ -69,6 +72,7 @@ export const CONTENT_TYPE_ICONS: Record<ContentType, string> = {
   op_ed: "✍️",
   flyer: "📄",
   event_announcement: "📅",
+  newsletter_article: "🗞️",
 }
 
 export function isContentType(value: string): value is ContentType {
@@ -387,5 +391,17 @@ Keep it tight and skimmable — this is print someone reads in seconds.`
 Topic/Event: ${issueTopic}${ctx}
 
 Include: A compelling headline, what the event is, why people should attend, date/time/location placeholders if not provided, RSVP or registration call to action. Write versions suitable for both email and social media.`
+
+    case "newsletter_article":
+      return `Write ONE article for ${candidateName}'s email newsletter — a single self-contained story, not a whole newsletter.
+
+Topic: ${issueTopic}${ctx}
+
+Format exactly:
+- The first line is a short, specific headline (roughly 4-12 words). No label, no markdown, no quotation marks.
+- Then a blank line.
+- Then the article body: 2-4 short paragraphs, 150-350 words total, in ${candidateName}'s authentic first-person voice, concrete and constituent-focused. Separate paragraphs with a blank line.
+
+Do NOT add a greeting, signature, subject line, images, links, or call-to-action buttons — just the headline line and the body paragraphs.`
   }
 }

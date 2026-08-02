@@ -3,11 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { resolveModel, toPlanId } from "@/lib/entitlements"
-import { consumeGeneration } from "@/lib/comms/usage"
-import { generateNewsletterDraft, type NewsletterDraft } from "@/lib/website/newsletterDraft"
 import { sendNewsletterNow, sendTestNewsletterNow, type SendResult, type TestSendResult } from "@/lib/newsletterSend"
-import { formatBallotLine } from "@/lib/party"
 import { parseBlocks } from "@/lib/newsletter/blocks"
 import { parseTemplate } from "@/lib/newsletter/template"
 import { builtinPreset } from "@/lib/newsletter/presets"
@@ -15,15 +11,6 @@ import { type Prisma } from "@/generated/prisma/client"
 
 export type NewsletterResult = { ok: true } | { ok: false; error: string }
 export type CreateResult = { ok: true; id: string } | { ok: false; error: string }
-export type DraftResult =
-  | { ok: true; draft: NewsletterDraft }
-  | { ok: false; error: string; limitHit?: boolean }
-
-async function requireCampaign() {
-  const session = await auth()
-  if (!session?.user?.id) return null
-  return prisma.campaign.findUnique({ where: { userId: session.user.id } })
-}
 
 async function requireCampaignId(): Promise<string | null> {
   const session = await auth()
@@ -150,46 +137,6 @@ export async function updateNewsletter(
   })
   revalidateAll(campaignId, id)
   return { ok: true }
-}
-
-/**
- * AI-draft a newsletter from a short instruction. Metered against Model Credits
- * (this is AI writing, like the Communications module). Returns the draft for the
- * candidate to review/edit — it is NOT persisted here.
- */
-export async function draftNewsletter(instruction: string, model?: string): Promise<DraftResult> {
-  const campaign = await requireCampaign()
-  if (!campaign) return { ok: false, error: "You must be signed in." }
-
-  const text = (instruction ?? "").trim()
-  if (!text) return { ok: false, error: "Tell the assistant what this newsletter should be about." }
-
-  const usedModel = resolveModel(model ?? campaign.aiModel)
-  const consumed = await consumeGeneration(toPlanId(campaign.plan), campaign, usedModel)
-  if (!consumed.ok) {
-    return { ok: false, error: "You're out of Model Credits this month.", limitHit: true }
-  }
-
-  try {
-    const draft = await generateNewsletterDraft(
-      {
-        candidateName: campaign.candidateName,
-        office: campaign.office,
-        party: formatBallotLine(campaign.party, campaign.additionalParties),
-        district: campaign.district,
-        state: campaign.state,
-        bio: campaign.bio,
-        whyRunning: campaign.whyRunning,
-        coreValues: campaign.coreValues,
-        voiceTone: campaign.voiceTone,
-      },
-      text.slice(0, 2000),
-      usedModel
-    )
-    return { ok: true, draft }
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Drafting failed. Please try again." }
-  }
 }
 
 /** Publish a newsletter to the public archive (requires a subject). */

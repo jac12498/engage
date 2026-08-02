@@ -19,16 +19,17 @@ import {
   ChevronRight,
   Newspaper,
   Ungroup,
+  Wand2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { SELECTABLE_AI_MODELS } from "@/lib/entitlements"
 import { NL_BLOCK_SPECS, NL_BLOCK_ORDER, type NlBlockType } from "@/lib/newsletter/blocks"
 import { NL_SNIPPETS, nlSnippet } from "@/lib/newsletter/snippets"
 import { renderNewsletterEmail, type EmailRenderCtx } from "@/lib/newsletter/renderEmail"
 import type { NewsletterTemplate } from "@/lib/newsletter/template"
+import { ArticleAiPanel } from "@/components/website/ArticleAiPanel"
+import { articleProseFromBlocks } from "@/lib/newsletter/articleDraft"
 import {
   updateNewsletter,
-  draftNewsletter,
   publishNewsletter,
   unpublishNewsletter,
   deleteNewsletter,
@@ -129,8 +130,7 @@ export function NewsletterEditor({
     newsletter.blocks.map((b) => ({ id: b.id, type: b.type, props: { ...(b.props as Props) }, groupId: b.groupId }))
   )
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
-  const [instruction, setInstruction] = useState("")
-  const [model, setModel] = useState(defaultModel)
+  const [assistGroup, setAssistGroup] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [origin, setOrigin] = useState("")
@@ -138,12 +138,11 @@ export function NewsletterEditor({
   useEffect(() => setOrigin(window.location.origin), [])
 
   const [saving, startSave] = useTransition()
-  const [drafting, startDraft] = useTransition()
   const [pub, startPub] = useTransition()
   const [deleting, startDelete] = useTransition()
   const [sending, startSend] = useTransition()
   const [testing, startTest] = useTransition()
-  const busy = saving || drafting || pub || deleting || sending || testing
+  const busy = saving || pub || deleting || sending || testing
 
   const published = newsletter.status === "published"
   const sent = Boolean(newsletter.sentAt)
@@ -221,6 +220,51 @@ export function NewsletterEditor({
     setCollapsed((c) => ({ ...c, [groupId]: !c[groupId] }))
   }
 
+  // ─── AI article authoring (words only; layout blocks are never touched) ───
+  /** Insert an AI-drafted article as a new group: heading (title) + text (body). */
+  function insertArticleFromAi(title: string, body: string) {
+    const groupId = genId()
+    const added: EditorBlock[] = []
+    if (title.trim()) added.push({ id: genId(), type: "heading", props: { text: title }, groupId })
+    added.push({ id: genId(), type: "text", props: { body }, groupId })
+    setBlocks((prev) => [...prev, ...added])
+    setNotice("Article added — refine the words with AI, then add images or buttons around it.")
+  }
+  /** Serialize an existing group's title + body to seed a refinement session. */
+  function groupProse(groupBlocks: EditorBlock[]): string {
+    const title = groupBlocks.find((b) => b.type === "heading")?.props.text ?? ""
+    const body = groupBlocks.find((b) => b.type === "text")?.props.body ?? ""
+    return articleProseFromBlocks(title, body)
+  }
+  /** Write refined prose back into a group's first heading + first text block only
+   *  (creating them if absent); all other blocks — images, buttons — are preserved. */
+  function applyAiToGroup(groupId: string, title: string, body: string) {
+    setBlocks((prev) => {
+      const row = computeRows(prev).find((r) => r.groupId === groupId)
+      if (!row) return prev
+      const before = prev.slice(0, row.start)
+      const slice = prev.slice(row.start, row.start + row.len)
+      const after = prev.slice(row.start + row.len)
+      let headingDone = false
+      let textDone = false
+      const updated = slice.map((b) => {
+        if (!headingDone && b.type === "heading") {
+          headingDone = true
+          return title.trim() ? { ...b, props: { ...b.props, text: title } } : b
+        }
+        if (!textDone && b.type === "text") {
+          textDone = true
+          return { ...b, props: { ...b.props, body } }
+        }
+        return b
+      })
+      const prepend = !headingDone && title.trim() ? [{ id: genId(), type: "heading" as const, props: { text: title }, groupId }] : []
+      const append = !textDone ? [{ id: genId(), type: "text" as const, props: { body }, groupId }] : []
+      return [...before, ...prepend, ...updated, ...append, ...after]
+    })
+    setNotice("Article updated.")
+  }
+
   // ─── Live preview (client-side; renderEmail is a pure module) ───
   const previewHtml = useMemo(() => {
     const ctx: EmailRenderCtx = {
@@ -260,25 +304,6 @@ export function NewsletterEditor({
         if (after) after()
         else router.refresh()
       }
-    })
-  }
-
-  function doDraft() {
-    const text = instruction.trim()
-    if (!text) return
-    if (blocks.length > 0 && !confirm("Replace the current content with an AI draft?")) return
-    setError(null)
-    setNotice(null)
-    startDraft(async () => {
-      const res = await draftNewsletter(text, model)
-      if (!res.ok) {
-        setError(res.error)
-        return
-      }
-      setSubject(res.draft.subject)
-      setPreview(res.draft.preview)
-      setBlocks(res.draft.blocks.map((b) => ({ id: genId(), type: b.type, props: { ...(b.props as Props) } })))
-      setNotice("Draft ready — edit the blocks, then Save.")
     })
   }
 
@@ -430,19 +455,9 @@ export function NewsletterEditor({
             </div>
           </CollapsibleCard>
 
-          {/* 3. Draft with AI (collapsible) */}
-          <CollapsibleCard title="Draft with AI" icon={<Sparkles className="h-4 w-4 text-[#c4910a]" />}>
-            <p className="text-sm text-muted-foreground">Describe what to cover and I&apos;ll draft it in your voice as a starting text block. Uses one generation.</p>
-            <textarea value={instruction} onChange={(e) => setInstruction(e.target.value)} rows={2} placeholder="e.g. A recap of the town hall, plus a canvass invite" disabled={busy} className={`mt-3 ${inputCls} resize-none`} />
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <Button onClick={doDraft} disabled={busy || !instruction.trim()}>
-                {drafting ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Sparkles className="mr-1.5 h-4 w-4" />}
-                {drafting ? "Drafting…" : "Draft with AI"}
-              </Button>
-              <select value={model} onChange={(e) => setModel(e.target.value)} disabled={busy} className="rounded-md border border-border bg-white px-2 py-1.5 text-xs text-muted-foreground outline-none">
-                {SELECTABLE_AI_MODELS.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-              </select>
-            </div>
+          {/* 3. Create article with AI (collapsible) */}
+          <CollapsibleCard title="Create Article with AI" icon={<Sparkles className="h-4 w-4 text-[#c4910a]" />} defaultOpen={false}>
+            <ArticleAiPanel mode="create" defaultModel={defaultModel} onAccept={insertArticleFromAi} />
           </CollapsibleCard>
 
           {/* 4. Content blocks / groups (collapsible) */}
@@ -462,15 +477,26 @@ export function NewsletterEditor({
                       first={ri === 0}
                       last={ri === rows.length - 1}
                       busy={busy}
+                      assisting={assistGroup === gid}
                       onToggle={() => toggleCollapse(gid)}
                       onMove={(d) => moveGroup(gid, d)}
                       onUngroup={() => ungroup(gid)}
                       onRemove={() => removeGroup(gid)}
                       onAddBlock={(type) => addBlockToGroup(gid, type)}
+                      onAssist={() => { setAssistGroup((g) => (g === gid ? null : gid)); setCollapsed((c) => ({ ...c, [gid]: false })) }}
                     >
                       {rowBlocks.map((b, bi) => (
                         <BlockCard key={b.id} block={b} first={bi === 0} last={bi === rowBlocks.length - 1} onChange={(patch) => updateProps(b.id, patch)} onMove={(d) => moveBlock(b.id, d)} onRemove={() => removeBlock(b.id)} />
                       ))}
+                      {assistGroup === gid && (
+                        <ArticleAiPanel
+                          mode="assist"
+                          defaultModel={defaultModel}
+                          initialDraft={groupProse(rowBlocks)}
+                          onAccept={(title, body) => { applyAiToGroup(gid, title, body); setAssistGroup(null) }}
+                          onClose={() => setAssistGroup(null)}
+                        />
+                      )}
                     </GroupCard>
                   )
                 }
@@ -583,11 +609,13 @@ function GroupCard({
   first,
   last,
   busy,
+  assisting,
   onToggle,
   onMove,
   onUngroup,
   onRemove,
   onAddBlock,
+  onAssist,
   children,
 }: {
   label: string
@@ -596,11 +624,13 @@ function GroupCard({
   first: boolean
   last: boolean
   busy: boolean
+  assisting: boolean
   onToggle: () => void
   onMove: (dir: -1 | 1) => void
   onUngroup: () => void
   onRemove: () => void
   onAddBlock: (type: NlBlockType) => void
+  onAssist: () => void
   children: ReactNode
 }) {
   return (
@@ -615,6 +645,7 @@ function GroupCard({
         <div className="flex shrink-0 items-center gap-1">
           <button onClick={() => onMove(-1)} disabled={first} className="rounded p-1 text-muted-foreground hover:bg-white disabled:opacity-30" aria-label="Move article up"><ArrowUp className="h-4 w-4" /></button>
           <button onClick={() => onMove(1)} disabled={last} className="rounded p-1 text-muted-foreground hover:bg-white disabled:opacity-30" aria-label="Move article down"><ArrowDown className="h-4 w-4" /></button>
+          <button onClick={onAssist} className={`rounded p-1 hover:bg-white ${assisting ? "text-[#c4910a]" : "text-muted-foreground hover:text-[#c4910a]"}`} aria-label="AI assistance" title="AI assistance — draft or refine this article's words"><Wand2 className="h-4 w-4" /></button>
           <button onClick={onUngroup} className="rounded p-1 text-muted-foreground hover:bg-white" aria-label="Ungroup" title="Ungroup — keep the blocks, drop the article grouping"><Ungroup className="h-4 w-4" /></button>
           <button onClick={onRemove} className="rounded p-1 text-muted-foreground hover:bg-red-50 hover:text-red-600" aria-label="Delete article" title="Delete the article and its blocks"><Trash2 className="h-4 w-4" /></button>
         </div>
