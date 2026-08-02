@@ -325,12 +325,12 @@ export function NewsletterEditor({
           {/* Subject / preview */}
           <div className="space-y-4 rounded-2xl border border-border bg-white p-5">
             <label className="block">
-              <span className="mb-1 block text-sm font-medium text-[#1a1a2e]">Subject</span>
-              <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Newsletter subject line" className={inputCls} />
+              <span className="mb-1 block text-sm font-medium text-[#1a1a2e]">Newsletter Title</span>
+              <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Shown in the inbox and as the archive page title" className={inputCls} />
             </label>
             <label className="block">
-              <span className="mb-1 block text-sm font-medium text-[#1a1a2e]">Preview text</span>
-              <input value={preview} onChange={(e) => setPreview(e.target.value)} placeholder="Short inbox teaser (optional)" className={inputCls} />
+              <span className="mb-1 block text-sm font-medium text-[#1a1a2e]">Newsletter Preview</span>
+              <input value={preview} onChange={(e) => setPreview(e.target.value)} placeholder="Short teaser for the inbox preview (optional)" className={inputCls} />
             </label>
           </div>
 
