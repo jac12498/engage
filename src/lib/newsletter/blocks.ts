@@ -24,6 +24,24 @@ export interface ButtonProps {
   align?: "left" | "center" | "right"
 }
 export type DividerProps = Record<string, never>
+export interface SpacerProps {
+  size: "small" | "medium" | "large"
+}
+export interface TwoColumnProps {
+  left: string
+  right: string
+}
+export interface SocialProps {
+  facebook: string
+  x: string
+  instagram: string
+  youtube: string
+  website: string
+}
+export interface QuoteProps {
+  text: string
+  attribution: string
+}
 
 // ─── Sanitizers ──────────────────────────────────────────────────────────────
 
@@ -117,11 +135,71 @@ export const NL_BLOCK_SPECS = {
     defaultProps: (): DividerProps => ({}),
     validate: (): DividerProps => ({}),
   } satisfies NlBlockSpec<DividerProps>,
+
+  spacer: {
+    type: "spacer",
+    label: "Spacer",
+    description: "An adjustable vertical gap between sections.",
+    defaultProps: (): SpacerProps => ({ size: "medium" }),
+    validate: (raw: unknown): SpacerProps => {
+      const s = record(raw).size
+      return { size: s === "small" || s === "large" ? s : "medium" }
+    },
+  } satisfies NlBlockSpec<SpacerProps>,
+
+  twoColumn: {
+    type: "twoColumn",
+    label: "Two columns",
+    description: "Two side-by-side text columns (stacks on narrow screens).",
+    defaultProps: (): TwoColumnProps => ({ left: "", right: "" }),
+    validate: (raw: unknown): TwoColumnProps => {
+      const r = record(raw)
+      return { left: str(r.left, 8000), right: str(r.right, 8000) }
+    },
+  } satisfies NlBlockSpec<TwoColumnProps>,
+
+  social: {
+    type: "social",
+    label: "Social links",
+    description: "A centered row of links to your social profiles.",
+    defaultProps: (): SocialProps => ({ facebook: "", x: "", instagram: "", youtube: "", website: "" }),
+    validate: (raw: unknown): SocialProps => {
+      const r = record(raw)
+      return {
+        facebook: safeHref(r.facebook) ?? "",
+        x: safeHref(r.x) ?? "",
+        instagram: safeHref(r.instagram) ?? "",
+        youtube: safeHref(r.youtube) ?? "",
+        website: safeHref(r.website) ?? "",
+      }
+    },
+  } satisfies NlBlockSpec<SocialProps>,
+
+  quote: {
+    type: "quote",
+    label: "Quote / callout",
+    description: "A highlighted pull-quote or callout with an accent border.",
+    defaultProps: (): QuoteProps => ({ text: "", attribution: "" }),
+    validate: (raw: unknown): QuoteProps => {
+      const r = record(raw)
+      return { text: str(r.text, 2000), attribution: str(r.attribution, 200) }
+    },
+  } satisfies NlBlockSpec<QuoteProps>,
 } as const
 
 export type NlBlockType = keyof typeof NL_BLOCK_SPECS
 
-export const NL_BLOCK_ORDER: NlBlockType[] = ["heading", "text", "image", "button", "divider"]
+export const NL_BLOCK_ORDER: NlBlockType[] = [
+  "heading",
+  "text",
+  "image",
+  "button",
+  "quote",
+  "twoColumn",
+  "social",
+  "divider",
+  "spacer",
+]
 
 export function isNlBlockType(v: unknown): v is NlBlockType {
   return typeof v === "string" && v in NL_BLOCK_SPECS

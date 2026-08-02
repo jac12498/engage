@@ -1,5 +1,16 @@
 import { Fragment } from "react"
-import { parseBlocks, type NlBlock, type HeadingProps, type TextProps, type ImageProps, type ButtonProps } from "@/lib/newsletter/blocks"
+import {
+  parseBlocks,
+  type NlBlock,
+  type HeadingProps,
+  type TextProps,
+  type ImageProps,
+  type ButtonProps,
+  type SpacerProps,
+  type TwoColumnProps,
+  type SocialProps,
+  type QuoteProps,
+} from "@/lib/newsletter/blocks"
 
 // Web render of newsletter content blocks for the public archive (themed via the
 // site's CSS vars). Distinct from the email renderer (lib/newsletter/renderEmail) —
@@ -70,6 +81,52 @@ function OneBlock({ block }: { block: NlBlock }) {
     }
     case "divider":
       return <hr className="my-6 border-t border-black/10" />
+    case "spacer": {
+      const p = block.props as SpacerProps
+      return <div style={{ height: p.size === "small" ? 12 : p.size === "large" ? 48 : 28 }} />
+    }
+    case "twoColumn": {
+      const p = block.props as TwoColumnProps
+      if (!p.left.trim() && !p.right.trim()) return null
+      return (
+        <div className="my-4 grid gap-6 sm:grid-cols-2">
+          <div><TextBlock body={p.left} /></div>
+          <div><TextBlock body={p.right} /></div>
+        </div>
+      )
+    }
+    case "social": {
+      const p = block.props as SocialProps
+      const links = (
+        [
+          ["Facebook", p.facebook],
+          ["X", p.x],
+          ["Instagram", p.instagram],
+          ["YouTube", p.youtube],
+          ["Website", p.website],
+        ] as [string, string][]
+      ).filter(([, u]) => u)
+      if (links.length === 0) return null
+      return (
+        <div className="my-4 flex flex-wrap justify-center gap-x-4 gap-y-1 text-sm font-semibold" style={{ color: "var(--site-primary)" }}>
+          {links.map(([label, url]) => (
+            <a key={label} href={url} target="_blank" rel="noopener noreferrer" className="hover:underline">
+              {label}
+            </a>
+          ))}
+        </div>
+      )
+    }
+    case "quote": {
+      const p = block.props as QuoteProps
+      if (!p.text) return null
+      return (
+        <blockquote className="my-5 border-l-4 pl-4 italic text-[#1a1a2e]" style={{ borderColor: "var(--site-accent)" }}>
+          <p className="text-lg">{p.text}</p>
+          {p.attribution && <p className="mt-2 text-sm not-italic text-muted-foreground">— {p.attribution}</p>}
+        </blockquote>
+      )
+    }
     default:
       return null
   }

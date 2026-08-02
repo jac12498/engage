@@ -1,4 +1,14 @@
-import type { NlBlock, HeadingProps, TextProps, ImageProps, ButtonProps } from "./blocks"
+import type {
+  NlBlock,
+  HeadingProps,
+  TextProps,
+  ImageProps,
+  ButtonProps,
+  SpacerProps,
+  TwoColumnProps,
+  SocialProps,
+  QuoteProps,
+} from "./blocks"
 import { parseBlocks } from "./blocks"
 import { parseTemplate, FONT_STACKS, type NewsletterTemplate } from "./template"
 
@@ -50,6 +60,19 @@ function composeAddress(m: EmailRenderCtx["mailing"]): string {
   return [line1, cityStateZip].filter(Boolean).join(", ")
 }
 
+/** Plain-text (blank lines = paragraphs) → escaped <p> HTML. */
+function paragraphsHtml(body: string): string {
+  return body
+    .split(/\n\s*\n/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map(
+      (para) =>
+        `<p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#1a1a2e">${esc(para).replace(/\n/g, "<br>")}</p>`
+    )
+    .join("")
+}
+
 /** One content block → a table row (`<tr><td>…`). */
 function renderBlock(block: NlBlock, tpl: NewsletterTemplate, baseUrl: string): string {
   const pad = "padding:10px 28px"
@@ -61,16 +84,47 @@ function renderBlock(block: NlBlock, tpl: NewsletterTemplate, baseUrl: string): 
     }
     case "text": {
       const p = block.props as TextProps
-      const paras = p.body
-        .split(/\n\s*\n/)
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .map(
-          (para) =>
-            `<p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#1a1a2e">${esc(para).replace(/\n/g, "<br>")}</p>`
-        )
-        .join("")
+      const paras = paragraphsHtml(p.body)
       return paras ? `<tr><td style="${pad}">${paras}</td></tr>` : ""
+    }
+    case "spacer": {
+      const p = block.props as SpacerProps
+      const h = p.size === "small" ? 12 : p.size === "large" ? 48 : 28
+      return `<tr><td style="height:${h}px;line-height:${h}px;font-size:0">&nbsp;</td></tr>`
+    }
+    case "twoColumn": {
+      const p = block.props as TwoColumnProps
+      if (!p.left.trim() && !p.right.trim()) return ""
+      return `<tr><td style="${pad}"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+        <td class="nl-col" width="50%" valign="top" style="padding-right:10px">${paragraphsHtml(p.left)}</td>
+        <td class="nl-col" width="50%" valign="top" style="padding-left:10px">${paragraphsHtml(p.right)}</td>
+      </tr></table></td></tr>`
+    }
+    case "social": {
+      const p = block.props as SocialProps
+      const links: [string, string][] = [
+        ["Facebook", p.facebook],
+        ["X", p.x],
+        ["Instagram", p.instagram],
+        ["YouTube", p.youtube],
+        ["Website", p.website],
+      ].filter(([, url]) => url) as [string, string][]
+      if (links.length === 0) return ""
+      const inner = links
+        .map(
+          ([label, url]) =>
+            `<a href="${esc(url)}" target="_blank" style="color:${tpl.theme.primaryColor};text-decoration:none;font-size:14px;font-weight:600">${label}</a>`
+        )
+        .join(`<span style="color:#c4c4d0">&nbsp;&middot;&nbsp;</span>`)
+      return `<tr><td style="${pad}" align="center">${inner}</td></tr>`
+    }
+    case "quote": {
+      const p = block.props as QuoteProps
+      if (!p.text) return ""
+      const attr = p.attribution
+        ? `<p style="margin:8px 0 0;font-size:13px;color:#8a8a99">&mdash; ${esc(p.attribution)}</p>`
+        : ""
+      return `<tr><td style="${pad}"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="border-left:3px solid ${tpl.theme.accentColor};padding:4px 0 4px 16px"><p style="margin:0;font-size:17px;line-height:1.5;font-style:italic;color:#1a1a2e">${esc(p.text)}</p>${attr}</td></tr></table></td></tr>`
     }
     case "image": {
       const p = block.props as ImageProps
@@ -138,7 +192,8 @@ export function renderNewsletterEmail(
 
   return `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light"><title>${esc(ctx.subject)}</title></head>
+<meta name="color-scheme" content="light"><title>${esc(ctx.subject)}</title>
+<style>@media only screen and (max-width:480px){.nl-col{display:block!important;width:100%!important;padding:0!important}}</style></head>
 <body style="margin:0;padding:0;background:${tpl.theme.contentBg};font-family:${font}">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${tpl.theme.contentBg}">
   <tr><td align="center" style="padding:24px 12px">

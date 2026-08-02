@@ -455,6 +455,38 @@ function BlockFields({ block, onChange }: { block: EditorBlock; onChange: (patch
       )
     case "divider":
       return <p className="text-sm text-muted-foreground">A horizontal divider — no options.</p>
+    case "spacer":
+      return (
+        <select value={p.size ?? "medium"} onChange={(e) => onChange({ size: e.target.value })} className={inputCls}>
+          <option value="small">Small gap</option>
+          <option value="medium">Medium gap</option>
+          <option value="large">Large gap</option>
+        </select>
+      )
+    case "twoColumn":
+      return (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <textarea value={p.left ?? ""} onChange={(e) => onChange({ left: e.target.value })} rows={4} placeholder="Left column text" className={`${inputCls} resize-y`} />
+          <textarea value={p.right ?? ""} onChange={(e) => onChange({ right: e.target.value })} rows={4} placeholder="Right column text" className={`${inputCls} resize-y`} />
+        </div>
+      )
+    case "social":
+      return (
+        <div className="space-y-2">
+          <input value={p.facebook ?? ""} onChange={(e) => onChange({ facebook: e.target.value })} placeholder="Facebook URL" className={inputCls} />
+          <input value={p.x ?? ""} onChange={(e) => onChange({ x: e.target.value })} placeholder="X (Twitter) URL" className={inputCls} />
+          <input value={p.instagram ?? ""} onChange={(e) => onChange({ instagram: e.target.value })} placeholder="Instagram URL" className={inputCls} />
+          <input value={p.youtube ?? ""} onChange={(e) => onChange({ youtube: e.target.value })} placeholder="YouTube URL" className={inputCls} />
+          <input value={p.website ?? ""} onChange={(e) => onChange({ website: e.target.value })} placeholder="Website URL" className={inputCls} />
+        </div>
+      )
+    case "quote":
+      return (
+        <div className="space-y-2">
+          <textarea value={p.text ?? ""} onChange={(e) => onChange({ text: e.target.value })} rows={3} placeholder="Quote or callout text" className={`${inputCls} resize-y`} />
+          <input value={p.attribution ?? ""} onChange={(e) => onChange({ attribution: e.target.value })} placeholder="Attribution (optional) — e.g. a supporter's name" className={inputCls} />
+        </div>
+      )
     default:
       return null
   }
