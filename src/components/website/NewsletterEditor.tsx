@@ -225,6 +225,14 @@ export function NewsletterEditor({
     return renderNewsletterEmail(template, blocks, ctx)
   }, [subject, blocks, template, campaign, campaignId, origin])
 
+  /** Open the current preview (incl. unsaved edits) full-page in a new tab. */
+  function openFullPreview() {
+    const blob = new Blob([previewHtml], { type: "text/html" })
+    const url = URL.createObjectURL(blob)
+    window.open(url, "_blank", "noopener")
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  }
+
   // ─── Actions ───
   function save(after?: () => void) {
     setError(null)
@@ -386,10 +394,34 @@ export function NewsletterEditor({
       {error && <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">{error}</p>}
 
       <div className="mt-5 space-y-5">
-          {/* AI draft */}
-          <div className="rounded-2xl border border-border bg-white p-5">
-            <div className="inline-flex items-center gap-2 font-semibold text-[#1a1a2e]"><Sparkles className="h-4 w-4 text-[#c4910a]" /> Draft with AI</div>
-            <p className="mt-1 text-sm text-muted-foreground">Describe what to cover and I&apos;ll draft it in your voice as a starting text block. Uses one generation.</p>
+          {/* 1. Live preview — scrollable, with a full-page link */}
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Live preview</p>
+              <button type="button" onClick={openFullPreview} className="inline-flex items-center gap-1 text-xs font-medium text-[#1b3a6b] hover:underline">
+                Open full page <ExternalLink className="h-3 w-3" />
+              </button>
+            </div>
+            <iframe title="Newsletter preview" srcDoc={previewHtml} className="h-[60vh] w-full overflow-auto rounded-2xl border border-border bg-white" />
+          </div>
+
+          {/* 2. Newsletter Title (collapsible) */}
+          <CollapsibleCard title="Newsletter Title">
+            <div className="space-y-4">
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-[#1a1a2e]">Newsletter Title</span>
+                <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Shown in the inbox and as the archive page title" className={inputCls} />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-[#1a1a2e]">Newsletter Preview</span>
+                <input value={preview} onChange={(e) => setPreview(e.target.value)} placeholder="Short teaser for the inbox preview (optional)" className={inputCls} />
+              </label>
+            </div>
+          </CollapsibleCard>
+
+          {/* 3. Draft with AI (collapsible) */}
+          <CollapsibleCard title="Draft with AI" icon={<Sparkles className="h-4 w-4 text-[#c4910a]" />}>
+            <p className="text-sm text-muted-foreground">Describe what to cover and I&apos;ll draft it in your voice as a starting text block. Uses one generation.</p>
             <textarea value={instruction} onChange={(e) => setInstruction(e.target.value)} rows={2} placeholder="e.g. A recap of the town hall, plus a canvass invite" disabled={busy} className={`mt-3 ${inputCls} resize-none`} />
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Button onClick={doDraft} disabled={busy || !instruction.trim()}>
@@ -400,78 +432,62 @@ export function NewsletterEditor({
                 {SELECTABLE_AI_MODELS.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
             </div>
-          </div>
+          </CollapsibleCard>
 
-          {/* Subject / preview */}
-          <div className="space-y-4 rounded-2xl border border-border bg-white p-5">
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-[#1a1a2e]">Newsletter Title</span>
-              <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Shown in the inbox and as the archive page title" className={inputCls} />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-[#1a1a2e]">Newsletter Preview</span>
-              <input value={preview} onChange={(e) => setPreview(e.target.value)} placeholder="Short teaser for the inbox preview (optional)" className={inputCls} />
-            </label>
-          </div>
-
-          {/* Live preview (full-width row, above the building blocks) */}
-          <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Live preview</p>
-            <iframe title="Newsletter preview" srcDoc={previewHtml} className="h-[70vh] w-full rounded-2xl border border-border bg-white" />
-          </div>
-
-          {/* Blocks */}
-          <div className="space-y-3">
-            {computeRows(blocks).map((row, ri, rows) => {
-              const rowBlocks = blocks.slice(row.start, row.start + row.len)
-              if (row.groupId) {
-                const gid = row.groupId
-                const isCollapsed = collapsed[gid] ?? false
+          {/* 4. Content blocks / groups (collapsible) */}
+          <CollapsibleCard title="Content">
+            <div className="space-y-3">
+              {computeRows(blocks).map((row, ri, rows) => {
+                const rowBlocks = blocks.slice(row.start, row.start + row.len)
+                if (row.groupId) {
+                  const gid = row.groupId
+                  const isCollapsed = collapsed[gid] ?? false
+                  return (
+                    <GroupCard
+                      key={gid}
+                      label={groupLabel(rowBlocks)}
+                      count={rowBlocks.length}
+                      collapsed={isCollapsed}
+                      first={ri === 0}
+                      last={ri === rows.length - 1}
+                      onToggle={() => toggleCollapse(gid)}
+                      onMove={(d) => moveGroup(gid, d)}
+                      onUngroup={() => ungroup(gid)}
+                      onRemove={() => removeGroup(gid)}
+                    >
+                      {rowBlocks.map((b, bi) => (
+                        <BlockCard key={b.id} block={b} first={bi === 0} last={bi === rowBlocks.length - 1} onChange={(patch) => updateProps(b.id, patch)} onMove={(d) => moveBlock(b.id, d)} onRemove={() => removeBlock(b.id)} />
+                      ))}
+                    </GroupCard>
+                  )
+                }
+                const b = rowBlocks[0]
                 return (
-                  <GroupCard
-                    key={gid}
-                    label={groupLabel(rowBlocks)}
-                    count={rowBlocks.length}
-                    collapsed={isCollapsed}
-                    first={ri === 0}
-                    last={ri === rows.length - 1}
-                    onToggle={() => toggleCollapse(gid)}
-                    onMove={(d) => moveGroup(gid, d)}
-                    onUngroup={() => ungroup(gid)}
-                    onRemove={() => removeGroup(gid)}
-                  >
-                    {rowBlocks.map((b, bi) => (
-                      <BlockCard key={b.id} block={b} first={bi === 0} last={bi === rowBlocks.length - 1} onChange={(patch) => updateProps(b.id, patch)} onMove={(d) => moveBlock(b.id, d)} onRemove={() => removeBlock(b.id)} />
-                    ))}
-                  </GroupCard>
+                  <BlockCard key={b.id} block={b} first={ri === 0} last={ri === rows.length - 1} onChange={(patch) => updateProps(b.id, patch)} onMove={(d) => moveBlock(b.id, d)} onRemove={() => removeBlock(b.id)} />
                 )
-              }
-              const b = rowBlocks[0]
-              return (
-                <BlockCard key={b.id} block={b} first={ri === 0} last={ri === rows.length - 1} onChange={(patch) => updateProps(b.id, patch)} onMove={(d) => moveBlock(b.id, d)} onRemove={() => removeBlock(b.id)} />
-              )
-            })}
-            {blocks.length === 0 && <p className="rounded-xl border border-dashed border-border bg-white/60 px-4 py-6 text-center text-sm text-muted-foreground">No content yet. Insert an Article or add a block below.</p>}
-
-            {/* Insert group snippets */}
-            <div className="flex flex-wrap gap-2 rounded-2xl border border-border bg-white p-3">
-              <span className="mr-1 inline-flex items-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Insert:</span>
-              {NL_SNIPPETS.map((s) => (
-                <button key={s.key} onClick={() => insertSnippet(s.key)} disabled={busy} title={s.description} className="inline-flex items-center gap-1 rounded-lg border border-[#1b3a6b]/40 bg-[#1b3a6b]/4 px-2.5 py-1.5 text-sm font-medium text-[#1a1a2e] transition-colors hover:border-[#1b3a6b]/70 disabled:opacity-50">
-                  <Newspaper className="h-3.5 w-3.5 text-[#1b3a6b]" /> {s.label}
-                </button>
-              ))}
+              })}
+              {blocks.length === 0 && <p className="rounded-xl border border-dashed border-border bg-white/60 px-4 py-6 text-center text-sm text-muted-foreground">No content yet. Insert a section or add a component below.</p>}
             </div>
+          </CollapsibleCard>
 
-            {/* Palette */}
-            <div className="flex flex-wrap gap-2 rounded-2xl border border-border bg-white p-3">
-              <span className="mr-1 inline-flex items-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Add:</span>
-              {NL_BLOCK_ORDER.map((type) => (
-                <button key={type} onClick={() => addBlock(type)} disabled={busy} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-sm font-medium text-[#1a1a2e] transition-colors hover:border-[#1b3a6b]/40 disabled:opacity-50">
-                  <Plus className="h-3.5 w-3.5 text-muted-foreground" /> {NL_BLOCK_SPECS[type].label}
-                </button>
-              ))}
-            </div>
+          {/* 5. Insert Section */}
+          <div className="flex flex-wrap gap-2 rounded-2xl border border-border bg-white p-3">
+            <span className="mr-1 inline-flex items-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Insert Section:</span>
+            {NL_SNIPPETS.map((s) => (
+              <button key={s.key} onClick={() => insertSnippet(s.key)} disabled={busy} title={s.description} className="inline-flex items-center gap-1 rounded-lg border border-[#1b3a6b]/40 bg-[#1b3a6b]/4 px-2.5 py-1.5 text-sm font-medium text-[#1a1a2e] transition-colors hover:border-[#1b3a6b]/70 disabled:opacity-50">
+                <Newspaper className="h-3.5 w-3.5 text-[#1b3a6b]" /> {s.label}
+              </button>
+            ))}
+          </div>
+
+          {/* 6. Add Component */}
+          <div className="flex flex-wrap gap-2 rounded-2xl border border-border bg-white p-3">
+            <span className="mr-1 inline-flex items-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Add Component:</span>
+            {NL_BLOCK_ORDER.map((type) => (
+              <button key={type} onClick={() => addBlock(type)} disabled={busy} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-sm font-medium text-[#1a1a2e] transition-colors hover:border-[#1b3a6b]/40 disabled:opacity-50">
+                <Plus className="h-3.5 w-3.5 text-muted-foreground" /> {NL_BLOCK_SPECS[type].label}
+              </button>
+            ))}
           </div>
 
           {/* Action bar */}
@@ -513,6 +529,30 @@ export function NewsletterEditor({
             )}
           </div>
       </div>
+    </div>
+  )
+}
+
+/** A titled card whose body collapses. Body state is local & ephemeral. */
+function CollapsibleCard({
+  title,
+  icon,
+  defaultOpen = true,
+  children,
+}: {
+  title: string
+  icon?: ReactNode
+  defaultOpen?: boolean
+  children: ReactNode
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div className="rounded-2xl border border-border bg-white">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="flex w-full items-center justify-between gap-2 px-5 py-4 text-left">
+        <span className="inline-flex items-center gap-2 font-semibold text-[#1a1a2e]">{icon}{title}</span>
+        {open ? <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
+      </button>
+      {open && <div className="border-t border-border px-5 pb-5 pt-4">{children}</div>}
     </div>
   )
 }
