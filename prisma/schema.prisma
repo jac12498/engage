@@ -154,6 +154,7 @@ model Campaign {
   newsClips    NewsClip[]
   newsletterSubscribers NewsletterSubscriber[]
   newsletters  Newsletter[]
+  newsletterImages NewsletterImage[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -421,6 +422,20 @@ model NewsletterSubscriber {
 
   @@unique([campaignId, email])
   @@index([campaignId, status])
+  @@schema("engagecampaign")
+}
+
+// An uploaded image used in a newsletter image block. Stored in-DB and served at a
+// stable public URL (/api/newsletter/image/[id]) so email clients can fetch it.
+model NewsletterImage {
+  id         String   @id @default(cuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  data       Bytes
+  mime       String
+  createdAt  DateTime @default(now())
+
+  @@index([campaignId])
   @@schema("engagecampaign")
 }
 

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState, useTransition } from "react"
+import { useEffect, useMemo, useRef, useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -14,6 +14,7 @@ import {
   Plus,
   ArrowUp,
   ArrowDown,
+  Upload,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SELECTABLE_AI_MODELS } from "@/lib/entitlements"
@@ -134,6 +135,7 @@ export function NewsletterEditor({
       mailing: campaign.mailing,
       unsubscribeUrl: "#",
       headshotUrl: campaign.headshotMime && origin ? `${origin}/api/website/headshot/${campaignId}` : null,
+      baseUrl: origin,
     }
     return renderNewsletterEmail(template, blocks, ctx)
   }, [subject, blocks, template, campaign, campaignId, origin])
@@ -387,13 +389,7 @@ function BlockFields({ block, onChange }: { block: EditorBlock; onChange: (patch
     case "text":
       return <textarea value={p.body ?? ""} onChange={(e) => onChange({ body: e.target.value })} rows={5} placeholder="Write your text… Blank line between paragraphs." className={`${inputCls} resize-y leading-relaxed`} />
     case "image":
-      return (
-        <div className="space-y-2">
-          <input value={p.src ?? ""} onChange={(e) => onChange({ src: e.target.value })} placeholder="Image URL (https://…)" className={inputCls} />
-          <input value={p.alt ?? ""} onChange={(e) => onChange({ alt: e.target.value })} placeholder="Alt text (optional)" className={inputCls} />
-          <input value={p.href ?? ""} onChange={(e) => onChange({ href: e.target.value })} placeholder="Link when clicked (optional)" className={inputCls} />
-        </div>
-      )
+      return <ImageField props={p} onChange={onChange} />
     case "button":
       return (
         <div className="space-y-2">
@@ -411,4 +407,50 @@ function BlockFields({ block, onChange }: { block: EditorBlock; onChange: (patch
     default:
       return null
   }
+}
+
+function ImageField({ props, onChange }: { props: Props; onChange: (patch: Props) => void }) {
+  const [uploading, setUploading] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  async function upload(file: File) {
+    setErr(null)
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      fd.append("file", file)
+      const res = await fetch("/api/newsletter/image", { method: "POST", body: fd })
+      if (!res.ok) {
+        setErr((await res.text()) || "Upload failed.")
+        return
+      }
+      const { url } = (await res.json()) as { url: string }
+      onChange({ src: url })
+    } catch {
+      setErr("Upload failed.")
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ""
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <input value={props.src ?? ""} onChange={(e) => onChange({ src: e.target.value })} placeholder="Image URL, or upload →" className={inputCls} />
+        <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f) }} />
+        <Button type="button" variant="outline" onClick={() => fileRef.current?.click()} disabled={uploading}>
+          {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+        </Button>
+      </div>
+      {err && <p className="text-xs text-red-600">{err}</p>}
+      {props.src && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={props.src} alt="" className="max-h-32 rounded border border-border object-contain" />
+      )}
+      <input value={props.alt ?? ""} onChange={(e) => onChange({ alt: e.target.value })} placeholder="Alt text (optional)" className={inputCls} />
+      <input value={props.href ?? ""} onChange={(e) => onChange({ href: e.target.value })} placeholder="Link when clicked (optional)" className={inputCls} />
+    </div>
+  )
 }

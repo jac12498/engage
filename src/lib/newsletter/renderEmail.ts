@@ -23,6 +23,15 @@ export interface EmailRenderCtx {
   unsubscribeUrl: string
   /** Absolute headshot URL, when the header shows it and one exists. */
   headshotUrl?: string | null
+  /** Origin used to absolutize relative image srcs (e.g. /api/newsletter/image/…),
+   *  since email clients need absolute URLs. Send passes the prod URL; the editor
+   *  preview passes window.location.origin. */
+  baseUrl: string
+}
+
+/** Relative internal paths → absolute (email clients need absolute image URLs). */
+function absolutize(src: string, baseUrl: string): string {
+  return src.startsWith("/") ? `${baseUrl}${src}` : src
 }
 
 function esc(s: string): string {
@@ -42,7 +51,7 @@ function composeAddress(m: EmailRenderCtx["mailing"]): string {
 }
 
 /** One content block → a table row (`<tr><td>…`). */
-function renderBlock(block: NlBlock, tpl: NewsletterTemplate): string {
+function renderBlock(block: NlBlock, tpl: NewsletterTemplate, baseUrl: string): string {
   const pad = "padding:10px 28px"
   switch (block.type) {
     case "heading": {
@@ -66,7 +75,8 @@ function renderBlock(block: NlBlock, tpl: NewsletterTemplate): string {
     case "image": {
       const p = block.props as ImageProps
       if (!p.src) return ""
-      const img = `<img src="${esc(p.src)}" alt="${esc(p.alt ?? "")}" width="544" style="display:block;width:100%;max-width:544px;height:auto;border:0;border-radius:8px" />`
+      const src = absolutize(p.src, baseUrl)
+      const img = `<img src="${esc(src)}" alt="${esc(p.alt ?? "")}" width="544" style="display:block;width:100%;max-width:544px;height:auto;border:0;border-radius:8px" />`
       const inner = p.href ? `<a href="${esc(p.href)}" target="_blank">${img}</a>` : img
       return `<tr><td style="${pad}">${inner}</td></tr>`
     }
@@ -124,7 +134,7 @@ export function renderNewsletterEmail(
   const tpl = parseTemplate(rawTemplate)
   const blocks = parseBlocks(rawBlocks)
   const font = FONT_STACKS[tpl.theme.fontFamily]
-  const body = blocks.map((b) => renderBlock(b, tpl)).join("")
+  const body = blocks.map((b) => renderBlock(b, tpl, ctx.baseUrl)).join("")
 
   return `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">

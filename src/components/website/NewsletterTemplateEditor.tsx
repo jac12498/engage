@@ -74,6 +74,7 @@ export function NewsletterTemplateEditor({
       mailing: campaign.mailing,
       unsubscribeUrl: "#",
       headshotUrl: campaign.headshotMime && origin ? `${origin}/api/website/headshot/${campaignId}` : null,
+      baseUrl: origin,
     }
     return renderNewsletterEmail(tpl, SAMPLE_BLOCKS, ctx)
   }, [tpl, campaign, campaignId, origin])

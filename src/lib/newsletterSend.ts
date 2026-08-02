@@ -124,6 +124,7 @@ export async function sendNewsletterNow(campaignId: string, newsletterId: string
       mailing,
       unsubscribeUrl,
       headshotUrl,
+      baseUrl: base,
     }
   }
 
