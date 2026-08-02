@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react"
+import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -15,10 +15,15 @@ import {
   ArrowUp,
   ArrowDown,
   Upload,
+  ChevronDown,
+  ChevronRight,
+  Newspaper,
+  Ungroup,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SELECTABLE_AI_MODELS } from "@/lib/entitlements"
 import { NL_BLOCK_SPECS, NL_BLOCK_ORDER, type NlBlockType } from "@/lib/newsletter/blocks"
+import { NL_SNIPPETS, nlSnippet } from "@/lib/newsletter/snippets"
 import { renderNewsletterEmail, type EmailRenderCtx } from "@/lib/newsletter/renderEmail"
 import type { NewsletterTemplate } from "@/lib/newsletter/template"
 import {
@@ -37,6 +42,8 @@ interface EditorBlock {
   id: string
   type: NlBlockType
   props: Props
+  /** Contiguous blocks sharing a groupId form one Article-style unit. */
+  groupId?: string
 }
 interface EditorCampaign {
   candidateName: string
@@ -48,7 +55,7 @@ interface Editable {
   id: string
   subject: string
   preview: string
-  blocks: { id: string; type: NlBlockType; props: unknown }[]
+  blocks: { id: string; type: NlBlockType; props: unknown; groupId?: string }[]
   status: string
   publishedAt: string | null
   sentAt: string | null
@@ -60,6 +67,41 @@ const inputCls =
 
 const genId = () =>
   typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : "b" + Math.random().toString(36).slice(2)
+
+const serializeBlocks = (blocks: EditorBlock[]) =>
+  blocks.map((b) => ({ id: b.id, type: b.type, props: b.props, groupId: b.groupId }))
+
+/** A contiguous run of blocks: either one group (groupId set) or one lone block. */
+interface Row {
+  groupId: string | null
+  start: number
+  len: number
+}
+function computeRows(blocks: EditorBlock[]): Row[] {
+  const rows: Row[] = []
+  for (let i = 0; i < blocks.length; i++) {
+    const g = blocks[i].groupId ?? null
+    const prev = rows[rows.length - 1]
+    if (g && prev && prev.groupId === g) prev.len++
+    else rows.push({ groupId: g, start: i, len: 1 })
+  }
+  return rows
+}
+/** Swap the row starting at `start` with its neighbor in `dir`, moving the whole run. */
+function moveSlice(blocks: EditorBlock[], start: number, dir: -1 | 1): EditorBlock[] {
+  const rows = computeRows(blocks)
+  const idx = rows.findIndex((r) => r.start === start)
+  const swap = idx + dir
+  if (idx < 0 || swap < 0 || swap >= rows.length) return blocks
+  const a = rows[Math.min(idx, swap)]
+  const b = rows[Math.max(idx, swap)]
+  return [
+    ...blocks.slice(0, a.start),
+    ...blocks.slice(b.start, b.start + b.len),
+    ...blocks.slice(a.start, a.start + a.len),
+    ...blocks.slice(b.start + b.len),
+  ]
+}
 
 export function NewsletterEditor({
   campaignId,
@@ -84,8 +126,9 @@ export function NewsletterEditor({
   const [subject, setSubject] = useState(newsletter.subject)
   const [preview, setPreview] = useState(newsletter.preview)
   const [blocks, setBlocks] = useState<EditorBlock[]>(
-    newsletter.blocks.map((b) => ({ id: b.id, type: b.type, props: { ...(b.props as Props) } }))
+    newsletter.blocks.map((b) => ({ id: b.id, type: b.type, props: { ...(b.props as Props) }, groupId: b.groupId }))
   )
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [instruction, setInstruction] = useState("")
   const [model, setModel] = useState(defaultModel)
   const [error, setError] = useState<string | null>(null)
@@ -111,21 +154,60 @@ export function NewsletterEditor({
     setBlocks((prev) => [...prev, { id: genId(), type, props: { ...(NL_BLOCK_SPECS[type].defaultProps() as Props) } }])
     setNotice(null)
   }
+  /** Insert a group snippet (e.g. Article) as one run of primitives sharing a groupId. */
+  function insertSnippet(key: string) {
+    const snip = nlSnippet(key)
+    if (!snip) return
+    const groupId = genId()
+    const added: EditorBlock[] = snip.blocks.map((sb) => ({
+      id: genId(),
+      type: sb.type,
+      props: { ...(NL_BLOCK_SPECS[sb.type].defaultProps() as Props), ...(sb.props ?? {}) },
+      groupId,
+    }))
+    setBlocks((prev) => [...prev, ...added])
+    setNotice(null)
+  }
   function updateProps(id: string, patch: Props) {
     setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, props: { ...b.props, ...patch } } : b)))
   }
+  /** Reorder a single block. Grouped blocks reorder only within their group;
+   *  ungrouped blocks hop over the neighboring row (past a whole group as a unit). */
   function moveBlock(id: string, dir: -1 | 1) {
     setBlocks((prev) => {
       const i = prev.findIndex((b) => b.id === id)
-      const j = i + dir
-      if (i < 0 || j < 0 || j >= prev.length) return prev
-      const next = [...prev]
-      ;[next[i], next[j]] = [next[j], next[i]]
-      return next
+      if (i < 0) return prev
+      const b = prev[i]
+      if (b.groupId) {
+        const j = i + dir
+        if (j < 0 || j >= prev.length || prev[j].groupId !== b.groupId) return prev
+        const next = [...prev]
+        ;[next[i], next[j]] = [next[j], next[i]]
+        return next
+      }
+      return moveSlice(prev, i, dir)
     })
   }
   function removeBlock(id: string) {
     setBlocks((prev) => prev.filter((b) => b.id !== id))
+  }
+  /** Move an entire group as one unit past its neighboring row. */
+  function moveGroup(groupId: string, dir: -1 | 1) {
+    setBlocks((prev) => {
+      const row = computeRows(prev).find((r) => r.groupId === groupId)
+      return row ? moveSlice(prev, row.start, dir) : prev
+    })
+  }
+  /** Dissolve a group — its blocks stay in place but become individually movable. */
+  function ungroup(groupId: string) {
+    setBlocks((prev) => prev.map((b) => (b.groupId === groupId ? { ...b, groupId: undefined } : b)))
+  }
+  function removeGroup(groupId: string) {
+    if (!confirm("Delete this article and all its blocks?")) return
+    setBlocks((prev) => prev.filter((b) => b.groupId !== groupId))
+  }
+  function toggleCollapse(groupId: string) {
+    setCollapsed((c) => ({ ...c, [groupId]: !c[groupId] }))
   }
 
   // ─── Live preview (client-side; renderEmail is a pure module) ───
@@ -151,7 +233,7 @@ export function NewsletterEditor({
       const res = await updateNewsletter(newsletter.id, {
         subject,
         preview,
-        blocks: blocks.map((b) => ({ id: b.id, type: b.type, props: b.props })),
+        blocks: serializeBlocks(blocks),
       })
       if (!res.ok) setError(res.error)
       else {
@@ -197,7 +279,7 @@ export function NewsletterEditor({
       const saved = await updateNewsletter(newsletter.id, {
         subject,
         preview,
-        blocks: blocks.map((b) => ({ id: b.id, type: b.type, props: b.props })),
+        blocks: serializeBlocks(blocks),
       })
       if (!saved.ok) {
         setError(saved.error)
@@ -221,7 +303,7 @@ export function NewsletterEditor({
       const saved = await updateNewsletter(newsletter.id, {
         subject,
         preview,
-        blocks: blocks.map((b) => ({ id: b.id, type: b.type, props: b.props })),
+        blocks: serializeBlocks(blocks),
       })
       if (!saved.ok) {
         setError(saved.error)
@@ -241,7 +323,7 @@ export function NewsletterEditor({
       const saved = await updateNewsletter(newsletter.id, {
         subject,
         preview,
-        blocks: blocks.map((b) => ({ id: b.id, type: b.type, props: b.props })),
+        blocks: serializeBlocks(blocks),
       })
       if (!saved.ok) {
         setError(saved.error)
@@ -336,10 +418,46 @@ export function NewsletterEditor({
 
           {/* Blocks */}
           <div className="space-y-3">
-            {blocks.map((b, i) => (
-              <BlockCard key={b.id} block={b} first={i === 0} last={i === blocks.length - 1} onChange={(patch) => updateProps(b.id, patch)} onMove={(d) => moveBlock(b.id, d)} onRemove={() => removeBlock(b.id)} />
-            ))}
-            {blocks.length === 0 && <p className="rounded-xl border border-dashed border-border bg-white/60 px-4 py-6 text-center text-sm text-muted-foreground">No content yet. Add a block below.</p>}
+            {computeRows(blocks).map((row, ri, rows) => {
+              const rowBlocks = blocks.slice(row.start, row.start + row.len)
+              if (row.groupId) {
+                const gid = row.groupId
+                const isCollapsed = collapsed[gid] ?? false
+                return (
+                  <GroupCard
+                    key={gid}
+                    label={groupLabel(rowBlocks)}
+                    count={rowBlocks.length}
+                    collapsed={isCollapsed}
+                    first={ri === 0}
+                    last={ri === rows.length - 1}
+                    onToggle={() => toggleCollapse(gid)}
+                    onMove={(d) => moveGroup(gid, d)}
+                    onUngroup={() => ungroup(gid)}
+                    onRemove={() => removeGroup(gid)}
+                  >
+                    {rowBlocks.map((b, bi) => (
+                      <BlockCard key={b.id} block={b} first={bi === 0} last={bi === rowBlocks.length - 1} onChange={(patch) => updateProps(b.id, patch)} onMove={(d) => moveBlock(b.id, d)} onRemove={() => removeBlock(b.id)} />
+                    ))}
+                  </GroupCard>
+                )
+              }
+              const b = rowBlocks[0]
+              return (
+                <BlockCard key={b.id} block={b} first={ri === 0} last={ri === rows.length - 1} onChange={(patch) => updateProps(b.id, patch)} onMove={(d) => moveBlock(b.id, d)} onRemove={() => removeBlock(b.id)} />
+              )
+            })}
+            {blocks.length === 0 && <p className="rounded-xl border border-dashed border-border bg-white/60 px-4 py-6 text-center text-sm text-muted-foreground">No content yet. Insert an Article or add a block below.</p>}
+
+            {/* Insert group snippets */}
+            <div className="flex flex-wrap gap-2 rounded-2xl border border-border bg-white p-3">
+              <span className="mr-1 inline-flex items-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">Insert:</span>
+              {NL_SNIPPETS.map((s) => (
+                <button key={s.key} onClick={() => insertSnippet(s.key)} disabled={busy} title={s.description} className="inline-flex items-center gap-1 rounded-lg border border-[#1b3a6b]/40 bg-[#1b3a6b]/4 px-2.5 py-1.5 text-sm font-medium text-[#1a1a2e] transition-colors hover:border-[#1b3a6b]/70 disabled:opacity-50">
+                  <Newspaper className="h-3.5 w-3.5 text-[#1b3a6b]" /> {s.label}
+                </button>
+              ))}
+            </div>
 
             {/* Palette */}
             <div className="flex flex-wrap gap-2 rounded-2xl border border-border bg-white p-3">
@@ -398,6 +516,56 @@ export function NewsletterEditor({
           <iframe title="Newsletter preview" srcDoc={previewHtml} className="h-[70vh] w-full rounded-2xl border border-border bg-white" />
         </div>
       </div>
+    </div>
+  )
+}
+
+/** Article/group label — derived from the group's first non-empty heading. */
+function groupLabel(groupBlocks: EditorBlock[]): string {
+  const h = groupBlocks.find((b) => b.type === "heading" && (b.props.text ?? "").trim())
+  return h ? (h.props.text as string).trim().slice(0, 60) : "Article"
+}
+
+function GroupCard({
+  label,
+  count,
+  collapsed,
+  first,
+  last,
+  onToggle,
+  onMove,
+  onUngroup,
+  onRemove,
+  children,
+}: {
+  label: string
+  count: number
+  collapsed: boolean
+  first: boolean
+  last: boolean
+  onToggle: () => void
+  onMove: (dir: -1 | 1) => void
+  onUngroup: () => void
+  onRemove: () => void
+  children: ReactNode
+}) {
+  return (
+    <div className="rounded-2xl border border-[#1b3a6b]/25 bg-[#1b3a6b]/3 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <button onClick={onToggle} className="inline-flex min-w-0 items-center gap-2 text-sm font-semibold text-[#1a1a2e]">
+          {collapsed ? <ChevronRight className="h-4 w-4 shrink-0" /> : <ChevronDown className="h-4 w-4 shrink-0" />}
+          <Newspaper className="h-4 w-4 shrink-0 text-[#1b3a6b]" />
+          <span className="truncate">{label}</span>
+          <span className="shrink-0 text-xs font-normal text-muted-foreground">· {count} block{count === 1 ? "" : "s"}</span>
+        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          <button onClick={() => onMove(-1)} disabled={first} className="rounded p-1 text-muted-foreground hover:bg-white disabled:opacity-30" aria-label="Move article up"><ArrowUp className="h-4 w-4" /></button>
+          <button onClick={() => onMove(1)} disabled={last} className="rounded p-1 text-muted-foreground hover:bg-white disabled:opacity-30" aria-label="Move article down"><ArrowDown className="h-4 w-4" /></button>
+          <button onClick={onUngroup} className="rounded p-1 text-muted-foreground hover:bg-white" aria-label="Ungroup" title="Ungroup — keep the blocks, drop the article grouping"><Ungroup className="h-4 w-4" /></button>
+          <button onClick={onRemove} className="rounded p-1 text-muted-foreground hover:bg-red-50 hover:text-red-600" aria-label="Delete article" title="Delete the article and its blocks"><Trash2 className="h-4 w-4" /></button>
+        </div>
+      </div>
+      {!collapsed && <div className="mt-3 space-y-3">{children}</div>}
     </div>
   )
 }

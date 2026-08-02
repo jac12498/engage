@@ -210,6 +210,9 @@ export interface NlBlock {
   id: string
   type: NlBlockType
   props: unknown
+  /** Optional grouping tag. Contiguous blocks sharing a groupId form an editor
+   *  "group" (e.g. an Article) that moves/collapses as a unit. Renderers ignore it. */
+  groupId?: string
 }
 
 /** Validate a (type, props) pair for a write. Returns type + sanitized props, or null. */
@@ -227,7 +230,9 @@ export function parseBlocks(raw: unknown): NlBlock[] {
     const v = validateNlBlock(r.type, r.props)
     if (!v) continue
     const id = typeof r.id === "string" && r.id ? r.id.slice(0, 64) : cryptoRandomId()
-    out.push({ id, type: v.type, props: v.props })
+    const block: NlBlock = { id, type: v.type, props: v.props }
+    if (typeof r.groupId === "string" && r.groupId) block.groupId = r.groupId.slice(0, 64)
+    out.push(block)
     if (out.length >= 100) break
   }
   return out
