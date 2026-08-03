@@ -1,10 +1,11 @@
 import "server-only"
 import { anthropic } from "@/lib/comms/anthropic"
+import { draftingThinking } from "@/lib/comms/prompts"
 
 // Website copy is a one-time-ish, quality-sensitive draft, so it uses a strong
 // model and is NOT metered against Communications' Model Credits (the website
 // is a separate product surface). Editable after generation.
-const WEBSITE_MODEL = "claude-sonnet-4-6"
+const WEBSITE_MODEL = "claude-sonnet-5"
 
 export interface WebsiteDraft {
   heroHeadline: string
@@ -105,9 +106,11 @@ ${profileBlock(profile)}
 ISSUE SOURCE MATERIAL
 ${materialBlock(positions, topics)}`
 
+  const thinking = draftingThinking(WEBSITE_MODEL)
   const res = await anthropic.messages.create({
     model: WEBSITE_MODEL,
     max_tokens: 2500,
+    ...(thinking ? { thinking } : {}),
     system: SYSTEM,
     messages: [{ role: "user", content: user }],
   })

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { WEBSITE_EDIT_LIMITS, toPlanId } from "@/lib/entitlements"
+import { WEBSITE_EDIT_LIMITS, toPlanId, resolveModel } from "@/lib/entitlements"
 import { CreateSitePanel } from "@/components/website/CreateSitePanel"
 import { type EditorSite } from "@/components/website/WebsiteBuilder"
 import { WebsiteWorkspace } from "@/components/website/WebsiteWorkspace"
@@ -86,7 +86,7 @@ export default async function WebsitePage() {
       pendingSignups={s._count.signups}
       editsUsed={editsUsed}
       editsLimit={WEBSITE_EDIT_LIMITS[plan]}
-      defaultModel={campaign.aiModel ?? "claude-sonnet-4-6"}
+      defaultModel={resolveModel(campaign.aiModel)}
     />
   )
 }

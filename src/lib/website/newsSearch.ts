@@ -1,12 +1,13 @@
 import "server-only"
 import type Anthropic from "@anthropic-ai/sdk"
 import { anthropic } from "@/lib/comms/anthropic"
+import { draftingThinking } from "@/lib/comms/prompts"
 
 // Discovery for the "In the News" feature. Uses Claude's server-side web-search
 // tool so results come back with REAL source URLs (a model asked to "list articles"
 // from memory will invent plausible-but-fake links). Everything returned here is a
 // candidate for the review queue — never auto-published.
-const SEARCH_MODEL = "claude-sonnet-4-6" // supports the web-search server tool
+const SEARCH_MODEL = "claude-sonnet-5" // supports the web-search server tool
 const SUMMARIZE_MODEL = "claude-haiku-4-5"
 
 export interface FoundClip {
@@ -100,18 +101,20 @@ Return ONLY a JSON array (no prose, no markdown fences), up to 10 items, each:
 If you find no genuine coverage, return [].`
 
   const tools = [
-    { type: "web_search_20250305", name: "web_search", max_uses: 5 },
+    { type: "web_search_20260209", name: "web_search", max_uses: 5 },
   ] as unknown as Anthropic.Messages.ToolUnion[]
 
   const messages: Anthropic.MessageParam[] = [{ role: "user", content: prompt }]
 
   // Server-tool loop: the API runs web search internally and may `pause_turn`
   // if it hits the per-request tool-iteration cap — re-send to resume.
+  const thinking = draftingThinking(SEARCH_MODEL)
   let final: Anthropic.Message | null = null
   for (let i = 0; i < 5; i++) {
     const res = await anthropic.messages.create({
       model: SEARCH_MODEL,
       max_tokens: 2048,
+      ...(thinking ? { thinking } : {}),
       tools,
       messages,
     })
