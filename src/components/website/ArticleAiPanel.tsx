@@ -196,8 +196,9 @@ export function ArticleAiPanel({
         </label>
       )}
 
-      {/* Create: description → generate (until there's a draft) */}
-      {mode === "create" && !draft.trim() && (
+      {/* No draft yet → describe + generate. Both modes: a freshly inserted Article
+          opened via AI Assistance seeds an empty draft and needs this entry point too. */}
+      {!draft.trim() && (
         <>
           <p className="text-sm text-muted-foreground">{topicId ? "Add any extra guidance for this article (optional), then draft." : "Describe the article and I'll draft it in your voice."} You can refine it as many times as you like — drafting uses one generation; refinements are essentially free.</p>
           <textarea value={instruction} onChange={(e) => setInstruction(e.target.value)} rows={2} placeholder={topicId ? "e.g. Focus on the vote next Tuesday and how to help" : "e.g. A recap of last week's town hall and what comes next"} disabled={busy} className={`mt-3 ${inputCls} resize-none`} />
@@ -211,8 +212,8 @@ export function ArticleAiPanel({
         </>
       )}
 
-      {/* Draft present: editable prose + refine loop + accept / save */}
-      {(draft.trim() || mode === "assist") && (
+      {/* Draft present → editable prose + refine loop + accept / save */}
+      {draft.trim() && (
         <>
           <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Article draft — headline on the first line, then the body</label>
           <textarea ref={draftRef} value={draft} onChange={(e) => { setDraft(e.target.value); setSavedId(null) }} rows={10} disabled={busy} placeholder="Your article draft appears here — you can edit it directly." className={`${inputCls} resize-y leading-relaxed`} />
