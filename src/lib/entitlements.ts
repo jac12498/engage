@@ -130,9 +130,22 @@ export const DEFAULT_AI_MODEL = "claude-haiku-4-5"
 /** Models any user may pick from, cheapest first. */
 export const SELECTABLE_AI_MODELS: AiModelDef[] = [
   { id: "claude-haiku-4-5", name: "Haiku 4.5", blurb: "Fast and economical — great for everyday drafts.", credits: 1 },
-  { id: "claude-sonnet-4-6", name: "Sonnet 4.6", blurb: "More nuanced writing for op-eds and longer pieces.", credits: 3 },
-  { id: "claude-opus-4-8", name: "Opus 4.8", blurb: "Our highest-quality writing for your most important pieces.", credits: 5 },
+  { id: "claude-sonnet-5", name: "Sonnet 5", blurb: "More nuanced writing for op-eds and longer pieces.", credits: 3 },
+  { id: "claude-opus-5", name: "Opus 5", blurb: "Our highest-quality writing for your most important pieces.", credits: 5 },
 ]
+
+/**
+ * Superseded model ids → their current replacement. A campaign that previously
+ * selected an older model is transparently upgraded to the successor rather than
+ * silently downgraded to the default. Same-tier, same price, so credit costs hold.
+ */
+export const LEGACY_MODEL_MAP: Record<string, string> = {
+  "claude-opus-4-8": "claude-opus-5",
+  "claude-opus-4-7": "claude-opus-5",
+  "claude-opus-4-6": "claude-opus-5",
+  "claude-sonnet-4-6": "claude-sonnet-5",
+  "claude-sonnet-4-5": "claude-sonnet-5",
+}
 
 /** Model Credits charged per generation, keyed by model id. */
 export const MODEL_CREDIT_COST: Record<string, number> = Object.fromEntries(
@@ -149,7 +162,8 @@ export function creditCost(modelId: string | null | undefined): number {
  * requested preference if it's a known selectable model, else the default.
  */
 export function resolveModel(preferred: string | null | undefined): string {
-  if (preferred && SELECTABLE_AI_MODELS.some((m) => m.id === preferred)) return preferred
+  const mapped = (preferred && LEGACY_MODEL_MAP[preferred]) || preferred
+  if (mapped && SELECTABLE_AI_MODELS.some((m) => m.id === mapped)) return mapped
   return DEFAULT_AI_MODEL
 }
 

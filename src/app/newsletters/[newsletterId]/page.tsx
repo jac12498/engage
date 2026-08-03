@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { DEFAULT_AI_MODEL } from "@/lib/entitlements"
+import { resolveModel } from "@/lib/entitlements"
 import { parseBlocks } from "@/lib/newsletter/blocks"
 import { parseTemplate } from "@/lib/newsletter/template"
 import { NewsletterEditor } from "@/components/website/NewsletterEditor"
@@ -66,7 +66,7 @@ export default async function NewsletterEditorPage({
     <NewsletterEditor
       campaignId={campaign.id}
       sitePublished={campaign.site?.published ?? false}
-      defaultModel={campaign.aiModel ?? DEFAULT_AI_MODEL}
+      defaultModel={resolveModel(campaign.aiModel)}
       activeSubscribers={activeSubscribers}
       hasMailingAddress={hasMailingAddress}
       topics={campaign.topics}

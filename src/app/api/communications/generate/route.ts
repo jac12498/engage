@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { anthropic } from "@/lib/comms/anthropic"
-import { buildSystemPrompt, buildUserPrompt, isContentType, toContextBundle } from "@/lib/comms/prompts"
+import { buildSystemPrompt, buildUserPrompt, draftingThinking, isContentType, toContextBundle } from "@/lib/comms/prompts"
 import { toPlanId, resolveModel } from "@/lib/entitlements"
 import { consumeGeneration } from "@/lib/comms/usage"
 
@@ -74,9 +74,11 @@ export async function POST(req: Request) {
   const systemPrompt = buildSystemPrompt(campaign, toContextBundle(contextItems))
   const userPrompt = buildUserPrompt(body.type, campaign.candidateName, issueTopic, additionalContext)
 
+  const thinking = draftingThinking(usedModel)
   const stream = await anthropic.messages.create({
     model: usedModel,
     max_tokens: 2048,
+    ...(thinking ? { thinking } : {}),
     system: systemPrompt,
     messages: [{ role: "user", content: userPrompt }],
     stream: true,

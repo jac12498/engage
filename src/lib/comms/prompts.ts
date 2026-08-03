@@ -110,6 +110,18 @@ export function mediumForType(type: ContentType): Medium {
   return "print"
 }
 
+// Models where thinking is ON by default (the "5" generation). Communications is
+// short-form drafting streamed into an editor, so we disable thinking on those:
+// it keeps time-to-first-token low and lets the whole max_tokens budget fund the
+// draft instead of reasoning. Haiku 4.5 is already no-think by default (and rejects
+// the effort/adaptive surface), so it gets no thinking field.
+const THINKING_OFF_MODELS = new Set(["claude-opus-5", "claude-sonnet-5"])
+
+/** The `thinking` param for a drafting request, or undefined to omit it. */
+export function draftingThinking(model: string): { type: "disabled" } | undefined {
+  return THINKING_OFF_MODELS.has(model) ? { type: "disabled" } : undefined
+}
+
 export interface PromptCampaign {
   candidateName: string
   office: string
@@ -187,7 +199,7 @@ export function buildSystemPrompt(campaign: PromptCampaign, ctx: ContextBundle):
 
 ${campaign.tagline ? `Campaign tagline: "${campaign.tagline}"\n` : ""}${campaign.bio ? `\nCandidate background: ${campaign.bio}\n` : ""}${knowledge ? `\nAbout the candidate:\n${knowledge}\n` : ""}${positionsBlock}${notesBlock}${refsBlock}
 
-Write in ${campaign.candidateName}'s authentic voice — direct, specific, and focused on constituents. Use the positions, values, and context above.${voiceGuidance} Never invent statistics or facts not present in this profile or the provided context.`
+Write in ${campaign.candidateName}'s authentic voice — direct, specific, and focused on constituents. Use the positions, values, and context above.${voiceGuidance} Never invent statistics or facts not present in this profile or the provided context. Respond with only the requested content — no internal reasoning or system tags (for example, <thinking>).`
 }
 
 /** Split scope-filtered ContextItems into the typed bundle the prompt expects. */
