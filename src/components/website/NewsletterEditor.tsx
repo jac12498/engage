@@ -20,6 +20,7 @@ import {
   Newspaper,
   Ungroup,
   Wand2,
+  FileText,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { NL_BLOCK_SPECS, NL_BLOCK_ORDER, type NlBlockType } from "@/lib/newsletter/blocks"
@@ -27,7 +28,7 @@ import { NL_SNIPPETS, nlSnippet } from "@/lib/newsletter/snippets"
 import { renderNewsletterEmail, type EmailRenderCtx } from "@/lib/newsletter/renderEmail"
 import type { NewsletterTemplate } from "@/lib/newsletter/template"
 import { ArticleAiPanel } from "@/components/website/ArticleAiPanel"
-import { articleProseFromBlocks } from "@/lib/newsletter/articleDraft"
+import { articleProseFromBlocks, parseArticleProse } from "@/lib/newsletter/articleDraft"
 import {
   updateNewsletter,
   publishNewsletter,
@@ -111,6 +112,7 @@ export function NewsletterEditor({
   activeSubscribers,
   hasMailingAddress,
   topics,
+  commsArticles,
   campaign,
   template,
   newsletter,
@@ -121,6 +123,7 @@ export function NewsletterEditor({
   activeSubscribers: number
   hasMailingAddress: boolean
   topics: { id: string; title: string }[]
+  commsArticles: { id: string; title: string | null; content: string }[]
   campaign: EditorCampaign
   template: NewsletterTemplate
   newsletter: Editable
@@ -133,6 +136,7 @@ export function NewsletterEditor({
   )
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [assistGroup, setAssistGroup] = useState<string | null>(null)
+  const [commsPickerOpen, setCommsPickerOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [origin, setOrigin] = useState("")
@@ -231,6 +235,12 @@ export function NewsletterEditor({
     added.push({ id: genId(), type: "text", props: { body }, groupId })
     setBlocks((prev) => [...prev, ...added])
     setNotice("Article added — refine the words with AI, then add images or buttons around it.")
+  }
+  /** Insert a saved Communications "Newsletter Article" as a new Article group. */
+  function insertCommsArticle(content: string) {
+    const { title, body } = parseArticleProse(content)
+    insertArticleFromAi(title, body)
+    setCommsPickerOpen(false)
   }
   /** Serialize an existing group's title + body to seed a refinement session. */
   function groupProse(groupBlocks: EditorBlock[]): string {
@@ -520,7 +530,30 @@ export function NewsletterEditor({
                 <Newspaper className="h-3.5 w-3.5 text-[#1b3a6b]" /> {s.label}
               </button>
             ))}
+            {commsArticles.length > 0 && (
+              <button onClick={() => setCommsPickerOpen((o) => !o)} disabled={busy} title="Insert a Newsletter Article you saved in the Communications module" className="inline-flex items-center gap-1 rounded-lg border border-[#1b3a6b]/40 bg-[#1b3a6b]/4 px-2.5 py-1.5 text-sm font-medium text-[#1a1a2e] transition-colors hover:border-[#1b3a6b]/70 disabled:opacity-50">
+                <FileText className="h-3.5 w-3.5 text-[#1b3a6b]" /> From Communications
+              </button>
+            )}
           </div>
+
+          {/* Communications article picker */}
+          {commsPickerOpen && commsArticles.length > 0 && (
+            <div className="space-y-1.5 rounded-2xl border border-[#1b3a6b]/25 bg-[#1b3a6b]/3 p-3">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Insert a saved Communications article — adds it as a new Article you can then edit</p>
+              {commsArticles.map((a) => {
+                const parsed = parseArticleProse(a.content)
+                const label = a.title?.trim() || parsed.title || "Untitled article"
+                const preview = parsed.body.replace(/\s+/g, " ").trim().slice(0, 140)
+                return (
+                  <button key={a.id} onClick={() => insertCommsArticle(a.content)} disabled={busy} className="block w-full rounded-lg border border-border bg-white px-3 py-2 text-left transition-colors hover:border-[#1b3a6b]/40 disabled:opacity-50">
+                    <span className="block truncate text-sm font-medium text-[#1a1a2e]">{label}</span>
+                    {preview && <span className="mt-0.5 block truncate text-xs text-muted-foreground">{preview}</span>}
+                  </button>
+                )
+              })}
+            </div>
+          )}
 
           {/* 6. Add Component */}
           <div className="flex flex-wrap gap-2 rounded-2xl border border-border bg-white p-3">

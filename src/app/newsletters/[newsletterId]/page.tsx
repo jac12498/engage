@@ -46,6 +46,15 @@ export default async function NewsletterEditorPage({
     where: { campaignId: campaign.id, status: "active" },
   })
 
+  // Saved Communications "Newsletter Article" pieces, for the "Insert from
+  // Communications" picker in the editor.
+  const commsArticles = await prisma.generation.findMany({
+    where: { campaignId: campaign.id, type: "newsletter_article" },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+    select: { id: true, title: true, content: true },
+  })
+
   const hasMailingAddress = Boolean(
     campaign.mailingStreet?.trim() &&
       campaign.mailingCity?.trim() &&
@@ -70,6 +79,7 @@ export default async function NewsletterEditorPage({
       activeSubscribers={activeSubscribers}
       hasMailingAddress={hasMailingAddress}
       topics={campaign.topics}
+      commsArticles={commsArticles}
       campaign={{
         candidateName: campaign.candidateName,
         committeeName: campaign.committeeName,
