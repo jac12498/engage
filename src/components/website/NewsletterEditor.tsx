@@ -287,10 +287,11 @@ export function NewsletterEditor({
       mailing: campaign.mailing,
       unsubscribeUrl: "#",
       headshotUrl: campaign.headshotMime && origin ? `${origin}/api/website/headshot/${campaignId}` : null,
+      subscribeUrl: sitePublished && origin ? `${origin}/websites/${campaignId}/newsletter#subscribe` : null,
       baseUrl: origin,
     }
     return renderNewsletterEmail(template, blocks, ctx)
-  }, [subject, blocks, template, campaign, campaignId, origin])
+  }, [subject, blocks, template, campaign, campaignId, origin, sitePublished])
 
   /** Open the current preview (incl. unsaved edits) full-page in a new tab. */
   function openFullPreview() {

@@ -59,6 +59,7 @@ export async function sendTestNewsletterNow(campaignId: string, newsletterId: st
       mailingZip: true,
       headshotMime: true,
       newsletterTemplate: true,
+      site: { select: { published: true } },
       user: { select: { email: true } },
     },
   })
@@ -88,6 +89,7 @@ export async function sendTestNewsletterNow(campaignId: string, newsletterId: st
     },
     unsubscribeUrl: "#",
     headshotUrl: campaign.headshotMime ? `${base}/api/website/headshot/${campaign.id}` : null,
+    subscribeUrl: campaign.site?.published ? `${base}/websites/${campaign.id}/newsletter#subscribe` : null,
     baseUrl: base,
   })
 
@@ -138,6 +140,7 @@ export async function sendNewsletterNow(campaignId: string, newsletterId: string
       mailingZip: true,
       headshotMime: true,
       newsletterTemplate: true,
+      site: { select: { published: true } },
       plan: true,
       creditsThisMonth: true,
       revisionsThisMonth: true,
@@ -193,6 +196,7 @@ export async function sendNewsletterNow(campaignId: string, newsletterId: string
   const replyTo = campaign.user?.email || undefined
   const base = baseUrl()
   const headshotUrl = campaign.headshotMime ? `${base}/api/website/headshot/${campaign.id}` : null
+  const subscribeUrl = campaign.site?.published ? `${base}/websites/${campaign.id}/newsletter#subscribe` : null
 
   function ctxFor(unsubscribeUrl: string): EmailRenderCtx {
     return {
@@ -203,6 +207,7 @@ export async function sendNewsletterNow(campaignId: string, newsletterId: string
       mailing,
       unsubscribeUrl,
       headshotUrl,
+      subscribeUrl,
       baseUrl: base,
     }
   }

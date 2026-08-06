@@ -34,6 +34,9 @@ export interface EmailRenderCtx {
   unsubscribeUrl: string
   /** Absolute headshot URL, when the header shows it and one exists. */
   headshotUrl?: string | null
+  /** Public subscribe-page URL, for readers who got this forwarded. Null/omitted
+   *  hides the line (e.g. when the candidate site isn't published, so signup is off). */
+  subscribeUrl?: string | null
   /** Origin used to absolutize relative image srcs (e.g. /api/newsletter/image/…),
    *  since email clients need absolute URLs. Send passes the prod URL; the editor
    *  preview passes window.location.origin. */
@@ -200,8 +203,12 @@ function renderFooter(tpl: NewsletterTemplate, ctx: EmailRenderCtx): string {
   const signoff = tpl.footer.signoff
     ? `<p style="margin:0 0 12px;font-size:14px;color:#4a4a5a">${esc(tpl.footer.signoff)}</p>`
     : ""
+  const subscribe = ctx.subscribeUrl
+    ? `<p style="margin:0 0 12px;font-size:14px;color:#4a4a5a">Was this forwarded to you? <a href="${esc(ctx.subscribeUrl)}" style="color:${tpl.theme.primaryColor};font-weight:600;text-decoration:underline">Subscribe to ${esc(ctx.candidateName)}'s newsletter</a>.</p>`
+    : ""
   return `<tr><td style="padding:20px 28px 28px;border-top:1px solid #eef0f4">
     ${signoff}
+    ${subscribe}
     <p style="margin:0 0 6px;font-size:12px;line-height:1.5;color:#8a8a99">${paidFor}${addr}</p>
     <p style="margin:0;font-size:12px;line-height:1.5;color:#8a8a99">
       You're receiving this because you subscribed to ${esc(ctx.candidateName)}'s newsletter.
