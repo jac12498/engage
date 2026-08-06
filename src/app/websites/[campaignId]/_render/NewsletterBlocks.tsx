@@ -1,6 +1,7 @@
 import { Fragment } from "react"
 import {
   parseBlocks,
+  parseInlineLinks,
   type NlBlock,
   type HeadingProps,
   type TextProps,
@@ -25,7 +26,15 @@ function TextBlock({ body }: { body: string }) {
         <p key={i} className="mb-4 text-lg leading-relaxed text-[#333]">
           {para.split("\n").map((line, j, arr) => (
             <Fragment key={j}>
-              {line}
+              {parseInlineLinks(line).map((tok, k) =>
+                "href" in tok ? (
+                  <a key={k} href={tok.href} target="_blank" rel="noopener noreferrer" className="underline" style={{ color: "var(--site-primary)" }}>
+                    {tok.label}
+                  </a>
+                ) : (
+                  <Fragment key={k}>{tok.text}</Fragment>
+                )
+              )}
               {j < arr.length - 1 && <br />}
             </Fragment>
           ))}

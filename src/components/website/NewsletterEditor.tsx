@@ -739,7 +739,7 @@ function BlockFields({ block, onChange }: { block: EditorBlock; onChange: (patch
     case "heading":
       return <input value={p.text ?? ""} onChange={(e) => onChange({ text: e.target.value })} placeholder="Heading text" className={inputCls} />
     case "text":
-      return <textarea value={p.body ?? ""} onChange={(e) => onChange({ body: e.target.value })} rows={5} placeholder="Write your text… Blank line between paragraphs." className={`${inputCls} resize-y leading-relaxed`} />
+      return <textarea value={p.body ?? ""} onChange={(e) => onChange({ body: e.target.value })} rows={5} placeholder="Write your text… Blank line between paragraphs. Add a link with [text](https://example.com)." className={`${inputCls} resize-y leading-relaxed`} />
     case "image":
       return <ImageField props={p} onChange={onChange} />
     case "imageText":
@@ -750,7 +750,7 @@ function BlockFields({ block, onChange }: { block: EditorBlock; onChange: (patch
             <option value="right">Image right · text wraps on the left</option>
           </select>
           <ImageField props={p} onChange={onChange} />
-          <textarea value={p.body ?? ""} onChange={(e) => onChange({ body: e.target.value })} rows={5} placeholder="Text that wraps around the image… Blank line between paragraphs." className={`${inputCls} resize-y leading-relaxed`} />
+          <textarea value={p.body ?? ""} onChange={(e) => onChange({ body: e.target.value })} rows={5} placeholder="Text that wraps around the image… Link with [text](https://example.com)." className={`${inputCls} resize-y leading-relaxed`} />
         </div>
       )
     case "button":

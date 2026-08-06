@@ -10,7 +10,7 @@ import type {
   SocialProps,
   QuoteProps,
 } from "./blocks"
-import { parseBlocks } from "./blocks"
+import { parseBlocks, parseInlineLinks } from "./blocks"
 import { parseTemplate, FONT_STACKS, type NewsletterTemplate } from "./template"
 
 // Email-safe renderer: template + content blocks → a 600px, table-based, fully
@@ -61,15 +61,26 @@ function composeAddress(m: EmailRenderCtx["mailing"]): string {
   return [line1, cityStateZip].filter(Boolean).join(", ")
 }
 
-/** Plain-text (blank lines = paragraphs) → escaped <p> HTML. */
-function paragraphsHtml(body: string): string {
+/** One text run → escaped HTML with [label](url) turned into anchors. */
+function inlineHtml(text: string, linkColor: string): string {
+  return parseInlineLinks(text)
+    .map((t) =>
+      "href" in t
+        ? `<a href="${esc(t.href)}" target="_blank" rel="noopener noreferrer" style="color:${linkColor};text-decoration:underline">${esc(t.label)}</a>`
+        : esc(t.text).replace(/\n/g, "<br>")
+    )
+    .join("")
+}
+
+/** Plain-text (blank lines = paragraphs) → escaped <p> HTML with inline links. */
+function paragraphsHtml(body: string, linkColor: string): string {
   return body
     .split(/\n\s*\n/)
     .map((s) => s.trim())
     .filter(Boolean)
     .map(
       (para) =>
-        `<p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#1a1a2e">${esc(para).replace(/\n/g, "<br>")}</p>`
+        `<p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#1a1a2e">${inlineHtml(para, linkColor)}</p>`
     )
     .join("")
 }
@@ -85,7 +96,7 @@ function renderBlock(block: NlBlock, tpl: NewsletterTemplate, baseUrl: string): 
     }
     case "text": {
       const p = block.props as TextProps
-      const paras = paragraphsHtml(p.body)
+      const paras = paragraphsHtml(p.body, tpl.theme.primaryColor)
       return paras ? `<tr><td style="${pad}">${paras}</td></tr>` : ""
     }
     case "spacer": {
@@ -97,8 +108,8 @@ function renderBlock(block: NlBlock, tpl: NewsletterTemplate, baseUrl: string): 
       const p = block.props as TwoColumnProps
       if (!p.left.trim() && !p.right.trim()) return ""
       return `<tr><td style="${pad}"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-        <td class="nl-col" width="50%" valign="top" style="padding-right:10px">${paragraphsHtml(p.left)}</td>
-        <td class="nl-col" width="50%" valign="top" style="padding-left:10px">${paragraphsHtml(p.right)}</td>
+        <td class="nl-col" width="50%" valign="top" style="padding-right:10px">${paragraphsHtml(p.left, tpl.theme.primaryColor)}</td>
+        <td class="nl-col" width="50%" valign="top" style="padding-left:10px">${paragraphsHtml(p.right, tpl.theme.primaryColor)}</td>
       </tr></table></td></tr>`
     }
     case "social": {
@@ -137,7 +148,7 @@ function renderBlock(block: NlBlock, tpl: NewsletterTemplate, baseUrl: string): 
     }
     case "imageText": {
       const p = block.props as ImageTextProps
-      const paras = paragraphsHtml(p.body)
+      const paras = paragraphsHtml(p.body, tpl.theme.primaryColor)
       if (!p.src) return paras ? `<tr><td style="${pad}">${paras}</td></tr>` : ""
       const src = absolutize(p.src, baseUrl)
       const align = p.side === "right" ? "right" : "left"

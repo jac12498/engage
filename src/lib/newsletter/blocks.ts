@@ -76,6 +76,45 @@ export function safeHref(v: unknown): string | undefined {
   }
 }
 
+// ─── Inline links ────────────────────────────────────────────────────────────
+// Markdown-style [label](url) inside text bodies. Parsed here (once) so the email
+// and web renderers produce identical, safe output.
+
+/** One run of a text body: plain text, or a resolved inline link. */
+export type InlineToken = { text: string } | { label: string; href: string }
+
+const INLINE_LINK_RE = /\[([^\]\n]+)\]\(([^)\s]+)\)/g
+
+/** Prepend https:// to a bare domain (example.com, www.foo.org/x) so authors needn't. */
+function normalizeInlineUrl(raw: string): string {
+  const t = raw.trim()
+  if (/^(https?:\/\/|\/)/i.test(t)) return t
+  if (/^[\w-]+(\.[\w-]+)+([/?#].*)?$/i.test(t)) return "https://" + t
+  return t
+}
+
+/**
+ * Split a plain-text run into text/link tokens on [label](url). URLs are sanitized
+ * with safeHref (http(s) or internal paths only; bare domains get https://). An
+ * unsafe or malformed URL keeps the literal "[label](url)" so the author can see
+ * and fix it rather than have it silently vanish.
+ */
+export function parseInlineLinks(input: string): InlineToken[] {
+  const out: InlineToken[] = []
+  let last = 0
+  INLINE_LINK_RE.lastIndex = 0
+  let m: RegExpExecArray | null
+  while ((m = INLINE_LINK_RE.exec(input)) !== null) {
+    if (m.index > last) out.push({ text: input.slice(last, m.index) })
+    const href = safeHref(normalizeInlineUrl(m[2]))
+    if (href) out.push({ label: m[1], href })
+    else out.push({ text: m[0] })
+    last = m.index + m[0].length
+  }
+  if (last < input.length) out.push({ text: input.slice(last) })
+  return out
+}
+
 // ─── Registry ────────────────────────────────────────────────────────────────
 
 export interface NlBlockSpec<P> {
