@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, Settings, LogOut, Lock, Menu, X, Sparkles, Users, type LucideIcon } from "lucide-react"
+import { LayoutDashboard, Settings, LogOut, Lock, Menu, X, Sparkles, Users, PlusCircle, type LucideIcon } from "lucide-react"
 import { NAV_MODULES, navModuleUnlocked, navUnlockPlan, activeModuleKey } from "@/lib/nav"
 import { PLAN_LABELS, type PlanId } from "@/lib/entitlements"
 import { signOutAction } from "@/app/actions/auth"
@@ -143,6 +143,9 @@ export function AppSidebar({
 
         {/* Footer */}
         <div className="space-y-0.5 border-t border-border px-3 py-3">
+          {canManageMembers && (
+            <Row href="/campaigns/new" label="Add campaign" icon={PlusCircle} active={isActive("/campaigns/new")} onClick={close} />
+          )}
           {canManageMembers && (
             <Row href="/members" label="Members" icon={Users} active={isActive("/members")} onClick={close} />
           )}

@@ -1,10 +1,9 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { getTopLevelDistricts } from "@/lib/districts"
-import { OnboardingForm } from "@/components/onboarding/OnboardingForm"
+import { CommitteeOnboardingForm } from "@/components/onboarding/CommitteeOnboardingForm"
 
-export const metadata = { title: "Set up your campaign · Engage" }
+export const metadata = { title: "Set up your committee · Engage" }
 
 export default async function OnboardingPage() {
   const session = await auth()
@@ -18,8 +17,6 @@ export default async function OnboardingPage() {
   })
   if (membership) redirect("/dashboard")
 
-  const topDistricts = await getTopLevelDistricts()
-
   return (
     <div className="min-h-screen bg-[#f4f6f9]">
       <header className="border-b border-border bg-white">
@@ -31,14 +28,14 @@ export default async function OnboardingPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-6 py-10">
-        <h1 className="text-2xl font-bold text-[#1a1a2e]">Set up your campaign</h1>
+      <main className="mx-auto max-w-2xl px-6 py-10">
+        <h1 className="text-2xl font-bold text-[#1a1a2e]">Set up your committee</h1>
         <p className="mt-1.5 text-muted-foreground">
-          A few details about you and your campaign. This powers your Communications and ties your
-          workspace to the right voters.
+          Start with your committee — the organization behind your work. You&rsquo;ll add
+          candidate campaigns (one per race) once you&rsquo;re inside.
         </p>
 
-        <OnboardingForm topDistricts={topDistricts} />
+        <CommitteeOnboardingForm />
       </main>
     </div>
   )
