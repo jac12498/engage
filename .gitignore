@@ -37,3 +37,13 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# campaign-finance data: commit the small committee registry parquet (queried at
+# runtime), but keep raw source CSVs and large future datasets out of git.
+# Large parquets (disclosures, donor geocodes) go on a Railway volume at the same
+# data/campaign_finance/{state}/ path.
+/data/campaign_finance/**/COMMCAND*.CSV
+/data/campaign_finance/**/*.csv
+/data/campaign_finance/**/disclosures/
+/data/campaign_finance/**/*donor_geocodes*
+/data/campaign_finance/**/*.duckdb

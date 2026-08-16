@@ -1,0 +1,189 @@
+{
+  "state": "NY",
+  "description": "New York State Board of Elections committee/candidate registry",
+  "version": "2026",
+  "dataType": "campaign_finance_committees",
+  "hasHeaders": false,
+  "delimiter": ",",
+  "encoding": "utf-8",
+  "source": "NY State Board of Elections",
+  "updateFrequency": "Periodic updates",
+  "filename": "COMMCAND.CSV",
+  
+  "columns": [
+    {
+      "index": 0,
+      "name": "committee_id",
+      "type": "VARCHAR",
+      "description": "Unique committee identifier",
+      "required": true,
+      "notes": "Primary key for committee records"
+    },
+    {
+      "index": 1,
+      "name": "committee_name",
+      "type": "VARCHAR",
+      "description": "Committee or candidate name",
+      "required": true
+    },
+    {
+      "index": 2,
+      "name": "filer_type",
+      "type": "VARCHAR",
+      "description": "Type of filer",
+      "required": false,
+      "valueMappings": {
+        "CANDIDATE": "Candidate committee",
+        "POLITICAL COMMITTEE": "Political action committee",
+        "PARTY COMMITTEE": "Political party committee"
+      }
+    },
+    {
+      "index": 3,
+      "name": "filing_level",
+      "type": "VARCHAR",
+      "description": "Filing jurisdiction level",
+      "required": false,
+      "valueMappings": {
+        "STATE": "Statewide office",
+        "COUNTY": "County-level office",
+        "LOCAL": "Municipal/local office"
+      }
+    },
+    {
+      "index": 4,
+      "name": "status",
+      "type": "VARCHAR",
+      "description": "Committee status",
+      "required": false,
+      "valueMappings": {
+        "ACTIVE": "Currently active committee",
+        "TERMINATED": "Committee has been terminated",
+        "SUSPENDED": "Committee suspended"
+      }
+    },
+    {
+      "index": 5,
+      "name": "committee_type",
+      "type": "VARCHAR",
+      "description": "Type of committee",
+      "required": false
+    },
+    {
+      "index": 6,
+      "name": "unknown_6",
+      "type": "VARCHAR",
+      "description": "Unknown field - not currently used",
+      "required": false
+    },
+    {
+      "index": 7,
+      "name": "unknown_7",
+      "type": "VARCHAR",
+      "description": "Unknown field - not currently used",
+      "required": false
+    },
+    {
+      "index": 8,
+      "name": "county",
+      "type": "VARCHAR",
+      "description": "County name",
+      "required": false
+    },
+    {
+      "index": 9,
+      "name": "municipality",
+      "type": "VARCHAR",
+      "description": "Municipality/city name",
+      "required": false
+    },
+    {
+      "index": 10,
+      "name": "treasurer_first_name",
+      "type": "VARCHAR",
+      "description": "Committee treasurer first name",
+      "required": false
+    },
+    {
+      "index": 11,
+      "name": "treasurer_middle_name",
+      "type": "VARCHAR",
+      "description": "Committee treasurer middle name/initial",
+      "required": false
+    },
+    {
+      "index": 12,
+      "name": "treasurer_last_name",
+      "type": "VARCHAR",
+      "description": "Committee treasurer last name",
+      "required": false
+    },
+    {
+      "index": 13,
+      "name": "address_line_1",
+      "type": "VARCHAR",
+      "description": "Committee address",
+      "required": false
+    },
+    {
+      "index": 14,
+      "name": "city",
+      "type": "VARCHAR",
+      "description": "Committee city",
+      "required": false
+    },
+    {
+      "index": 15,
+      "name": "state",
+      "type": "VARCHAR",
+      "description": "Committee state (2-letter code)",
+      "required": false
+    },
+    {
+      "index": 16,
+      "name": "zip",
+      "type": "VARCHAR",
+      "description": "Committee ZIP code",
+      "required": false
+    }
+  ],
+  
+  "applicationFieldMapping": {
+    "committeeId": "committee_id",
+    "committeeName": "committee_name",
+    "filerType": "filer_type",
+    "filingLevel": "filing_level",
+    "status": "status",
+    "committeeType": "committee_type",
+    "county": "county",
+    "municipality": "municipality",
+    "treasurerFirstName": "treasurer_first_name",
+    "treasurerMiddleName": "treasurer_middle_name",
+    "treasurerLastName": "treasurer_last_name",
+    "addressLine1": "address_line_1",
+    "city": "city",
+    "addressState": "state",
+    "zip": "zip"
+  },
+  
+  "committeeIdFormat": {
+    "type": "alphanumeric",
+    "example": "19576",
+    "description": "Numeric or alphanumeric identifier assigned by NY State BOE",
+    "notes": [
+      "Committee IDs are used to link disclosure records to committee information",
+      "Route ID format in application: {state}-{committeeId} (e.g., 'ny-19576')"
+    ]
+  },
+  
+  "notes": [
+    "COMMCAND.CSV is the authoritative committee registry file",
+    "File is headerless CSV format",
+    "committees.parquet is a point-in-time snapshot converted for faster querying",
+    "Always prioritize COMMCAND.CSV over committees.parquet for current data",
+    "Committee data is used to enrich donor search results with recipient information",
+    "Not all columns are fully documented - many positions beyond index 16 may exist",
+    "Committee status should be checked before displaying to users",
+    "Treasurer information is optional and may be missing for some committees"
+  ]
+}

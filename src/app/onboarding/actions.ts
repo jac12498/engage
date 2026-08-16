@@ -3,7 +3,8 @@
 import { redirect } from "next/navigation"
 import { auth, updateSession } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { isSupportedState, isValidCommitteeType } from "@/lib/committeeTypes"
+import { isSupportedState, isValidCommitteeType, mapCommcandType } from "@/lib/committeeTypes"
+import { fetchCommitteeByFilerId } from "@/lib/campaignFinance"
 
 export interface CreateCommitteeInput {
   /** Committee name, e.g. "Woodstock Democratic Committee". */
@@ -17,6 +18,47 @@ export interface CreateCommitteeInput {
 }
 
 export type OnboardingResult = { ok: true } | { ok: false; error: string }
+
+export type CommitteeLookup =
+  | {
+      found: true
+      name: string
+      committeeTypeCode: string | null // mapped to our onboarding codes, or null
+      rawCommitteeType: string | null // the NYSBOE label, for display
+      filerType: string | null
+      status: string | null
+      city: string | null
+      addressState: string | null
+    }
+  | { found: false }
+
+/**
+ * Look up a committee by its state Filer ID in the campaign-finance registry
+ * (NY only today) to prefill onboarding. Read-only; requires only that the caller
+ * is signed in. Returns a plain, client-safe DTO.
+ */
+export async function lookupCommittee(state: string, filerId: string): Promise<CommitteeLookup> {
+  const session = await auth()
+  if (!session?.user?.id) return { found: false }
+
+  const stateCode = state.trim().toUpperCase()
+  const id = filerId.trim()
+  if (!isSupportedState(stateCode) || !id) return { found: false }
+
+  const committee = await fetchCommitteeByFilerId(stateCode, id)
+  if (!committee) return { found: false }
+
+  return {
+    found: true,
+    name: committee.committeeName,
+    committeeTypeCode: mapCommcandType(committee.committeeType, committee.filerType),
+    rawCommitteeType: committee.committeeType,
+    filerType: committee.filerType,
+    status: committee.status,
+    city: committee.city,
+    addressState: committee.addressState,
+  }
+}
 
 /**
  * Committee-first onboarding: create the signed-in user's Committee on the free
