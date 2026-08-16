@@ -1,11 +1,13 @@
 "use client"
 
 import { useMemo, useState, useTransition } from "react"
+import { CheckCircle2, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { submitCommittee } from "@/app/onboarding/actions"
+import { submitCommittee, lookupCommittee } from "@/app/onboarding/actions"
 import {
   SUPPORTED_STATES,
   committeeTypesFor,
+  committeeTypeLabel,
   isSupportedState,
 } from "@/lib/committeeTypes"
 
@@ -34,9 +36,40 @@ export function CommitteeOnboardingForm() {
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
+  // Filer-ID lookup state.
+  const [lookingUp, setLookingUp] = useState(false)
+  const [lookupMsg, setLookupMsg] = useState<string | null>(null)
+  const [matched, setMatched] = useState<{ name: string; typeLabel: string | null; location: string | null } | null>(null)
+
   const types = useMemo(() => committeeTypesFor(state), [state])
   const stateSupported = isSupportedState(state)
   const selectedType = types.find((t) => t.code === committeeType)
+
+  async function handleLookup() {
+    setError(null)
+    setLookupMsg(null)
+    setMatched(null)
+    const id = filerId.trim()
+    if (!id) return setLookupMsg("Enter a Filer ID to look up.")
+    setLookingUp(true)
+    try {
+      const res = await lookupCommittee(state, id)
+      if (!res.found) {
+        setLookupMsg("No committee found for that Filer ID — enter your details manually.")
+        return
+      }
+      setName(res.name)
+      if (res.committeeTypeCode) setCommitteeType(res.committeeTypeCode)
+      const location = [res.city, res.addressState].filter(Boolean).join(", ") || null
+      setMatched({
+        name: res.name,
+        typeLabel: committeeTypeLabel(state, res.committeeTypeCode) ?? res.rawCommitteeType,
+        location,
+      })
+    } finally {
+      setLookingUp(false)
+    }
+  }
 
   function handleSubmit() {
     setError(null)
@@ -123,20 +156,51 @@ export function CommitteeOnboardingForm() {
             </p>
           </div>
 
-          {/* Filer ID (optional) */}
+          {/* Filer ID (optional) + lookup */}
           <div className="sm:col-span-2">
-            <Field label="NY State Filer ID (optional)">
+            <span className="mb-1.5 block text-sm font-medium text-[#1a1a2e]">
+              NY State Filer ID (optional)
+            </span>
+            <div className="flex gap-2">
               <input
                 value={filerId}
-                onChange={(e) => setFilerId(e.target.value)}
+                onChange={(e) => {
+                  setFilerId(e.target.value)
+                  setMatched(null)
+                  setLookupMsg(null)
+                }}
                 placeholder="e.g. A12345"
-                className={inputCls}
+                className={`${inputCls} flex-1`}
               />
-            </Field>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleLookup}
+                disabled={!stateSupported || lookingUp || !filerId.trim()}
+              >
+                {lookingUp ? <Loader2 className="h-4 w-4 animate-spin" /> : "Look up"}
+              </Button>
+            </div>
             <p className="mt-1.5 text-xs text-muted-foreground">
-              If your committee is already registered with the NY State Board of Elections, enter its
-              Filer ID. You can add or change it later.
+              If your committee is registered with the NY State Board of Elections, enter its Filer ID
+              and click Look up to fill in your details automatically. You can edit anything after.
             </p>
+            {lookupMsg && <p className="mt-1.5 text-xs text-[#c4910a]">{lookupMsg}</p>}
+            {matched && (
+              <div className="mt-2 flex items-start gap-2 rounded-xl border border-green-600/30 bg-green-50 px-3.5 py-2.5">
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-700" />
+                <div className="text-sm text-green-900">
+                  <span className="font-semibold">{matched.name}</span>
+                  {matched.typeLabel && <> · {matched.typeLabel}</>}
+                  {matched.location && (
+                    <span className="text-green-800/70"> · {matched.location}</span>
+                  )}
+                  <p className="mt-0.5 text-xs text-green-800/80">
+                    Filled in from the NY Board of Elections registry. Edit anything below if needed.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </section>

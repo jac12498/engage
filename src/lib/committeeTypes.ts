@@ -98,3 +98,26 @@ export function isValidCommitteeType(
 ): boolean {
   return !!code && committeeTypesFor(state).some((x) => x.code === code)
 }
+
+/**
+ * Map a raw NYSBOE COMMCAND committee_type (and filer_type) string to one of our
+ * onboarding committee-type codes. Returns null when it can't be confidently mapped
+ * (e.g. a plain CANDIDATE record with no committee_type) — the user then picks.
+ * Based on the actual distinct values in the registry (63k+ rows).
+ */
+export function mapCommcandType(
+  committeeType: string | null | undefined,
+  _filerType?: string | null
+): string | null {
+  const t = (committeeType ?? "").toLowerCase()
+  if (!t) return null
+  if (t.includes("housekeeping")) return "housekeeping"
+  if (t.includes("authorized single")) return "authorized_single"
+  if (t.includes("authorized multi")) return "authorized_multi"
+  if (t.includes("political action")) return "pac"
+  if (t.includes("independent expenditure")) return "independent_expenditure"
+  if (t.includes("ballot issue")) return "ballot_issue"
+  if (t.includes("constituted") || t.startsWith("party ")) return "constituted"
+  if (t.includes("public campaign finance")) return "authorized_single"
+  return null
+}
