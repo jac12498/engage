@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react"
 import { CheckCircle2, X, Loader2, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { fetchChildDistricts, submitOnboarding } from "@/app/onboarding/actions"
+import { fetchChildDistricts, submitCampaign } from "@/app/campaigns/actions"
 import type { DistrictNode } from "@/lib/districts"
 
 /** One level of the hierarchy: the children available, and what's chosen here. */
@@ -31,7 +31,7 @@ const PARTY_NEEDS_CUSTOM = new Set<string>(["Independent", "Other"])
 // Endorsements are named party lines (fusion voting), so exclude the free-text options.
 const ENDORSEMENT_OPTIONS = PARTY_OPTIONS.filter((p) => !PARTY_NEEDS_CUSTOM.has(p))
 
-export function OnboardingForm({ topDistricts }: { topDistricts: DistrictNode[] }) {
+export function CampaignForm({ topDistricts }: { topDistricts: DistrictNode[] }) {
   const [candidateName, setCandidateName] = useState("")
   const [office, setOffice] = useState("")
   const [committeeName, setCommitteeName] = useState("")
@@ -46,8 +46,6 @@ export function OnboardingForm({ topDistricts }: { topDistricts: DistrictNode[] 
   function resolveParty(): string {
     if (!partyChoice) return ""
     if (showCustomParty) {
-      // For "Other" the typed name is the party; for "Independent" it's an
-      // optional refinement, defaulting to "Independent".
       return partyCustom.trim() || (partyChoice === "Independent" ? "Independent" : "")
     }
     return partyChoice
@@ -145,7 +143,7 @@ export function OnboardingForm({ topDistricts }: { topDistricts: DistrictNode[] 
     if (!committeeName.trim()) return setError("Please enter a committee name.")
 
     startTransition(async () => {
-      const result = await submitOnboarding({
+      const result = await submitCampaign({
         candidateName,
         office,
         party: resolveParty(),
@@ -159,7 +157,7 @@ export function OnboardingForm({ topDistricts }: { topDistricts: DistrictNode[] 
 
   return (
     <div className="mt-8 space-y-6">
-      {/* Profile */}
+      {/* Candidate */}
       <section className="rounded-2xl border border-border bg-white p-6">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-[#c4910a]">Candidate</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -175,7 +173,7 @@ export function OnboardingForm({ topDistricts }: { topDistricts: DistrictNode[] 
             <input
               value={office}
               onChange={(e) => setOffice(e.target.value)}
-              placeholder="County Legislature, District 23"
+              placeholder="Town Council, Town of Woodstock"
               className={inputCls}
             />
           </Field>
@@ -204,16 +202,14 @@ export function OnboardingForm({ topDistricts }: { topDistricts: DistrictNode[] 
                 value={partyCustom}
                 onChange={(e) => setPartyCustom(e.target.value)}
                 placeholder={
-                  partyChoice === "Independent"
-                    ? "Party name (optional)"
-                    : "Enter your party name"
+                  partyChoice === "Independent" ? "Party name (optional)" : "Enter your party name"
                 }
                 className={`${inputCls} mt-2`}
               />
             )}
           </div>
           <div className="sm:col-span-2">
-            <Field label="Committee name" required>
+            <Field label="Committee name (for “Paid for by”)" required>
               <input
                 value={committeeName}
                 onChange={(e) => setCommitteeName(e.target.value)}
@@ -222,9 +218,9 @@ export function OnboardingForm({ topDistricts }: { topDistricts: DistrictNode[] 
               />
             </Field>
             <p className="mt-1.5 text-xs text-muted-foreground">
-              Used for the &ldquo;Paid for by&rdquo; line on your website and communications. If you
-              haven&rsquo;t set up an official committee yet, enter your intended name — you can update
-              it later to match the official name if it ends up different.
+              Used for the &ldquo;Paid for by&rdquo; line on this campaign&rsquo;s website and
+              communications. This can be the candidate&rsquo;s own committee or your committee,
+              depending on who&rsquo;s funding the race.
             </p>
           </div>
 
@@ -236,9 +232,17 @@ export function OnboardingForm({ topDistricts }: { topDistricts: DistrictNode[] 
             {endorsements.length > 0 && (
               <div className="mb-2 flex flex-wrap gap-2">
                 {endorsements.map((p) => (
-                  <span key={p} className="inline-flex items-center gap-1.5 rounded-full bg-[#1b3a6b]/8 px-3 py-1 text-sm font-medium text-[#1b3a6b]">
+                  <span
+                    key={p}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-[#1b3a6b]/8 px-3 py-1 text-sm font-medium text-[#1b3a6b]"
+                  >
                     {p}
-                    <button type="button" onClick={() => removeEndorsement(p)} className="text-[#1b3a6b]/60 hover:text-[#1b3a6b]" aria-label={`Remove ${p}`}>
+                    <button
+                      type="button"
+                      onClick={() => removeEndorsement(p)}
+                      className="text-[#1b3a6b]/60 hover:text-[#1b3a6b]"
+                      aria-label={`Remove ${p}`}
+                    >
                       <X className="h-3.5 w-3.5" />
                     </button>
                   </span>
@@ -252,9 +256,13 @@ export function OnboardingForm({ topDistricts }: { topDistricts: DistrictNode[] 
                 disabled={availableEndorsements.length === 0}
                 className={`${selectCls} flex-1`}
               >
-                <option value="">{availableEndorsements.length ? "Add an endorsing party…" : "No more parties to add"}</option>
+                <option value="">
+                  {availableEndorsements.length ? "Add an endorsing party…" : "No more parties to add"}
+                </option>
                 {availableEndorsements.map((p) => (
-                  <option key={p} value={p}>{p}</option>
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
                 ))}
               </select>
               <Button type="button" variant="outline" onClick={addEndorsement} disabled={!endorsePick}>
@@ -271,14 +279,14 @@ export function OnboardingForm({ topDistricts }: { topDistricts: DistrictNode[] 
       {/* District */}
       <section className="rounded-2xl border border-border bg-white p-6">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-[#c4910a]">
-          Your district (optional)
+          District (optional)
         </h2>
         <p className="mt-1.5 text-sm text-muted-foreground">
           Choose a district type, then the specific district. You can stop at any level, or keep
-          drilling down to a town, ward, or legislative district. This is how we match your campaign
+          drilling down to a town, ward, or legislative district. This is how we match the campaign
           to the right voters. Voter File, Voter Outreach, and Field Tools aren&rsquo;t available in
-          every state yet — Communications and your website work nationwide, so you can skip this
-          and add it later.
+          every state yet — Communications and the website work nationwide, so you can skip this and
+          add it later.
         </p>
 
         <div className="mt-5 space-y-4">
@@ -291,7 +299,6 @@ export function OnboardingForm({ topDistricts }: { topDistricts: DistrictNode[] 
 
             return (
               <div key={i} className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
-                {/* Type selector (only when there's a real choice) */}
                 {types.length > 1 ? (
                   <Field label={i === 0 ? "State" : "District type"}>
                     <select
@@ -311,7 +318,6 @@ export function OnboardingForm({ topDistricts }: { topDistricts: DistrictNode[] 
                   <div className="hidden sm:block" />
                 )}
 
-                {/* District selector */}
                 {effectiveType ? (
                   <Field label={effectiveType}>
                     <select
@@ -323,9 +329,7 @@ export function OnboardingForm({ topDistricts }: { topDistricts: DistrictNode[] 
                       {districts.map((d) => (
                         <option key={d.id} value={d.id}>
                           {d.name}
-                          {d.voterCount != null
-                            ? ` (${d.voterCount.toLocaleString()} voters)`
-                            : ""}
+                          {d.voterCount != null ? ` (${d.voterCount.toLocaleString()} voters)` : ""}
                         </option>
                       ))}
                     </select>
@@ -334,7 +338,6 @@ export function OnboardingForm({ topDistricts }: { topDistricts: DistrictNode[] 
                   <div className="hidden sm:block" />
                 )}
 
-                {/* Clear (not on the top level) */}
                 {i > 0 && level.selectedId ? (
                   <button
                     type="button"
@@ -359,7 +362,6 @@ export function OnboardingForm({ topDistricts }: { topDistricts: DistrictNode[] 
           )}
         </div>
 
-        {/* Confirmation */}
         {selected && (
           <div className="mt-5 flex items-start gap-2 rounded-xl border-2 border-green-600/30 bg-green-50 px-4 py-3">
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-green-700" />
@@ -367,9 +369,7 @@ export function OnboardingForm({ topDistricts }: { topDistricts: DistrictNode[] 
               <p className="text-sm text-green-900">
                 Selected: <span className="font-semibold">{selected.name}</span>{" "}
                 <span className="text-green-800/70">({selected.typeName})</span>
-                {selected.voterCount != null && (
-                  <> · {selected.voterCount.toLocaleString()} voters</>
-                )}
+                {selected.voterCount != null && <> · {selected.voterCount.toLocaleString()} voters</>}
               </p>
               {selected.hasChildren && (
                 <p className="mt-0.5 text-xs text-green-800/80">
@@ -389,7 +389,7 @@ export function OnboardingForm({ topDistricts }: { topDistricts: DistrictNode[] 
 
       <div className="flex items-center justify-end gap-3">
         <Button onClick={handleSubmit} disabled={isPending}>
-          {isPending ? "Creating your workspace…" : "Create my campaign"}
+          {isPending ? "Adding campaign…" : "Add campaign"}
         </Button>
       </div>
     </div>
@@ -399,8 +399,7 @@ export function OnboardingForm({ topDistricts }: { topDistricts: DistrictNode[] 
 const inputCls =
   "w-full rounded-lg border border-border bg-white px-3.5 py-2.5 text-sm text-[#1a1a2e] outline-none transition-colors focus:border-[#1b3a6b] focus:ring-2 focus:ring-[#1b3a6b]/15"
 
-const selectCls =
-  "w-full rounded-lg border border-border bg-white px-3.5 py-2.5 text-sm text-[#1a1a2e] outline-none transition-colors focus:border-[#1b3a6b] focus:ring-2 focus:ring-[#1b3a6b]/15"
+const selectCls = inputCls
 
 function Field({
   label,

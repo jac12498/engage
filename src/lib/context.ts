@@ -89,12 +89,13 @@ export async function requireCommittee(min: Role = "viewer"): Promise<ActiveCont
 
 /**
  * Require an active committee AND a campaign within it (for candidate-specific
- * modules). Redirects to onboarding when the committee has no campaign yet.
+ * modules). When the committee has no campaign yet, send the user to add one —
+ * NOT to onboarding (they're already set up as a committee).
  */
 export async function requireActiveCampaign(
   min: Role = "viewer"
 ): Promise<ActiveContext & { campaign: Campaign }> {
   const ctx = await requireCommittee(min)
-  if (!ctx.campaign) redirect("/onboarding")
+  if (!ctx.campaign) redirect("/campaigns/new")
   return ctx as ActiveContext & { campaign: Campaign }
 }

@@ -1,17 +1,27 @@
 import { redirect } from "next/navigation"
 import Link from "next/link"
-import { ArrowRight, Check, Circle, Sparkles } from "lucide-react"
+import { ArrowRight, Check, Circle, Sparkles, Megaphone, UserPlus } from "lucide-react"
 import { AppShell } from "@/components/AppShell"
-import { requireActiveCampaign } from "@/lib/context"
+import { requireCommittee, roleAtLeast } from "@/lib/context"
 import { computeHomeTasks, type HomeTask } from "@/lib/homeTasks"
 
 export const dynamic = "force-dynamic"
 
 export default async function HomePage() {
-  const { campaign, committee } = await requireActiveCampaign()
+  const { committee, campaign, role } = await requireCommittee()
+
+  // A committee legitimately starts with no campaign. Show a "get started" empty
+  // state (add a campaign, invite members) instead of the campaign checklist.
+  if (!campaign) {
+    return (
+      <AppShell>
+        <NoCampaignHome committeeName={committee.name} canManage={roleAtLeast(role, "admin")} />
+      </AppShell>
+    )
+  }
 
   const data = await computeHomeTasks(campaign.id, committee.id)
-  if (!data) redirect("/onboarding")
+  if (!data) redirect("/campaigns/new")
 
   const { candidateName, tasks, doneCount, total } = data
   const pending = tasks.filter((t) => !t.done)
@@ -98,6 +108,55 @@ export default async function HomePage() {
         </div>
       )}
     </AppShell>
+  )
+}
+
+function NoCampaignHome({ committeeName, canManage }: { committeeName: string; canManage: boolean }) {
+  return (
+    <div>
+      <div>
+        <h1 className="text-2xl font-bold text-[#1a1a2e]">{committeeName}</h1>
+        <p className="mt-1 text-muted-foreground">
+          Your committee is set up. Add your first campaign to start using Communications, your
+          website, and newsletters.
+        </p>
+      </div>
+
+      <div className="mt-8 rounded-2xl border border-border bg-white p-8 text-center">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-[#1b3a6b]/8 text-[#1b3a6b]">
+          <Megaphone className="h-6 w-6" />
+        </div>
+        <h2 className="mt-4 text-lg font-semibold text-[#1a1a2e]">Add your first campaign</h2>
+        <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+          A campaign is one candidate&rsquo;s race. Each gets its own Communications, website, and
+          newsletter — add one per race your committee runs.
+        </p>
+        <div className="mt-5 flex flex-wrap justify-center gap-3">
+          {canManage ? (
+            <Link
+              href="/campaigns/new"
+              className="inline-flex items-center gap-2 rounded-lg bg-[#1b3a6b] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#122850]"
+            >
+              <Megaphone className="h-4 w-4" />
+              Add a campaign
+            </Link>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Ask a committee owner or admin to add the first campaign.
+            </p>
+          )}
+          {canManage && (
+            <Link
+              href="/members"
+              className="inline-flex items-center gap-2 rounded-lg border border-border px-5 py-2.5 text-sm font-semibold text-[#1a1a2e] transition-colors hover:border-[#1b3a6b]/40"
+            >
+              <UserPlus className="h-4 w-4 text-muted-foreground" />
+              Invite members
+            </Link>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
 

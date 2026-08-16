@@ -91,6 +91,15 @@ model Committee {
   id   String @id @default(cuid())
   name String
 
+  // Registration profile. `state` (2-letter) drives which committee types are
+  // offered and future coverage; `committeeType` is a code from the state's list
+  // (see lib/committeeTypes.ts — e.g. "constituted", "authorized_single", "pac");
+  // `filerId` is the state's campaign-finance filer ID (NY BOE), optional — no
+  // auto-lookup yet. All nullable (legacy backfilled committees have none).
+  state         String?
+  committeeType String?
+  filerId       String?
+
   members   CommitteeMembership[]
   campaigns Campaign[]
   contacts  Contact[]
