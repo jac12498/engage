@@ -17,7 +17,9 @@ export type ConsumeResult =
   | { ok: true; used: number; limit: number | null; charged: boolean }
   | { ok: false; used: number; limit: number }
 
-interface UsageCampaign {
+// Usage is metered at the COMMITTEE level: a committee has one shared monthly pool
+// across all of its campaigns. The counter fields live on the Committee row.
+interface UsageCommittee {
   id: string
   creditsThisMonth: number
   revisionsThisMonth: number
@@ -39,18 +41,18 @@ interface MonthState {
 }
 
 /** Resolve current-month counters, rolling ALL of them over at a new month. */
-function monthlyState(campaign: UsageCampaign): MonthState {
+function monthlyState(committee: UsageCommittee): MonthState {
   const now = new Date()
-  const start = campaign.billingPeriodStart
+  const start = committee.billingPeriodStart
   const sameMonth =
     start.getUTCFullYear() === now.getUTCFullYear() && start.getUTCMonth() === now.getUTCMonth()
   return {
-    credits: sameMonth ? campaign.creditsThisMonth : 0,
-    revisions: sameMonth ? campaign.revisionsThisMonth : 0,
-    crawls: sameMonth ? campaign.crawlsThisMonth : 0,
-    websiteEdits: sameMonth ? campaign.websiteEditsThisMonth : 0,
-    newsSearches: sameMonth ? campaign.newsSearchesThisMonth : 0,
-    newsletterEmails: sameMonth ? campaign.newsletterEmailsThisMonth : 0,
+    credits: sameMonth ? committee.creditsThisMonth : 0,
+    revisions: sameMonth ? committee.revisionsThisMonth : 0,
+    crawls: sameMonth ? committee.crawlsThisMonth : 0,
+    websiteEdits: sameMonth ? committee.websiteEditsThisMonth : 0,
+    newsSearches: sameMonth ? committee.newsSearchesThisMonth : 0,
+    newsletterEmails: sameMonth ? committee.newsletterEmailsThisMonth : 0,
     periodStart: sameMonth ? start : now,
   }
 }
@@ -58,7 +60,7 @@ function monthlyState(campaign: UsageCampaign): MonthState {
 // Write all counters so a month-rollover triggered by one consumer also
 // resets the others.
 function writeUsage(id: string, s: MonthState) {
-  return prisma.campaign.update({
+  return prisma.committee.update({
     where: { id },
     data: {
       creditsThisMonth: s.credits,
@@ -86,16 +88,16 @@ function applyCharge(s: MonthState, limit: number | null, cost: number) {
 /** Charge a fresh generation's credit cost (by model). */
 export async function consumeGeneration(
   plan: PlanId,
-  campaign: UsageCampaign,
+  committee: UsageCommittee,
   model: string
 ): Promise<ConsumeResult> {
   const limit = CREDIT_LIMITS[plan]
-  const s = monthlyState(campaign)
+  const s = monthlyState(committee)
   // Reject only when the balance is already exhausted — never mid-generation.
   if (limit != null && s.credits >= limit) return { ok: false, used: s.credits, limit }
 
   applyCharge(s, limit, creditCost(model))
-  await writeUsage(campaign.id, s)
+  await writeUsage(committee.id, s)
   return { ok: true, used: s.credits, limit, charged: true }
 }
 
@@ -105,11 +107,11 @@ export async function consumeGeneration(
  */
 export async function consumeRevision(
   plan: PlanId,
-  campaign: UsageCampaign,
+  committee: UsageCommittee,
   model: string
 ): Promise<ConsumeResult> {
   const limit = CREDIT_LIMITS[plan]
-  const s = monthlyState(campaign)
+  const s = monthlyState(committee)
 
   s.revisions += 1
   const charges = s.revisions % REVISIONS_PER_CREDIT === 0
@@ -118,18 +120,18 @@ export async function consumeRevision(
   }
   if (charges) applyCharge(s, limit, creditCost(model))
 
-  await writeUsage(campaign.id, s)
+  await writeUsage(committee.id, s)
   return { ok: true, used: s.credits, limit, charged: charges }
 }
 
 /** Charge one website crawl against the monthly crawl cap. */
-export async function consumeCrawl(plan: PlanId, campaign: UsageCampaign): Promise<ConsumeResult> {
+export async function consumeCrawl(plan: PlanId, committee: UsageCommittee): Promise<ConsumeResult> {
   const limit = WEBSITE_CRAWL_LIMITS[plan]
-  const s = monthlyState(campaign)
+  const s = monthlyState(committee)
   if (limit != null && s.crawls >= limit) return { ok: false, used: s.crawls, limit }
 
   s.crawls += 1
-  await writeUsage(campaign.id, s)
+  await writeUsage(committee.id, s)
   return { ok: true, used: s.crawls, limit, charged: true }
 }
 
@@ -138,13 +140,13 @@ export async function consumeCrawl(plan: PlanId, campaign: UsageCampaign): Promi
  * Metered per candidate instruction, not per tool call — one message may fan out
  * into several block edits. Rejects only when the balance is already exhausted.
  */
-export async function consumeWebsiteEdit(plan: PlanId, campaign: UsageCampaign): Promise<ConsumeResult> {
+export async function consumeWebsiteEdit(plan: PlanId, committee: UsageCommittee): Promise<ConsumeResult> {
   const limit = WEBSITE_EDIT_LIMITS[plan]
-  const s = monthlyState(campaign)
+  const s = monthlyState(committee)
   if (limit != null && s.websiteEdits >= limit) return { ok: false, used: s.websiteEdits, limit }
 
   s.websiteEdits += 1
-  await writeUsage(campaign.id, s)
+  await writeUsage(committee.id, s)
   return { ok: true, used: s.websiteEdits, limit, charged: true }
 }
 
@@ -153,22 +155,22 @@ export async function consumeWebsiteEdit(plan: PlanId, campaign: UsageCampaign):
  * Metered per search (one instruction = one Claude+web-search call). Rejects only
  * when the balance is already exhausted.
  */
-export async function consumeNewsSearch(plan: PlanId, campaign: UsageCampaign): Promise<ConsumeResult> {
+export async function consumeNewsSearch(plan: PlanId, committee: UsageCommittee): Promise<ConsumeResult> {
   const limit = NEWS_SEARCH_LIMITS[plan]
-  const s = monthlyState(campaign)
+  const s = monthlyState(committee)
   if (limit != null && s.newsSearches >= limit) return { ok: false, used: s.newsSearches, limit }
 
   s.newsSearches += 1
-  await writeUsage(campaign.id, s)
+  await writeUsage(committee.id, s)
   return { ok: true, used: s.newsSearches, limit, charged: true }
 }
 
 export type NewsletterHeadroom = { limit: number | null; used: number; remaining: number | null }
 
 /** Read remaining newsletter-email allowance this month (null limit/remaining = unlimited). */
-export function newsletterHeadroom(plan: PlanId, campaign: UsageCampaign): NewsletterHeadroom {
+export function newsletterHeadroom(plan: PlanId, committee: UsageCommittee): NewsletterHeadroom {
   const limit = NEWSLETTER_EMAIL_LIMITS[plan]
-  const s = monthlyState(campaign)
+  const s = monthlyState(committee)
   return {
     limit,
     used: s.newsletterEmails,
@@ -184,28 +186,28 @@ export function newsletterHeadroom(plan: PlanId, campaign: UsageCampaign): Newsl
  */
 export async function consumeNewsletterEmails(
   plan: PlanId,
-  campaign: UsageCampaign,
+  committee: UsageCommittee,
   count: number
 ): Promise<ConsumeResult> {
   const limit = NEWSLETTER_EMAIL_LIMITS[plan]
-  const s = monthlyState(campaign)
+  const s = monthlyState(committee)
   if (limit != null && s.newsletterEmails + count > limit) {
     return { ok: false, used: s.newsletterEmails, limit }
   }
   s.newsletterEmails += count
-  await writeUsage(campaign.id, s)
+  await writeUsage(committee.id, s)
   return { ok: true, used: s.newsletterEmails, limit, charged: true }
 }
 
 /** Give a crawl credit back (e.g. the crawl found nothing). Best-effort. */
-export async function refundCrawl(campaignId: string): Promise<void> {
-  const c = await prisma.campaign.findUnique({
-    where: { id: campaignId },
+export async function refundCrawl(committeeId: string): Promise<void> {
+  const c = await prisma.committee.findUnique({
+    where: { id: committeeId },
     select: { crawlsThisMonth: true },
   })
   if (c && c.crawlsThisMonth > 0) {
-    await prisma.campaign.update({
-      where: { id: campaignId },
+    await prisma.committee.update({
+      where: { id: committeeId },
       data: { crawlsThisMonth: c.crawlsThisMonth - 1 },
     })
   }

@@ -1,8 +1,8 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { getActiveContext, roleAtLeast } from "@/lib/context"
 import { sendNewsletterNow, sendTestNewsletterNow, type SendResult, type TestSendResult } from "@/lib/newsletterSend"
 import { parseBlocks } from "@/lib/newsletter/blocks"
 import { parseTemplate } from "@/lib/newsletter/template"
@@ -12,11 +12,11 @@ import { type Prisma } from "@/generated/prisma/client"
 export type NewsletterResult = { ok: true } | { ok: false; error: string }
 export type CreateResult = { ok: true; id: string } | { ok: false; error: string }
 
+/** Active campaign id, editor-gated (newsletter actions are all mutations), or null. */
 async function requireCampaignId(): Promise<string | null> {
-  const session = await auth()
-  if (!session?.user?.id) return null
-  const c = await prisma.campaign.findUnique({ where: { userId: session.user.id }, select: { id: true } })
-  return c?.id ?? null
+  const ctx = await getActiveContext()
+  if (!ctx || !roleAtLeast(ctx.role, "editor")) return null
+  return ctx.campaign?.id ?? null
 }
 
 function revalidateAll(campaignId: string, newsletterId?: string) {

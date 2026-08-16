@@ -1,13 +1,13 @@
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { getActiveContext } from "@/lib/context"
 import { anthropic } from "@/lib/comms/anthropic"
 import { buildSystemPrompt, buildRevisionPrompt, draftingThinking, isContentType, toContextBundle } from "@/lib/comms/prompts"
 import { toPlanId, resolveModel } from "@/lib/entitlements"
 import { consumeRevision } from "@/lib/comms/usage"
 
 export async function POST(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) return new Response("Unauthorized", { status: 401 })
+  const ctx = await getActiveContext()
+  if (!ctx) return new Response("Unauthorized", { status: 401 })
 
   const body = (await req.json()) as {
     type?: string
@@ -23,15 +23,15 @@ export async function POST(req: Request) {
   if (!body.currentDraft?.trim()) return new Response("Nothing to revise", { status: 400 })
   if (!body.notes?.trim()) return new Response("Revision notes required", { status: 400 })
 
-  const campaign = await prisma.campaign.findUnique({ where: { userId: session.user.id } })
+  const { committee, campaign } = ctx
   if (!campaign) return new Response("No campaign found", { status: 404 })
 
-  const plan = toPlanId(campaign.plan)
+  const plan = toPlanId(committee.plan)
 
-  const usedModel = resolveModel(body.model ?? campaign.aiModel)
+  const usedModel = resolveModel(body.model ?? committee.aiModel)
 
   // Revisions are ~free: only every Nth one charges (at the model's cost, capped).
-  const consumed = await consumeRevision(plan, campaign, usedModel)
+  const consumed = await consumeRevision(plan, committee, usedModel)
   if (!consumed.ok) {
     return Response.json(
       { error: "limit_reached", used: consumed.used, limit: consumed.limit },

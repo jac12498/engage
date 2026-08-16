@@ -1,8 +1,7 @@
 import { redirect, notFound } from "next/navigation"
 import Link from "next/link"
 import { ArrowRight, Check, Lock } from "lucide-react"
-import { auth } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
+import { requireCommittee } from "@/lib/context"
 import { toPlanId, PLAN_LABELS } from "@/lib/entitlements"
 import { NAV_MODULES, navModuleUnlocked, navUnlockPlan } from "@/lib/nav"
 import { UPGRADE_HIGHLIGHTS } from "@/lib/upgrade"
@@ -16,15 +15,8 @@ export default async function UpgradePage({ params }: { params: Promise<{ key: s
   const highlight = UPGRADE_HIGHLIGHTS[key]
   if (!mod || !highlight) notFound()
 
-  const session = await auth()
-  if (!session?.user?.id) redirect("/sign-in")
-  const campaign = await prisma.campaign.findUnique({
-    where: { userId: session.user.id },
-    select: { plan: true },
-  })
-  if (!campaign) redirect("/onboarding")
-
-  const plan = toPlanId(campaign.plan)
+  const { committee } = await requireCommittee()
+  const plan = toPlanId(committee.plan)
   // Already entitled → no upsell; go straight to the module.
   if (navModuleUnlocked(mod, plan)) redirect(mod.href)
 

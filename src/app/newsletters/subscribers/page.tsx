@@ -1,6 +1,5 @@
-import { redirect } from "next/navigation"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { requireActiveCampaign } from "@/lib/context"
 import { NEWSLETTER_SUBSCRIBER_LIMITS, toPlanId } from "@/lib/entitlements"
 import { SubscribersManager, type SubscriberRow } from "@/components/website/SubscribersManager"
 
@@ -9,16 +8,9 @@ export const dynamic = "force-dynamic"
 export const metadata = { title: "Newsletter subscribers · Engage" }
 
 export default async function SubscribersPage() {
-  const session = await auth()
-  if (!session?.user?.id) redirect("/sign-in")
+  const { campaign, committee } = await requireActiveCampaign()
 
-  const campaign = await prisma.campaign.findUnique({
-    where: { userId: session.user.id },
-    select: { id: true, plan: true },
-  })
-  if (!campaign) redirect("/onboarding")
-
-  const subscriberLimit = NEWSLETTER_SUBSCRIBER_LIMITS[toPlanId(campaign.plan)]
+  const subscriberLimit = NEWSLETTER_SUBSCRIBER_LIMITS[toPlanId(committee.plan)]
 
   const subs = await prisma.newsletterSubscriber.findMany({
     where: { campaignId: campaign.id },

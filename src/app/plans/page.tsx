@@ -1,7 +1,5 @@
-import { redirect } from "next/navigation"
 import { Check } from "lucide-react"
-import { auth } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
+import { requireCommittee } from "@/lib/context"
 import { toPlanId, PLAN_LABELS, PLAN_ORDER, type PlanId } from "@/lib/entitlements"
 import { AppShell } from "@/components/AppShell"
 
@@ -40,14 +38,8 @@ const TIERS: { plan: PlanId; price: string; cadence: string; blurb: string; feat
 const rank = (p: PlanId) => PLAN_ORDER.indexOf(p)
 
 export default async function PlansPage() {
-  const session = await auth()
-  if (!session?.user?.id) redirect("/sign-in")
-  const campaign = await prisma.campaign.findUnique({
-    where: { userId: session.user.id },
-    select: { plan: true },
-  })
-  if (!campaign) redirect("/onboarding")
-  const plan = toPlanId(campaign.plan)
+  const { committee } = await requireCommittee()
+  const plan = toPlanId(committee.plan)
 
   return (
     <AppShell>

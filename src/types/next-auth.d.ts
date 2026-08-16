@@ -5,17 +5,26 @@ declare module "next-auth" {
     user: {
       id: string
     } & DefaultSession["user"]
-    /** Account plan: "starter" | "campaign" | "committee" | null (pre-onboarding). */
+    /** Whether the user belongs to at least one committee (gates onboarding). */
+    hasCommittee: boolean
+    /** The active committee the user is working in, or null pre-onboarding. */
+    activeCommitteeId: string | null
+    /** The active campaign within that committee, or null if it has none yet. */
+    activeCampaignId: string | null
+    /** The user's role in the active committee: "owner" | "admin" | "editor" | "viewer". */
+    role: string | null
+    /** The active committee's plan: "starter" | "campaign" | "committee" | null. */
     plan: string | null
-    /** Whether the user has completed onboarding (created a Campaign). */
-    hasCampaign: boolean
   }
 }
 
 declare module "next-auth/jwt" {
   interface JWT {
     id?: string
+    hasCommittee?: boolean
+    activeCommitteeId?: string | null
+    activeCampaignId?: string | null
+    role?: string | null
     plan?: string | null
-    hasCampaign?: boolean
   }
 }

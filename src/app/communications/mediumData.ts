@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { requireActiveCampaign } from "@/lib/context"
 import { toPlanId } from "@/lib/entitlements"
 import type { Medium } from "@/lib/comms/prompts"
 
@@ -14,11 +14,10 @@ function usedThisMonth(used: number, periodStart: Date): number {
 
 /** Load everything a media generator page needs for one medium. */
 export async function loadMediumData(medium: Medium) {
-  const session = await auth()
-  if (!session?.user?.id) redirect("/sign-in")
+  const { campaign: active, committee } = await requireActiveCampaign()
 
   const campaign = await prisma.campaign.findUnique({
-    where: { userId: session.user.id },
+    where: { id: active.id },
     include: {
       topics: { orderBy: { updatedAt: "desc" } },
       generations: { where: { medium }, orderBy: { createdAt: "desc" }, take: 50 },
@@ -27,8 +26,8 @@ export async function loadMediumData(medium: Medium) {
   if (!campaign) redirect("/onboarding")
 
   return {
-    plan: toPlanId(campaign.plan),
-    creditsUsed: usedThisMonth(campaign.creditsThisMonth, campaign.billingPeriodStart),
+    plan: toPlanId(committee.plan),
+    creditsUsed: usedThisMonth(committee.creditsThisMonth, committee.billingPeriodStart),
     topics: campaign.topics.map((t) => ({
       id: t.id,
       title: t.title,

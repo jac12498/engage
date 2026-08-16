@@ -1,6 +1,5 @@
-import { redirect } from "next/navigation"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { requireActiveCampaign } from "@/lib/context"
 import { NewslettersManager, type NewsletterRow } from "@/components/website/NewslettersManager"
 
 export const dynamic = "force-dynamic"
@@ -8,14 +7,7 @@ export const dynamic = "force-dynamic"
 export const metadata = { title: "Newsletters · Engage" }
 
 export default async function NewslettersPage() {
-  const session = await auth()
-  if (!session?.user?.id) redirect("/sign-in")
-
-  const campaign = await prisma.campaign.findUnique({
-    where: { userId: session.user.id },
-    select: { id: true },
-  })
-  if (!campaign) redirect("/onboarding")
+  const { campaign } = await requireActiveCampaign()
 
   const [items, activeSubscribers, presets] = await Promise.all([
     prisma.newsletter.findMany({

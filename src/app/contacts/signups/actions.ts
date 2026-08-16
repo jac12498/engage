@@ -1,26 +1,23 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { getActiveContext, roleAtLeast, type Role } from "@/lib/context"
 
 export type SignupResult = { ok: true; contactId?: string } | { ok: false; error: string }
 
-/** Resolve the signed-in user's campaign id, or null. */
-async function requireCampaignId(): Promise<string | null> {
-  const session = await auth()
-  if (!session?.user?.id) return null
-  const campaign = await prisma.campaign.findUnique({
-    where: { userId: session.user.id },
-    select: { id: true },
-  })
-  return campaign?.id ?? null
+/** Resolve the active committee id, or null (optionally requiring a role). */
+async function requireCommitteeId(min: Role = "viewer"): Promise<string | null> {
+  const ctx = await getActiveContext()
+  if (!ctx) return null
+  if (!roleAtLeast(ctx.role, min)) return null
+  return ctx.committee.id
 }
 
-/** Load a signup only if it belongs to the caller's campaign (via its website). */
-async function loadOwnedSignup(signupId: string, campaignId: string) {
+/** Load a signup only if it belongs to the committee (via its website's campaign). */
+async function loadOwnedSignup(signupId: string, committeeId: string) {
   return prisma.volunteerSignup.findFirst({
-    where: { id: signupId, website: { campaignId } },
+    where: { id: signupId, website: { campaign: { committeeId } } },
   })
 }
 
@@ -37,10 +34,10 @@ function splitName(name: string): { firstName: string; lastName: string } {
  * links it to the resulting Contact.
  */
 export async function acceptSignup(signupId: string): Promise<SignupResult> {
-  const campaignId = await requireCampaignId()
-  if (!campaignId) return { ok: false, error: "You must be signed in." }
+  const committeeId = await requireCommitteeId("editor")
+  if (!committeeId) return { ok: false, error: "You must be signed in." }
 
-  const signup = await loadOwnedSignup(signupId, campaignId)
+  const signup = await loadOwnedSignup(signupId, committeeId)
   if (!signup) return { ok: false, error: "Signup not found." }
   if (signup.status === "accepted" && signup.contactId) {
     return { ok: true, contactId: signup.contactId }
@@ -56,7 +53,7 @@ export async function acceptSignup(signupId: string): Promise<SignupResult> {
   const existing = email
     ? await prisma.contact.findFirst({
         where: {
-          campaignId,
+          committeeId,
           emails: { some: { email: { equals: email, mode: "insensitive" } } },
         },
         include: { phones: true },
@@ -88,7 +85,7 @@ export async function acceptSignup(signupId: string): Promise<SignupResult> {
     const { firstName, lastName } = splitName(signup.name)
     const created = await prisma.contact.create({
       data: {
-        campaignId,
+        committeeId,
         firstName,
         lastName,
         types: ["volunteer"],
@@ -113,10 +110,10 @@ export async function acceptSignup(signupId: string): Promise<SignupResult> {
 
 /** Reject a signup (kept for audit; no Contact created). */
 export async function rejectSignup(signupId: string): Promise<SignupResult> {
-  const campaignId = await requireCampaignId()
-  if (!campaignId) return { ok: false, error: "You must be signed in." }
+  const committeeId = await requireCommitteeId("editor")
+  if (!committeeId) return { ok: false, error: "You must be signed in." }
 
-  const signup = await loadOwnedSignup(signupId, campaignId)
+  const signup = await loadOwnedSignup(signupId, committeeId)
   if (!signup) return { ok: false, error: "Signup not found." }
 
   await prisma.volunteerSignup.update({
@@ -130,10 +127,10 @@ export async function rejectSignup(signupId: string): Promise<SignupResult> {
 
 /** Permanently delete a signup record. */
 export async function deleteSignup(signupId: string): Promise<SignupResult> {
-  const campaignId = await requireCampaignId()
-  if (!campaignId) return { ok: false, error: "You must be signed in." }
+  const committeeId = await requireCommitteeId("editor")
+  if (!committeeId) return { ok: false, error: "You must be signed in." }
 
-  const signup = await loadOwnedSignup(signupId, campaignId)
+  const signup = await loadOwnedSignup(signupId, committeeId)
   if (!signup) return { ok: false, error: "Signup not found." }
 
   await prisma.volunteerSignup.delete({ where: { id: signup.id } })

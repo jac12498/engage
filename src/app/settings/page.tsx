@@ -1,37 +1,11 @@
-import { redirect } from "next/navigation"
 import { AppShell } from "@/components/AppShell"
-import { auth } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
+import { requireActiveCampaign } from "@/lib/context"
 import { SettingsForm } from "@/components/settings/SettingsForm"
 
 export const dynamic = "force-dynamic"
 
 export default async function SettingsPage() {
-  const session = await auth()
-  if (!session?.user?.id) redirect("/sign-in")
-
-  const campaign = await prisma.campaign.findUnique({
-    where: { userId: session.user.id },
-    select: {
-      id: true,
-      plan: true,
-      candidateName: true,
-      office: true,
-      party: true,
-      additionalParties: true,
-      committeeName: true,
-      mailingStreet: true,
-      mailingStreet2: true,
-      mailingCity: true,
-      mailingState: true,
-      mailingZip: true,
-      headshotMime: true,
-      district: true,
-      districtVoterCount: true,
-      state: true,
-    },
-  })
-  if (!campaign) redirect("/onboarding")
+  const { campaign } = await requireActiveCampaign()
 
   return (
     <AppShell>

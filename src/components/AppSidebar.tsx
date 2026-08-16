@@ -3,10 +3,15 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, Settings, LogOut, Lock, Menu, X, Sparkles, type LucideIcon } from "lucide-react"
+import { LayoutDashboard, Settings, LogOut, Lock, Menu, X, Sparkles, Users, type LucideIcon } from "lucide-react"
 import { NAV_MODULES, navModuleUnlocked, navUnlockPlan, activeModuleKey } from "@/lib/nav"
 import { PLAN_LABELS, type PlanId } from "@/lib/entitlements"
 import { signOutAction } from "@/app/actions/auth"
+import {
+  WorkspaceSwitcher,
+  type SwitcherCommittee,
+  type SwitcherCampaign,
+} from "@/components/WorkspaceSwitcher"
 
 export interface SidebarCampaign {
   id: string
@@ -15,11 +20,30 @@ export interface SidebarCampaign {
   headshotMime: string | null
 }
 
-export function AppSidebar({ campaign, plan }: { campaign: SidebarCampaign; plan: PlanId }) {
+export function AppSidebar({
+  campaign,
+  plan,
+  role,
+  committees,
+  activeCommitteeId,
+  committeeName,
+  campaigns,
+  activeCampaignId,
+}: {
+  campaign: SidebarCampaign | null
+  plan: PlanId
+  role: string
+  committees: SwitcherCommittee[]
+  activeCommitteeId: string
+  committeeName: string
+  campaigns: SwitcherCampaign[]
+  activeCampaignId: string | null
+}) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const activeKey = activeModuleKey(pathname)
-  const identity = campaign.committeeName || campaign.candidateName
+  const identity = campaign?.committeeName || campaign?.candidateName || committeeName
+  const canManageMembers = role === "owner" || role === "admin"
   const close = () => setOpen(false)
 
   function isActive(href: string, exact?: boolean) {
@@ -53,7 +77,7 @@ export function AppSidebar({ campaign, plan }: { campaign: SidebarCampaign; plan
             </button>
           </div>
           <div className="mt-3 flex items-center gap-2.5">
-            {campaign.headshotMime ? (
+            {campaign?.headshotMime ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={`/api/website/headshot/${campaign.id}`} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
             ) : (
@@ -65,6 +89,16 @@ export function AppSidebar({ campaign, plan }: { campaign: SidebarCampaign; plan
               <p className="truncate text-sm font-semibold text-[#1a1a2e]">{identity}</p>
               <p className="text-xs text-muted-foreground">{PLAN_LABELS[plan]} plan</p>
             </div>
+          </div>
+
+          {/* Committee + campaign switchers (render only when there's a choice). */}
+          <div className="mt-3">
+            <WorkspaceSwitcher
+              committees={committees}
+              activeCommitteeId={activeCommitteeId}
+              campaigns={campaigns}
+              activeCampaignId={activeCampaignId}
+            />
           </div>
         </div>
 
@@ -109,6 +143,9 @@ export function AppSidebar({ campaign, plan }: { campaign: SidebarCampaign; plan
 
         {/* Footer */}
         <div className="space-y-0.5 border-t border-border px-3 py-3">
+          {canManageMembers && (
+            <Row href="/members" label="Members" icon={Users} active={isActive("/members")} onClick={close} />
+          )}
           <Row href="/plans" label="Plans" icon={Sparkles} active={isActive("/plans")} onClick={close} />
           <Row href="/settings" label="Campaign settings" icon={Settings} active={isActive("/settings")} onClick={close} />
           <form action={signOutAction}>

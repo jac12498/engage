@@ -19,6 +19,68 @@ for (const v of ["RESEND_API_KEY", "EMAIL_FROM", "AUTH_SECRET"] as const) {
   if (!process.env[v]) console.error(`[auth] Missing required env var: ${v}`)
 }
 
+/**
+ * Resolve a user's active committee + campaign from the DB (their memberships and
+ * persisted last-selection). This is the authoritative resolution the JWT caches;
+ * `lib/context.ts` re-verifies membership + loads fresh rows for request handling.
+ */
+async function resolveActiveContext(userId: string): Promise<{
+  hasCommittee: boolean
+  activeCommitteeId: string | null
+  activeCampaignId: string | null
+  role: string | null
+  plan: string | null
+}> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      lastCommitteeId: true,
+      lastCampaignId: true,
+      memberships: {
+        select: { committeeId: true, role: true, committee: { select: { plan: true } } },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  })
+
+  const memberships = user?.memberships ?? []
+  if (memberships.length === 0) {
+    return { hasCommittee: false, activeCommitteeId: null, activeCampaignId: null, role: null, plan: null }
+  }
+
+  // Active committee = the persisted last one (if still a member), else the first.
+  const active =
+    memberships.find((m) => m.committeeId === user?.lastCommitteeId) ?? memberships[0]
+  const committeeId = active.committeeId
+
+  // Active campaign = the persisted last one (if it belongs to this committee),
+  // else the committee's first campaign, else null.
+  let campaignId: string | null = null
+  if (user?.lastCampaignId) {
+    const belongs = await prisma.campaign.findFirst({
+      where: { id: user.lastCampaignId, committeeId },
+      select: { id: true },
+    })
+    campaignId = belongs?.id ?? null
+  }
+  if (!campaignId) {
+    const first = await prisma.campaign.findFirst({
+      where: { committeeId },
+      orderBy: { createdAt: "asc" },
+      select: { id: true },
+    })
+    campaignId = first?.id ?? null
+  }
+
+  return {
+    hasCommittee: true,
+    activeCommitteeId: committeeId,
+    activeCampaignId: campaignId,
+    role: active.role,
+    plan: active.committee.plan,
+  }
+}
+
 export const authConfig = {
   adapter: PrismaAdapter(prisma),
 
@@ -82,25 +144,22 @@ export const authConfig = {
   },
 
   callbacks: {
-    async jwt({ token, user, trigger, session }) {
+    async jwt({ token, user, trigger }) {
       // On initial sign-in, pin the user id.
       if (user) token.id = user.id
 
-      // Refresh campaign/plan onto the token: on sign-in, on explicit update
-      // (after onboarding), and whenever it's missing.
-      if (token.id && (user || trigger === "update" || token.plan === undefined)) {
-        const campaign = await prisma.campaign.findUnique({
-          where: { userId: token.id as string },
-          select: { plan: true },
-        })
-        token.hasCampaign = !!campaign
-        token.plan = campaign?.plan ?? null
-      }
-
-      // Allow the client to optimistically patch the token after onboarding.
-      if (trigger === "update" && session) {
-        if (session.plan !== undefined) token.plan = session.plan
-        if (session.hasCampaign !== undefined) token.hasCampaign = session.hasCampaign
+      // Resolve the active committee/campaign context onto the token: on sign-in,
+      // on explicit update (after onboarding or a committee/campaign switch), and
+      // whenever it's missing. The switcher persists User.lastCommitteeId /
+      // lastCampaignId to the DB and then triggers an update, so we always resolve
+      // from the DB — the single source of truth — rather than a client payload.
+      if (token.id && (user || trigger === "update" || token.hasCommittee === undefined)) {
+        const ctx = await resolveActiveContext(token.id as string)
+        token.hasCommittee = ctx.hasCommittee
+        token.activeCommitteeId = ctx.activeCommitteeId
+        token.activeCampaignId = ctx.activeCampaignId
+        token.role = ctx.role
+        token.plan = ctx.plan
       }
 
       return token
@@ -109,8 +168,11 @@ export const authConfig = {
     async session({ session, token }) {
       if (token && session.user) {
         session.user.id = token.id as string
+        session.hasCommittee = !!token.hasCommittee
+        session.activeCommitteeId = (token.activeCommitteeId as string | null) ?? null
+        session.activeCampaignId = (token.activeCampaignId as string | null) ?? null
+        session.role = (token.role as string | null) ?? null
         session.plan = (token.plan as string | null) ?? null
-        session.hasCampaign = !!token.hasCampaign
       }
       return session
     },
@@ -141,4 +203,5 @@ export const authConfig = {
   debug: false,
 } satisfies NextAuthConfig
 
-export const { handlers, auth, signIn, signOut } = NextAuth(authConfig)
+export const { handlers, auth, signIn, signOut, unstable_update: updateSession } =
+  NextAuth(authConfig)

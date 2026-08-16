@@ -25,7 +25,16 @@ model User {
   image         String?
   accounts      Account[]
   sessions      Session[]
-  campaign      Campaign?
+
+  // A user belongs to one or more committees, each with a role (see
+  // CommitteeMembership). Replaces the old 1:1 User↔Campaign relation.
+  memberships   CommitteeMembership[]
+
+  // Persisted active context, so a committee/campaign switch survives across
+  // devices and re-logins. The JWT mirrors these; the switcher writes both.
+  lastCommitteeId String?
+  lastCampaignId  String?
+
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -72,12 +81,66 @@ model VerificationToken {
   @@schema("engagecampaign")
 }
 
-// ─── Campaign profile + entitlement ──────────────────────────────────────────
+// ─── Committee (account / tenant / billing entity) ───────────────────────────
+
+// A committee is the account. It owns one or more Campaigns (candidate races),
+// has one or more members (users with a role), and holds the subscription plan
+// and shared usage metering pool. This is the multi-tenant boundary: everything
+// a signed-in user does happens within an "active committee" they belong to.
+model Committee {
+  id   String @id @default(cuid())
+  name String
+
+  members   CommitteeMembership[]
+  campaigns Campaign[]
+  contacts  Contact[]
+  tags      Tag[]
+
+  // Entitlement: which plan this account is on. Default free tier = Starter.
+  plan String @default("starter") // starter | campaign | committee
+
+  // AI Communications — shared usage pool across all this committee's campaigns.
+  aiModel                   String? // preferred generation model; null = default Haiku
+  creditsThisMonth          Int      @default(0) // Model Credits consumed this month
+  revisionsThisMonth        Int      @default(0) // every 5th revision charges the model's credit cost
+  crawlsThisMonth           Int      @default(0) // website-crawl references this month
+  websiteEditsThisMonth     Int      @default(0) // conversational website-builder messages this month
+  newsSearchesThisMonth     Int      @default(0) // "In the News" web-search discovery runs this month
+  newsletterEmailsThisMonth Int      @default(0) // newsletter recipient-emails sent this month
+  billingPeriodStart        DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@schema("engagecampaign")
+}
+
+// User ↔ Committee join with a role that governs privileges. Roles (ranked):
+// owner > admin > editor > viewer.
+//   owner  — billing, delete committee, manage members (incl. other owners)
+//   admin  — manage members + all content
+//   editor — create/edit content (comms, contacts, website); no member/billing control
+//   viewer — read-only
+model CommitteeMembership {
+  userId      String
+  committeeId String
+  role        String // owner | admin | editor | viewer
+  createdAt   DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  committee Committee @relation(fields: [committeeId], references: [id], onDelete: Cascade)
+
+  @@id([userId, committeeId])
+  @@index([committeeId])
+  @@schema("engagecampaign")
+}
+
+// ─── Campaign (candidate race profile) ───────────────────────────────────────
 
 model Campaign {
-  id     String @id @default(cuid())
-  userId String @unique
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String    @id @default(cuid())
+  committeeId String
+  committee   Committee @relation(fields: [committeeId], references: [id], onDelete: Cascade)
 
   // Candidate / office profile (powers AI Communications + Candidate Website)
   candidateName String
@@ -132,25 +195,14 @@ model Campaign {
   districtQueryString String? // snapshot of districts.query_string → voter-file filter
   districtVoterCount  Int? // snapshot of districts.voter_count at selection time
 
-  // Entitlement: which plan this account is on. Default free tier = Starter.
-  plan String @default("starter") // starter | campaign | committee
-
-  // AI Communications
-  aiModel            String? // preferred generation model (any plan can select); null = default Haiku
-  creditsThisMonth   Int      @default(0) @map("generationsThisMonth") // Model Credits consumed this month
-  revisionsThisMonth Int      @default(0) // every 5th revision charges the model's credit cost
-  crawlsThisMonth    Int      @default(0) // website-crawl references this month
-  websiteEditsThisMonth Int   @default(0) // conversational website-builder messages this month
-  newsSearchesThisMonth Int   @default(0) // "In the News" web-search discovery runs this month
-  newsletterEmailsThisMonth Int @default(0) // newsletter recipient-emails sent this month (send metering)
-  billingPeriodStart   DateTime @default(now())
+  // NOTE: subscription plan + all usage metering now live on Committee (the
+  // billing entity). A campaign inherits its committee's plan and shares its
+  // credit pool with the committee's other campaigns.
 
   topics       Topic[]
   generations  Generation[]
   contextItems ContextItem[]
   site         Website?
-  contacts     Contact[]
-  tags         Tag[]
   newsClips    NewsClip[]
   newsletterSubscribers NewsletterSubscriber[]
   newsletters  Newsletter[]
@@ -495,9 +547,9 @@ model Newsletter {
 // (later) matched voters, all in one place. Website volunteer signups flow in
 // here as `source = "volunteer_signup"` contacts.
 model Contact {
-  id         String   @id @default(cuid())
-  campaignId String
-  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  id          String    @id @default(cuid())
+  committeeId String
+  committee   Committee @relation(fields: [committeeId], references: [id], onDelete: Cascade)
 
   firstName String
   lastName  String
@@ -517,8 +569,8 @@ model Contact {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([campaignId])
-  @@index([campaignId, lastName])
+  @@index([committeeId])
+  @@index([committeeId, lastName])
   @@schema("engagecampaign")
 }
 
@@ -581,18 +633,18 @@ model ContactNote {
   @@schema("engagecampaign")
 }
 
-// User-defined tags, scoped to a campaign. Reused across contacts (m:n via ContactTag).
+// User-defined tags, scoped to a committee. Reused across contacts (m:n via ContactTag).
 model Tag {
-  id         String   @id @default(cuid())
-  campaignId String
-  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  name       String
-  createdAt  DateTime @default(now())
+  id          String    @id @default(cuid())
+  committeeId String
+  committee   Committee @relation(fields: [committeeId], references: [id], onDelete: Cascade)
+  name        String
+  createdAt   DateTime  @default(now())
 
   contactTags ContactTag[]
 
-  @@unique([campaignId, name])
-  @@index([campaignId])
+  @@unique([committeeId, name])
+  @@index([committeeId])
   @@schema("engagecampaign")
 }
 

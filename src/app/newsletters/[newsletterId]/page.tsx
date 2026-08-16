@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { requireActiveCampaign } from "@/lib/context"
 import { resolveModel } from "@/lib/entitlements"
 import { parseBlocks } from "@/lib/newsletter/blocks"
 import { parseTemplate } from "@/lib/newsletter/template"
@@ -16,14 +16,12 @@ export default async function NewsletterEditorPage({
   params: Promise<{ newsletterId: string }>
 }) {
   const { newsletterId } = await params
-  const session = await auth()
-  if (!session?.user?.id) redirect("/sign-in")
+  const { campaign: active, committee } = await requireActiveCampaign()
 
   const campaign = await prisma.campaign.findUnique({
-    where: { userId: session.user.id },
+    where: { id: active.id },
     select: {
       id: true,
-      aiModel: true,
       candidateName: true,
       committeeName: true,
       mailingStreet: true,
@@ -75,7 +73,7 @@ export default async function NewsletterEditorPage({
     <NewsletterEditor
       campaignId={campaign.id}
       sitePublished={campaign.site?.published ?? false}
-      defaultModel={resolveModel(campaign.aiModel)}
+      defaultModel={resolveModel(committee.aiModel)}
       activeSubscribers={activeSubscribers}
       hasMailingAddress={hasMailingAddress}
       topics={campaign.topics}

@@ -1,8 +1,8 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { getActiveContext } from "@/lib/context"
 import { buildUserPrompt, isContentType } from "@/lib/comms/prompts"
 import { composeLeanSummary, type InterviewData } from "@/lib/comms/interview"
 
@@ -25,15 +25,12 @@ export type SaveResult = { ok: true; id: string } | { ok: false; error: string }
 
 /** Persist a (possibly edited) generation the user chose to keep. */
 export async function saveGeneration(input: SaveGenerationInput): Promise<SaveResult> {
-  const session = await auth()
-  if (!session?.user?.id) return { ok: false, error: "You must be signed in." }
   if (!isContentType(input.type)) return { ok: false, error: "Invalid content type." }
   if (!input.content?.trim()) return { ok: false, error: "There's nothing to save yet." }
 
-  const campaign = await prisma.campaign.findUnique({
-    where: { userId: session.user.id },
-    select: { id: true, candidateName: true },
-  })
+  const ctx = await getActiveContext()
+  if (!ctx) return { ok: false, error: "You must be signed in." }
+  const campaign = ctx.campaign
   if (!campaign) return { ok: false, error: "No campaign found." }
 
   // Reconstruct the instruction for a faithful record of what produced this.
@@ -139,17 +136,11 @@ export async function getGenerationForEdit(id: string): Promise<
 }
 
 export async function deleteGeneration(id: string): Promise<{ ok: boolean }> {
-  const session = await auth()
-  if (!session?.user?.id) return { ok: false }
+  const campaignId = await requireCampaignId()
+  if (!campaignId) return { ok: false }
 
-  const campaign = await prisma.campaign.findUnique({
-    where: { userId: session.user.id },
-    select: { id: true },
-  })
-  if (!campaign) return { ok: false }
-
-  // Scope the delete to the caller's campaign.
-  await prisma.generation.deleteMany({ where: { id, campaignId: campaign.id } })
+  // Scope the delete to the active campaign.
+  await prisma.generation.deleteMany({ where: { id, campaignId } })
   revalidatePath("/communications")
   return { ok: true }
 }
@@ -157,13 +148,8 @@ export async function deleteGeneration(id: string): Promise<{ ok: boolean }> {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 async function requireCampaignId(): Promise<string | null> {
-  const session = await auth()
-  if (!session?.user?.id) return null
-  const campaign = await prisma.campaign.findUnique({
-    where: { userId: session.user.id },
-    select: { id: true },
-  })
-  return campaign?.id ?? null
+  const ctx = await getActiveContext()
+  return ctx?.campaign?.id ?? null
 }
 
 // ─── Candidate interview / profile ───────────────────────────────────────────

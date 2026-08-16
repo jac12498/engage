@@ -42,7 +42,11 @@ export async function POST(req: Request) {
   // Only accept signups for a published site.
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId },
-    select: { candidateName: true, plan: true, site: { select: { published: true } } },
+    select: {
+      candidateName: true,
+      committee: { select: { plan: true } },
+      site: { select: { published: true } },
+    },
   })
   if (!campaign || !campaign.site?.published) return new Response("Not found", { status: 404 })
 
@@ -56,7 +60,7 @@ export async function POST(req: Request) {
   // Volume gate: a brand-new sign-up can't push the list past the plan's cap
   // (existing subscribers re-confirming/re-subscribing are always allowed).
   if (!existing) {
-    const cap = NEWSLETTER_SUBSCRIBER_LIMITS[toPlanId(campaign.plan)]
+    const cap = NEWSLETTER_SUBSCRIBER_LIMITS[toPlanId(campaign.committee.plan)]
     if (cap != null) {
       const listSize = await prisma.newsletterSubscriber.count({
         where: { campaignId, status: { in: ["active", "pending"] } },

@@ -22,9 +22,12 @@ export interface HomeData {
  * account state (never guessed), so the checklist is always accurate. An AI
  * assistant can layer on top of this later to prioritize / act on these.
  */
-export async function computeHomeTasks(userId: string): Promise<HomeData | null> {
+export async function computeHomeTasks(
+  campaignId: string,
+  committeeId: string
+): Promise<HomeData | null> {
   const campaign = await prisma.campaign.findUnique({
-    where: { userId },
+    where: { id: campaignId },
     select: {
       id: true,
       candidateName: true,
@@ -42,7 +45,8 @@ export async function computeHomeTasks(userId: string): Promise<HomeData | null>
 
   const [generations, contacts, newsletters] = await Promise.all([
     prisma.generation.count({ where: { campaignId: campaign.id } }),
-    prisma.contact.count({ where: { campaignId: campaign.id } }),
+    // Contacts are committee-wide (shared CRM across the committee's campaigns).
+    prisma.contact.count({ where: { committeeId } }),
     prisma.newsletter.count({ where: { campaignId: campaign.id } }),
   ])
 

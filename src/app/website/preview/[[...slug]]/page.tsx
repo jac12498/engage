@@ -1,7 +1,6 @@
-import { redirect, notFound } from "next/navigation"
+import { notFound } from "next/navigation"
 import type { Metadata } from "next"
-import { auth } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
+import { requireActiveCampaign } from "@/lib/context"
 import { loadPublicSite } from "@/app/websites/[campaignId]/_render/site"
 import { PublicSite } from "@/app/websites/[campaignId]/_render/PublicSite"
 
@@ -17,14 +16,7 @@ export default async function WebsitePreview({
 }: {
   params: Promise<{ slug?: string[] }>
 }) {
-  const session = await auth()
-  if (!session?.user?.id) redirect("/sign-in")
-
-  const campaign = await prisma.campaign.findUnique({
-    where: { userId: session.user.id },
-    select: { id: true },
-  })
-  if (!campaign) redirect("/onboarding")
+  const { campaign } = await requireActiveCampaign()
 
   const site = await loadPublicSite(campaign.id)
   if (!site) notFound()

@@ -1,8 +1,8 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { getActiveContext, roleAtLeast } from "@/lib/context"
 
 /** Core campaign identity fields editable after signup. */
 export interface CampaignBasicsInput {
@@ -28,8 +28,9 @@ export type UpdateResult = { ok: true } | { ok: false; error: string }
 export async function updateCampaignBasics(
   input: CampaignBasicsInput
 ): Promise<UpdateResult> {
-  const session = await auth()
-  if (!session?.user?.id) return { ok: false, error: "You must be signed in." }
+  const ctx = await getActiveContext()
+  if (!ctx?.campaign) return { ok: false, error: "You must be signed in." }
+  if (!roleAtLeast(ctx.role, "editor")) return { ok: false, error: "You don't have permission to edit campaign settings." }
 
   const candidateName = input.candidateName.trim()
   const office = input.office.trim()
@@ -51,11 +52,7 @@ export async function updateCampaignBasics(
       return true
     })
 
-  const campaign = await prisma.campaign.findUnique({
-    where: { userId: session.user.id },
-    select: { id: true },
-  })
-  if (!campaign) return { ok: false, error: "No campaign found." }
+  const campaign = ctx.campaign
 
   await prisma.campaign.update({
     where: { id: campaign.id },

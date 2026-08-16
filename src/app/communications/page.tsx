@@ -9,17 +9,16 @@ import {
   GraduationCap,
   Scale,
 } from "lucide-react"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { requireActiveCampaign } from "@/lib/context"
 import { computeKnowledge } from "@/lib/comms/interview"
 import { MEDIA, MEDIUM_LABELS } from "@/lib/comms/prompts"
 
 export default async function CommunicationsOverview() {
-  const session = await auth()
-  if (!session?.user?.id) redirect("/sign-in")
+  const { campaign: active } = await requireActiveCampaign()
 
   const campaign = await prisma.campaign.findUnique({
-    where: { userId: session.user.id },
+    where: { id: active.id },
     select: {
       id: true,
       candidateName: true,

@@ -1,7 +1,7 @@
 "use server"
 
 import { redirect } from "next/navigation"
-import { auth } from "@/lib/auth"
+import { auth, updateSession } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import {
   getChildDistricts,
@@ -66,9 +66,12 @@ export async function completeOnboarding(
       return true
     })
 
-  // One Campaign per user.
-  const existing = await prisma.campaign.findUnique({ where: { userId } })
-  if (existing) return { ok: true }
+  // Already set up? (Idempotent: a user who belongs to a committee is done.)
+  const existingMembership = await prisma.committeeMembership.findFirst({
+    where: { userId },
+    select: { committeeId: true },
+  })
+  if (existingMembership) return { ok: true }
 
   // District is optional. Voter File, Voter Outreach, and Field Tools are gated
   // by state coverage, but Communications + Website work nationwide — so a
@@ -84,21 +87,35 @@ export async function completeOnboarding(
   const stateMatch = district?.queryString?.match(/districtState=([A-Za-z]{2})/)
   const state = stateMatch ? stateMatch[1].toUpperCase() : null
 
-  await prisma.campaign.create({
+  // Create the Committee (the account/billing entity), make this user its owner,
+  // and create the first Campaign under it. The committee name defaults to the
+  // registered committee name from onboarding. Then pin the user's active context.
+  const committee = await prisma.committee.create({
     data: {
-      userId,
-      candidateName,
-      office,
-      party,
-      additionalParties,
-      committeeName,
+      name: committeeName,
       plan: "starter",
-      state,
-      district: district?.name ?? null,
-      districtId: district?.id ?? null,
-      districtQueryString: district?.queryString ?? null,
-      districtVoterCount: district?.voterCount ?? null,
+      members: { create: { userId, role: "owner" } },
+      campaigns: {
+        create: {
+          candidateName,
+          office,
+          party,
+          additionalParties,
+          committeeName,
+          state,
+          district: district?.name ?? null,
+          districtId: district?.id ?? null,
+          districtQueryString: district?.queryString ?? null,
+          districtVoterCount: district?.voterCount ?? null,
+        },
+      },
     },
+    select: { id: true, campaigns: { select: { id: true }, take: 1 } },
+  })
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { lastCommitteeId: committee.id, lastCampaignId: committee.campaigns[0]?.id ?? null },
   })
 
   return { ok: true }
@@ -107,6 +124,11 @@ export async function completeOnboarding(
 /** Server-action variant used by the form to create + then route home. */
 export async function submitOnboarding(input: CompleteOnboardingInput) {
   const result = await completeOnboarding(input)
-  if (result.ok) redirect("/dashboard")
+  if (result.ok) {
+    // Refresh the JWT so it picks up the new active committee/campaign context;
+    // otherwise the dashboard gate would bounce back to onboarding.
+    await updateSession({})
+    redirect("/dashboard")
+  }
   return result
 }

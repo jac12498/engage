@@ -1,8 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { auth } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
+import { getActiveContext, roleAtLeast } from "@/lib/context"
 import {
   svcCreatePage,
   svcUpdatePage,
@@ -19,13 +18,9 @@ import {
 } from "@/lib/website/blockService"
 
 async function currentCampaignId(): Promise<string | null> {
-  const session = await auth()
-  if (!session?.user?.id) return null
-  const c = await prisma.campaign.findUnique({
-    where: { userId: session.user.id },
-    select: { id: true },
-  })
-  return c?.id ?? null
+  const ctx = await getActiveContext()
+  if (!ctx || !roleAtLeast(ctx.role, "editor")) return null
+  return ctx.campaign?.id ?? null
 }
 
 function revalidate(campaignId: string) {

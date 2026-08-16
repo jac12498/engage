@@ -10,12 +10,13 @@ export default async function OnboardingPage() {
   const session = await auth()
   if (!session?.user?.id) redirect("/sign-in")
 
-  // Authoritative gate: read the DB, not the (possibly stale) JWT.
-  const campaign = await prisma.campaign.findUnique({
+  // Authoritative gate: read the DB, not the (possibly stale) JWT. A user who
+  // already belongs to a committee is set up — send them to the workspace.
+  const membership = await prisma.committeeMembership.findFirst({
     where: { userId: session.user.id },
-    select: { id: true },
+    select: { committeeId: true },
   })
-  if (campaign) redirect("/dashboard")
+  if (membership) redirect("/dashboard")
 
   const topDistricts = await getTopLevelDistricts()
 

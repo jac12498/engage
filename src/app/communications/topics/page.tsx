@@ -1,14 +1,13 @@
 import { redirect } from "next/navigation"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { requireActiveCampaign } from "@/lib/context"
 import { TopicsManager } from "@/components/communications/TopicsManager"
 
 export default async function TopicsPage() {
-  const session = await auth()
-  if (!session?.user?.id) redirect("/sign-in")
+  const { campaign: active } = await requireActiveCampaign()
 
   const campaign = await prisma.campaign.findUnique({
-    where: { userId: session.user.id },
+    where: { id: active.id },
     include: { topics: { orderBy: { updatedAt: "desc" } } },
   })
   if (!campaign) redirect("/onboarding")

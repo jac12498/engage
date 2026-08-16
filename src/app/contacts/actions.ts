@@ -1,8 +1,8 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { getActiveContext, roleAtLeast, type Role } from "@/lib/context"
 import { CONTACT_TYPES } from "@/lib/contacts"
 
 export interface EmailInput {
@@ -46,15 +46,15 @@ export interface ContactInput {
 
 export type ContactResult = { ok: true; id: string } | { ok: false; error: string }
 
-/** Resolve the signed-in user's campaign id, or null. */
-async function requireCampaignId(): Promise<string | null> {
-  const session = await auth()
-  if (!session?.user?.id) return null
-  const campaign = await prisma.campaign.findUnique({
-    where: { userId: session.user.id },
-    select: { id: true },
-  })
-  return campaign?.id ?? null
+/**
+ * Resolve the active committee id (the CRM is committee-scoped), or null when the
+ * user isn't signed in or lacks the required role. Writes pass `"editor"`.
+ */
+async function requireCommitteeId(min: Role = "viewer"): Promise<string | null> {
+  const ctx = await getActiveContext()
+  if (!ctx) return null
+  if (!roleAtLeast(ctx.role, min)) return null
+  return ctx.committee.id
 }
 
 const clean = (v?: string) => v?.trim() || null
@@ -133,7 +133,7 @@ function normalizeAddresses(
  * Upsert tag names into the campaign's Tag list and return their ids.
  * De-dupes case-insensitively by trimmed name.
  */
-async function resolveTagIds(campaignId: string, names: string[]): Promise<string[]> {
+async function resolveTagIds(committeeId: string, names: string[]): Promise<string[]> {
   const seen = new Set<string>()
   const clean: string[] = []
   for (const n of names) {
@@ -147,8 +147,8 @@ async function resolveTagIds(campaignId: string, names: string[]): Promise<strin
   const ids: string[] = []
   for (const name of clean.slice(0, 50)) {
     const tag = await prisma.tag.upsert({
-      where: { campaignId_name: { campaignId, name } },
-      create: { campaignId, name },
+      where: { committeeId_name: { committeeId, name } },
+      create: { committeeId, name },
       update: {},
       select: { id: true },
     })
@@ -159,8 +159,8 @@ async function resolveTagIds(campaignId: string, names: string[]): Promise<strin
 
 /** Create or update a contact (with its emails/phones/tags), scoped to the caller's campaign. */
 export async function saveContact(input: ContactInput): Promise<ContactResult> {
-  const campaignId = await requireCampaignId()
-  if (!campaignId) return { ok: false, error: "You must be signed in." }
+  const committeeId = await requireCommitteeId("editor")
+  if (!committeeId) return { ok: false, error: "You must be signed in." }
 
   const firstName = input.firstName?.trim()
   const lastName = input.lastName?.trim()
@@ -182,7 +182,7 @@ export async function saveContact(input: ContactInput): Promise<ContactResult> {
   const addrRes = normalizeAddresses(input.addresses ?? [])
   if (!addrRes.ok) return addrRes
 
-  const tagIds = await resolveTagIds(campaignId, input.tags ?? [])
+  const tagIds = await resolveTagIds(committeeId, input.tags ?? [])
   const newNote = clean(input.newNote)
 
   const scalar = { firstName, lastName, types }
@@ -194,7 +194,7 @@ export async function saveContact(input: ContactInput): Promise<ContactResult> {
   if (input.id) {
     // Guard: only touch a contact that belongs to this campaign.
     const existing = await prisma.contact.findFirst({
-      where: { id: input.id, campaignId },
+      where: { id: input.id, committeeId },
       select: { id: true },
     })
     if (!existing) return { ok: false, error: "Contact not found." }
@@ -224,7 +224,7 @@ export async function saveContact(input: ContactInput): Promise<ContactResult> {
 
   const created = await prisma.contact.create({
     data: {
-      campaignId,
+      committeeId,
       source: "manual",
       ...scalar,
       emails: { create: emailCreate },
@@ -243,13 +243,13 @@ export async function addContactNote(
   contactId: string,
   body: string
 ): Promise<{ ok: boolean; error?: string }> {
-  const campaignId = await requireCampaignId()
-  if (!campaignId) return { ok: false, error: "You must be signed in." }
+  const committeeId = await requireCommitteeId("editor")
+  if (!committeeId) return { ok: false, error: "You must be signed in." }
   const text = body?.trim()
   if (!text) return { ok: false, error: "Note can't be empty." }
 
   const existing = await prisma.contact.findFirst({
-    where: { id: contactId, campaignId },
+    where: { id: contactId, committeeId },
     select: { id: true },
   })
   if (!existing) return { ok: false, error: "Contact not found." }
@@ -262,11 +262,11 @@ export async function addContactNote(
 
 /** Delete a single note (ownership checked via its contact's campaign). */
 export async function deleteContactNote(noteId: string): Promise<{ ok: boolean; error?: string }> {
-  const campaignId = await requireCampaignId()
-  if (!campaignId) return { ok: false, error: "You must be signed in." }
+  const committeeId = await requireCommitteeId("editor")
+  if (!committeeId) return { ok: false, error: "You must be signed in." }
 
   const note = await prisma.contactNote.findFirst({
-    where: { id: noteId, contact: { campaignId } },
+    where: { id: noteId, contact: { committeeId } },
     select: { id: true, contactId: true },
   })
   if (!note) return { ok: false, error: "Note not found." }
@@ -279,11 +279,11 @@ export async function deleteContactNote(noteId: string): Promise<{ ok: boolean; 
 
 /** Delete a contact owned by the caller's campaign. */
 export async function deleteContact(id: string): Promise<{ ok: boolean; error?: string }> {
-  const campaignId = await requireCampaignId()
-  if (!campaignId) return { ok: false, error: "You must be signed in." }
+  const committeeId = await requireCommitteeId("editor")
+  if (!committeeId) return { ok: false, error: "You must be signed in." }
 
   const existing = await prisma.contact.findFirst({
-    where: { id, campaignId },
+    where: { id, committeeId },
     select: { id: true },
   })
   if (!existing) return { ok: false, error: "Contact not found." }

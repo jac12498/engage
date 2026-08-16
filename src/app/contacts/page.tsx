@@ -1,34 +1,32 @@
-import { redirect } from "next/navigation"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { requireCommittee } from "@/lib/context"
 import { ContactsManager, type ContactRow } from "@/components/contacts/ContactsManager"
 
 export const dynamic = "force-dynamic"
 
 export default async function ContactsPage() {
-  const session = await auth()
-  if (!session?.user?.id) redirect("/sign-in")
+  const { committee } = await requireCommittee()
 
-  const campaign = await prisma.campaign.findUnique({
-    where: { userId: session.user.id },
-    select: {
-      id: true,
-      tags: { orderBy: { name: "asc" }, select: { name: true } },
-      contacts: {
-        orderBy: [{ createdAt: "desc" }],
-        include: {
-          emails: { orderBy: { order: "asc" } },
-          phones: { orderBy: { order: "asc" } },
-          addresses: { orderBy: { order: "asc" } },
-          contactNotes: { orderBy: { createdAt: "desc" } },
-          contactTags: { include: { tag: true } },
-        },
+  const [tags, contactRows] = await Promise.all([
+    prisma.tag.findMany({
+      where: { committeeId: committee.id },
+      orderBy: { name: "asc" },
+      select: { name: true },
+    }),
+    prisma.contact.findMany({
+      where: { committeeId: committee.id },
+      orderBy: [{ createdAt: "desc" }],
+      include: {
+        emails: { orderBy: { order: "asc" } },
+        phones: { orderBy: { order: "asc" } },
+        addresses: { orderBy: { order: "asc" } },
+        contactNotes: { orderBy: { createdAt: "desc" } },
+        contactTags: { include: { tag: true } },
       },
-    },
-  })
-  if (!campaign) redirect("/onboarding")
+    }),
+  ])
 
-  const contacts: ContactRow[] = campaign.contacts.map((c) => ({
+  const contacts: ContactRow[] = contactRows.map((c) => ({
     id: c.id,
     firstName: c.firstName,
     lastName: c.lastName,
@@ -57,10 +55,11 @@ export default async function ContactsPage() {
     })),
   }))
 
-  const allTags = campaign.tags.map((t) => t.name)
+  const allTags = tags.map((t) => t.name)
 
+  // Pending signups across every campaign website in the committee.
   const pendingSignups = await prisma.volunteerSignup.count({
-    where: { website: { campaignId: campaign.id }, status: "pending" },
+    where: { website: { campaign: { committeeId: committee.id } }, status: "pending" },
   })
 
   return <ContactsManager contacts={contacts} allTags={allTags} pendingSignups={pendingSignups} />

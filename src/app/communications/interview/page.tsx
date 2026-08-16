@@ -1,27 +1,9 @@
-import { redirect } from "next/navigation"
-import { auth } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
+import { requireActiveCampaign } from "@/lib/context"
 import { InterviewView } from "@/components/communications/InterviewView"
 import type { InterviewData } from "@/lib/comms/interview"
 
 export default async function InterviewPage() {
-  const session = await auth()
-  if (!session?.user?.id) redirect("/sign-in")
-
-  const c = await prisma.campaign.findUnique({
-    where: { userId: session.user.id },
-    select: {
-      bio: true,
-      education: true,
-      experience: true,
-      whyRunning: true,
-      coreValues: true,
-      politicalLean: true,
-      voiceTone: true,
-      interview: true,
-    },
-  })
-  if (!c) redirect("/onboarding")
+  const { campaign: c } = await requireActiveCampaign()
 
   return (
     <InterviewView
