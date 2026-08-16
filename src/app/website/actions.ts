@@ -1,17 +1,18 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { type Prisma } from "@/generated/prisma/client"
+import { getActiveContext, roleAtLeast } from "@/lib/context"
 import { generateWebsiteDraft } from "@/lib/website/generate"
 import { draftToHomeBlocks, type BlockInput } from "@/lib/website/draftToBlocks"
 import { slugify } from "@/lib/website/slug"
 
+/** The active campaign (editor role required — website work is a mutation), or null. */
 async function currentCampaign() {
-  const session = await auth()
-  if (!session?.user?.id) return null
-  return prisma.campaign.findUnique({ where: { userId: session.user.id } })
+  const ctx = await getActiveContext()
+  if (!ctx || !roleAtLeast(ctx.role, "editor")) return null
+  return ctx.campaign
 }
 
 /** Free site slug derived from `base`, appending -2, -3… on collision. */

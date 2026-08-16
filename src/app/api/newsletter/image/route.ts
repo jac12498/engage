@@ -1,5 +1,5 @@
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { getActiveContext } from "@/lib/context"
 
 const MAX_BYTES = 5 * 1024 * 1024 // 5 MB
 const ALLOWED = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"])
@@ -7,12 +7,9 @@ const ALLOWED = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"])
 // Upload an image for a newsletter image block. Stored in-DB; returns a stable
 // path (/api/newsletter/image/[id]) that email clients can fetch.
 export async function POST(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) return new Response("Unauthorized", { status: 401 })
-  const campaign = await prisma.campaign.findUnique({
-    where: { userId: session.user.id },
-    select: { id: true },
-  })
+  const ctx = await getActiveContext()
+  if (!ctx) return new Response("Unauthorized", { status: 401 })
+  const campaign = ctx.campaign
   if (!campaign) return new Response("No campaign", { status: 404 })
 
   let file: File | null = null

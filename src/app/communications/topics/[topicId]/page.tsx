@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { requireActiveCampaign } from "@/lib/context"
 import { toPlanId } from "@/lib/entitlements"
 import { TopicDetail } from "@/components/communications/TopicDetail"
 
@@ -19,16 +19,12 @@ export default async function TopicDetailPage({
 }) {
   const { topicId } = await params
 
-  const session = await auth()
-  if (!session?.user?.id) redirect("/sign-in")
+  const { campaign: active, committee } = await requireActiveCampaign()
 
   const campaign = await prisma.campaign.findUnique({
-    where: { userId: session.user.id },
+    where: { id: active.id },
     select: {
       id: true,
-      plan: true,
-      creditsThisMonth: true,
-      billingPeriodStart: true,
       topics: { orderBy: { title: "asc" }, select: { id: true, title: true } },
     },
   })
@@ -74,8 +70,8 @@ export default async function TopicDetailPage({
         newsHook: g.newsHook,
         createdAt: g.createdAt.toISOString(),
       }))}
-      plan={toPlanId(campaign.plan)}
-      creditsUsed={usedThisMonth(campaign.creditsThisMonth, campaign.billingPeriodStart)}
+      plan={toPlanId(committee.plan)}
+      creditsUsed={usedThisMonth(committee.creditsThisMonth, committee.billingPeriodStart)}
     />
   )
 }

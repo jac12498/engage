@@ -1,28 +1,23 @@
 import { redirect } from "next/navigation"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { requireActiveCampaign } from "@/lib/context"
 import { WEBSITE_EDIT_LIMITS, toPlanId, resolveModel } from "@/lib/entitlements"
 import { CreateSitePanel } from "@/components/website/CreateSitePanel"
 import { type EditorSite } from "@/components/website/WebsiteBuilder"
 import { WebsiteWorkspace } from "@/components/website/WebsiteWorkspace"
 
 export default async function WebsitePage() {
-  const session = await auth()
-  if (!session?.user?.id) redirect("/sign-in")
+  const { campaign: active, committee } = await requireActiveCampaign()
 
   const campaign = await prisma.campaign.findUnique({
-    where: { userId: session.user.id },
+    where: { id: active.id },
     select: {
       id: true,
       candidateName: true,
       office: true,
       bio: true,
       whyRunning: true,
-      plan: true,
-      aiModel: true,
       headshotMime: true, // headshot lives on Campaign now; presence tracked via mime
-      websiteEditsThisMonth: true,
-      billingPeriodStart: true,
       site: {
         omit: { headshotData: true }, // legacy column; kept but unused
         include: {
@@ -72,12 +67,12 @@ export default async function WebsitePage() {
     })),
   }
 
-  const plan = toPlanId(campaign.plan)
+  const plan = toPlanId(committee.plan)
   const now = new Date()
-  const bp = campaign.billingPeriodStart
+  const bp = committee.billingPeriodStart
   const sameMonth =
     bp.getUTCFullYear() === now.getUTCFullYear() && bp.getUTCMonth() === now.getUTCMonth()
-  const editsUsed = sameMonth ? campaign.websiteEditsThisMonth : 0
+  const editsUsed = sameMonth ? committee.websiteEditsThisMonth : 0
 
   return (
     <WebsiteWorkspace
@@ -86,7 +81,7 @@ export default async function WebsitePage() {
       pendingSignups={s._count.signups}
       editsUsed={editsUsed}
       editsLimit={WEBSITE_EDIT_LIMITS[plan]}
-      defaultModel={resolveModel(campaign.aiModel)}
+      defaultModel={resolveModel(committee.aiModel)}
     />
   )
 }

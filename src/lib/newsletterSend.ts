@@ -60,11 +60,19 @@ export async function sendTestNewsletterNow(campaignId: string, newsletterId: st
       headshotMime: true,
       newsletterTemplate: true,
       site: { select: { published: true } },
-      user: { select: { email: true } },
+      committee: {
+        select: {
+          members: {
+            where: { role: "owner" },
+            select: { user: { select: { email: true } } },
+            take: 1,
+          },
+        },
+      },
     },
   })
   if (!campaign) return { ok: false, error: "Campaign not found." }
-  const to = campaign.user?.email
+  const to = campaign.committee.members[0]?.user.email
   if (!to) return { ok: false, error: "No account email to send the test to." }
 
   const blocks =
@@ -141,15 +149,24 @@ export async function sendNewsletterNow(campaignId: string, newsletterId: string
       headshotMime: true,
       newsletterTemplate: true,
       site: { select: { published: true } },
-      plan: true,
-      creditsThisMonth: true,
-      revisionsThisMonth: true,
-      crawlsThisMonth: true,
-      websiteEditsThisMonth: true,
-      newsSearchesThisMonth: true,
-      newsletterEmailsThisMonth: true,
-      billingPeriodStart: true,
-      user: { select: { email: true } },
+      committee: {
+        select: {
+          id: true,
+          plan: true,
+          creditsThisMonth: true,
+          revisionsThisMonth: true,
+          crawlsThisMonth: true,
+          websiteEditsThisMonth: true,
+          newsSearchesThisMonth: true,
+          newsletterEmailsThisMonth: true,
+          billingPeriodStart: true,
+          members: {
+            where: { role: "owner" },
+            select: { user: { select: { email: true } } },
+            take: 1,
+          },
+        },
+      },
     },
   })
   if (!campaign) return { ok: false, error: "Campaign not found." }
@@ -179,11 +196,11 @@ export async function sendNewsletterNow(campaignId: string, newsletterId: string
   })
   if (subscribers.length === 0) return { ok: false, error: "You have no confirmed subscribers yet." }
 
-  // Meter up front (all-or-nothing against the monthly cap).
-  const plan = toPlanId(campaign.plan)
-  const consumed = await consumeNewsletterEmails(plan, campaign, subscribers.length)
+  // Meter up front (all-or-nothing against the committee's monthly cap).
+  const plan = toPlanId(campaign.committee.plan)
+  const consumed = await consumeNewsletterEmails(plan, campaign.committee, subscribers.length)
   if (!consumed.ok) {
-    const { remaining } = newsletterHeadroom(plan, campaign)
+    const { remaining } = newsletterHeadroom(plan, campaign.committee)
     return {
       ok: false,
       limitHit: true,
@@ -193,7 +210,7 @@ export async function sendNewsletterNow(campaignId: string, newsletterId: string
 
   const fromName = sanitizeName(campaign.committeeName || campaign.candidateName) || "Newsletter"
   const from = `${fromName} <${SEND_ADDRESS}>`
-  const replyTo = campaign.user?.email || undefined
+  const replyTo = campaign.committee.members[0]?.user.email || undefined
   const base = baseUrl()
   const headshotUrl = campaign.headshotMime ? `${base}/api/website/headshot/${campaign.id}` : null
   const subscribeUrl = campaign.site?.published ? `${base}/websites/${campaign.id}/newsletter#subscribe` : null

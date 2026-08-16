@@ -1,17 +1,16 @@
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { ArrowRight, Check, Circle, Sparkles } from "lucide-react"
-import { auth } from "@/lib/auth"
 import { AppShell } from "@/components/AppShell"
+import { requireActiveCampaign } from "@/lib/context"
 import { computeHomeTasks, type HomeTask } from "@/lib/homeTasks"
 
 export const dynamic = "force-dynamic"
 
 export default async function HomePage() {
-  const session = await auth()
-  if (!session?.user?.id) redirect("/sign-in")
+  const { campaign, committee } = await requireActiveCampaign()
 
-  const data = await computeHomeTasks(session.user.id)
+  const data = await computeHomeTasks(campaign.id, committee.id)
   if (!data) redirect("/onboarding")
 
   const { candidateName, tasks, doneCount, total } = data

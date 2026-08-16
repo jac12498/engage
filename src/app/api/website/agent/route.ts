@@ -1,7 +1,6 @@
 import { revalidatePath } from "next/cache"
 import type Anthropic from "@anthropic-ai/sdk"
-import { auth } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
+import { getActiveContext } from "@/lib/context"
 import { anthropic } from "@/lib/comms/anthropic"
 import { resolveModel, toPlanId } from "@/lib/entitlements"
 import { consumeWebsiteEdit } from "@/lib/comms/usage"
@@ -72,29 +71,9 @@ export async function POST(req: Request) {
 }
 
 async function handlePost(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) return new Response("Unauthorized", { status: 401 })
-
-  const campaign = await prisma.campaign.findUnique({
-    where: { userId: session.user.id },
-    select: {
-      id: true,
-      candidateName: true,
-      office: true,
-      party: true,
-      additionalParties: true,
-      state: true,
-      plan: true,
-      aiModel: true,
-      creditsThisMonth: true,
-      revisionsThisMonth: true,
-      crawlsThisMonth: true,
-      websiteEditsThisMonth: true,
-      newsSearchesThisMonth: true,
-      newsletterEmailsThisMonth: true,
-      billingPeriodStart: true,
-    },
-  })
+  const ctx = await getActiveContext()
+  if (!ctx) return new Response("Unauthorized", { status: 401 })
+  const { committee, campaign } = ctx
   if (!campaign) return new Response("No campaign", { status: 400 })
 
   const snapshot0 = await getSiteSnapshot(campaign.id)
@@ -107,8 +86,8 @@ async function handlePost(req: Request) {
   }
 
   // Meter one message per user instruction, before doing any work.
-  const plan = toPlanId(campaign.plan)
-  const usage = await consumeWebsiteEdit(plan, campaign)
+  const plan = toPlanId(committee.plan)
+  const usage = await consumeWebsiteEdit(plan, committee)
   if (!usage.ok) {
     return Response.json(
       { error: "limit", used: usage.used, limit: usage.limit },
@@ -116,7 +95,7 @@ async function handlePost(req: Request) {
     )
   }
 
-  const model = resolveModel(body.model ?? campaign.aiModel)
+  const model = resolveModel(body.model ?? committee.aiModel)
 
   const messages: Anthropic.MessageParam[] = turns
     .slice(-MAX_HISTORY)

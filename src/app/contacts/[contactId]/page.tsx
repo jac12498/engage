@@ -1,6 +1,6 @@
-import { notFound, redirect } from "next/navigation"
-import { auth } from "@/lib/auth"
+import { notFound } from "next/navigation"
 import { prisma } from "@/lib/prisma"
+import { requireCommittee } from "@/lib/context"
 import { ContactDetail } from "@/components/contacts/ContactDetail"
 import type { ContactRow } from "@/components/contacts/ContactsManager"
 
@@ -12,17 +12,16 @@ export default async function ContactDetailPage({
   params: Promise<{ contactId: string }>
 }) {
   const { contactId } = await params
-  const session = await auth()
-  if (!session?.user?.id) redirect("/sign-in")
+  const { committee } = await requireCommittee()
 
-  const campaign = await prisma.campaign.findUnique({
-    where: { userId: session.user.id },
-    select: { id: true, tags: { orderBy: { name: "asc" }, select: { name: true } } },
+  const tags = await prisma.tag.findMany({
+    where: { committeeId: committee.id },
+    orderBy: { name: "asc" },
+    select: { name: true },
   })
-  if (!campaign) redirect("/onboarding")
 
   const c = await prisma.contact.findFirst({
-    where: { id: contactId, campaignId: campaign.id },
+    where: { id: contactId, committeeId: committee.id },
     include: {
       emails: { orderBy: { order: "asc" } },
       phones: { orderBy: { order: "asc" } },
@@ -62,5 +61,5 @@ export default async function ContactDetailPage({
     })),
   }
 
-  return <ContactDetail contact={contact} allTags={campaign.tags.map((t) => t.name)} />
+  return <ContactDetail contact={contact} allTags={tags.map((t) => t.name)} />
 }

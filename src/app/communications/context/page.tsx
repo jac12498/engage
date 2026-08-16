@@ -1,14 +1,13 @@
 import { redirect } from "next/navigation"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { requireActiveCampaign } from "@/lib/context"
 import { ContextManager } from "@/components/communications/ContextManager"
 
 export default async function ContextPage() {
-  const session = await auth()
-  if (!session?.user?.id) redirect("/sign-in")
+  const { campaign: active } = await requireActiveCampaign()
 
   const campaign = await prisma.campaign.findUnique({
-    where: { userId: session.user.id },
+    where: { id: active.id },
     include: {
       contextItems: { orderBy: [{ type: "asc" }, { createdAt: "asc" }] },
       topics: { orderBy: { title: "asc" }, select: { id: true, title: true } },

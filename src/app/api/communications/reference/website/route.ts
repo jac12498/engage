@@ -1,5 +1,5 @@
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { getActiveContext } from "@/lib/context"
 import { anthropic } from "@/lib/comms/anthropic"
 import { DEFAULT_AI_MODEL, toPlanId } from "@/lib/entitlements"
 import { consumeCrawl, refundCrawl } from "@/lib/comms/usage"
@@ -75,8 +75,8 @@ async function fetchText(url: string): Promise<string | null> {
 }
 
 export async function POST(req: Request) {
-  const session = await auth()
-  if (!session?.user?.id) return new Response("Unauthorized", { status: 401 })
+  const ctx = await getActiveContext()
+  if (!ctx) return new Response("Unauthorized", { status: 401 })
 
   const { url } = (await req.json()) as { url?: string }
   if (!url || !/^https?:\/\//i.test(url)) {
@@ -94,9 +94,9 @@ export async function POST(req: Request) {
   }
 
   // Enforce the monthly crawl cap before doing any expensive work.
-  const campaign = await prisma.campaign.findUnique({ where: { userId: session.user.id } })
+  const { committee, campaign } = ctx
   if (!campaign) return new Response("No campaign found", { status: 404 })
-  const consumed = await consumeCrawl(toPlanId(campaign.plan), campaign)
+  const consumed = await consumeCrawl(toPlanId(committee.plan), committee)
   if (!consumed.ok) {
     return Response.json(
       {
@@ -155,7 +155,7 @@ export async function POST(req: Request) {
   }
 
   if (pages.length === 0) {
-    await refundCrawl(campaign.id) // nothing read — don't charge for it
+    await refundCrawl(committee.id) // nothing read — don't charge for it
     return Response.json(
       { error: "Couldn't read any pages from that site. Try the URL type, or paste the text." },
       { status: 422 }

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { requireActiveCampaign } from "@/lib/context"
 import { parseTemplate } from "@/lib/newsletter/template"
 import { NewsletterTemplateEditor } from "@/components/website/NewsletterTemplateEditor"
 import { SavedPresets } from "@/components/website/SavedPresets"
@@ -9,11 +9,10 @@ export const dynamic = "force-dynamic"
 export const metadata = { title: "Newsletter template · Engage" }
 
 export default async function NewsletterTemplatePage() {
-  const session = await auth()
-  if (!session?.user?.id) redirect("/sign-in")
+  const { campaign: active } = await requireActiveCampaign()
 
   const campaign = await prisma.campaign.findUnique({
-    where: { userId: session.user.id },
+    where: { id: active.id },
     select: {
       id: true,
       candidateName: true,

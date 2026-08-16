@@ -1,8 +1,8 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { getActiveContext, roleAtLeast } from "@/lib/context"
 import { toPlanId } from "@/lib/entitlements"
 import { consumeNewsSearch } from "@/lib/comms/usage"
 import { searchCandidateNews, summarizeArticleUrl } from "@/lib/website/newsSearch"
@@ -12,11 +12,14 @@ export type FindResult =
   | { ok: true; found: number; added: number }
   | { ok: false; error: string; limitHit?: boolean }
 
-/** The signed-in user's full campaign row (satisfies both the metering + query needs), or null. */
-async function requireCampaign() {
-  const session = await auth()
-  if (!session?.user?.id) return null
-  return prisma.campaign.findUnique({ where: { userId: session.user.id } })
+/**
+ * The active campaign + its committee (for metering), editor-gated. Returns null
+ * when not signed in, no active campaign, or insufficient role.
+ */
+async function requireContext() {
+  const ctx = await getActiveContext()
+  if (!ctx?.campaign || !roleAtLeast(ctx.role, "editor")) return null
+  return { campaign: ctx.campaign, committee: ctx.committee }
 }
 
 function validHttpUrl(v: string): string | null {
@@ -40,10 +43,11 @@ function revalidatePress(campaignId: string) {
  * URLs are skipped so re-running doesn't duplicate.
  */
 export async function findPressCoverage(keywords?: string): Promise<FindResult> {
-  const campaign = await requireCampaign()
-  if (!campaign) return { ok: false, error: "You must be signed in." }
+  const ctx = await requireContext()
+  if (!ctx) return { ok: false, error: "You must be signed in." }
+  const { campaign, committee } = ctx
 
-  const usage = await consumeNewsSearch(toPlanId(campaign.plan), campaign)
+  const usage = await consumeNewsSearch(toPlanId(committee.plan), committee)
   if (!usage.ok) {
     return { ok: false, error: "You've used all your news searches this month.", limitHit: true }
   }
@@ -98,8 +102,9 @@ export async function findPressCoverage(keywords?: string): Promise<FindResult> 
  * (the owner added it deliberately, so it skips the queue). Idempotent per URL.
  */
 export async function addPressClipByUrl(rawUrl: string): Promise<PressResult> {
-  const campaign = await requireCampaign()
-  if (!campaign) return { ok: false, error: "You must be signed in." }
+  const ctx = await requireContext()
+  if (!ctx) return { ok: false, error: "You must be signed in." }
+  const { campaign } = ctx
 
   const url = validHttpUrl(rawUrl)
   if (!url) return { ok: false, error: "Enter a valid http(s) link." }
@@ -127,8 +132,9 @@ export async function addPressClipByUrl(rawUrl: string): Promise<PressResult> {
 }
 
 async function setStatus(clipId: string, status: "approved" | "rejected"): Promise<PressResult> {
-  const campaign = await requireCampaign()
-  if (!campaign) return { ok: false, error: "You must be signed in." }
+  const ctx = await requireContext()
+  if (!ctx) return { ok: false, error: "You must be signed in." }
+  const { campaign } = ctx
 
   const clip = await prisma.newsClip.findFirst({ where: { id: clipId, campaignId: campaign.id } })
   if (!clip) return { ok: false, error: "Clip not found." }
@@ -150,8 +156,9 @@ export async function rejectClip(clipId: string): Promise<PressResult> {
 
 /** Permanently delete a clip. */
 export async function deleteClip(clipId: string): Promise<PressResult> {
-  const campaign = await requireCampaign()
-  if (!campaign) return { ok: false, error: "You must be signed in." }
+  const ctx = await requireContext()
+  if (!ctx) return { ok: false, error: "You must be signed in." }
+  const { campaign } = ctx
 
   const clip = await prisma.newsClip.findFirst({ where: { id: clipId, campaignId: campaign.id } })
   if (!clip) return { ok: false, error: "Clip not found." }

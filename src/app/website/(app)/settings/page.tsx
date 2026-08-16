@@ -1,19 +1,18 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { requireActiveCampaign } from "@/lib/context"
 import { SiteSettingsForm } from "@/components/website/SiteSettingsForm"
 
 export const dynamic = "force-dynamic"
 export const metadata = { title: "Website settings · Engage" }
 
 export default async function WebsiteSettingsPage() {
-  const session = await auth()
-  if (!session?.user?.id) redirect("/sign-in")
+  const { campaign: active } = await requireActiveCampaign()
 
   const campaign = await prisma.campaign.findUnique({
-    where: { userId: session.user.id },
+    where: { id: active.id },
     select: {
       site: {
         select: {

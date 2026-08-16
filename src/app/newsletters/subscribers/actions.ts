@@ -1,19 +1,16 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { getActiveContext, roleAtLeast } from "@/lib/context"
 
 export type SubscriberResult = { ok: true } | { ok: false; error: string }
 
+/** Active campaign id, editor-gated (subscriber edits are mutations), or null. */
 async function requireCampaignId(): Promise<string | null> {
-  const session = await auth()
-  if (!session?.user?.id) return null
-  const campaign = await prisma.campaign.findUnique({
-    where: { userId: session.user.id },
-    select: { id: true },
-  })
-  return campaign?.id ?? null
+  const ctx = await getActiveContext()
+  if (!ctx || !roleAtLeast(ctx.role, "editor")) return null
+  return ctx.campaign?.id ?? null
 }
 
 /** Permanently delete a subscriber (e.g. spam or a bad address). */

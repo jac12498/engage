@@ -1,19 +1,14 @@
 import { revalidatePath } from "next/cache"
-import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { getActiveContext } from "@/lib/context"
 
 const MAX_BYTES = 3 * 1024 * 1024 // 3 MB
 const ALLOWED = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"])
 
-/** The signed-in user's campaign id, or null. */
+/** The active campaign id, or null. */
 async function currentCampaignId(): Promise<string | null> {
-  const session = await auth()
-  if (!session?.user?.id) return null
-  const campaign = await prisma.campaign.findUnique({
-    where: { userId: session.user.id },
-    select: { id: true },
-  })
-  return campaign?.id ?? null
+  const ctx = await getActiveContext()
+  return ctx?.campaign?.id ?? null
 }
 
 // Upload / replace the candidate headshot for the signed-in user's campaign.
