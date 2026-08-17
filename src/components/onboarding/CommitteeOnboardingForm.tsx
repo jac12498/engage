@@ -27,7 +27,29 @@ const ALL_STATES: { code: string; name: string }[] = [
   ["VA", "Virginia"], ["WA", "Washington"], ["WV", "West Virginia"], ["WI", "Wisconsin"], ["WY", "Wyoming"],
 ].map(([code, name]) => ({ code, name }))
 
-export function CommitteeOnboardingForm() {
+export interface CommitteeFormInput {
+  state: string
+  committeeType: string
+  name: string
+  filerId?: string
+}
+
+// A committee-form submit action: creates the committee and (on success) redirects,
+// or returns an error. Used for both first-time onboarding and creating additional
+// committees.
+type SubmitAction = (
+  input: CommitteeFormInput
+) => Promise<{ ok: true } | { ok: false; error: string } | void>
+
+export function CommitteeOnboardingForm({
+  submitAction = submitCommittee,
+  submitLabel = "Create committee",
+  pendingLabel = "Creating your committee…",
+}: {
+  submitAction?: SubmitAction
+  submitLabel?: string
+  pendingLabel?: string
+} = {}) {
   // Default to NY (the only supported state today) so the type list is ready.
   const [state, setState] = useState(SUPPORTED_STATES[0]?.code ?? "NY")
   const [committeeType, setCommitteeType] = useState("")
@@ -78,7 +100,7 @@ export function CommitteeOnboardingForm() {
     if (!name.trim()) return setError("Please enter your committee name.")
 
     startTransition(async () => {
-      const result = await submitCommittee({
+      const result = await submitAction({
         state,
         committeeType,
         name,
@@ -213,7 +235,7 @@ export function CommitteeOnboardingForm() {
 
       <div className="flex items-center justify-end gap-3">
         <Button onClick={handleSubmit} disabled={isPending}>
-          {isPending ? "Creating your committee…" : "Create committee"}
+          {isPending ? pendingLabel : submitLabel}
         </Button>
       </div>
     </div>
