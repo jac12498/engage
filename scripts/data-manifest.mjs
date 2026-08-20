@@ -14,6 +14,14 @@
 
 export const BUCKET = "engage-data"
 
+// Small file committed to git AND seeded: a Railway volume mounted at /app/data
+// SHADOWS image files at that path, so anything the app reads from data/ at runtime
+// must also live on the volume. This tiny registry parquet is read for onboarding
+// committee lookup, so it's seeded too (kept in git for dev, where there's no volume).
+export const REGISTRY_FILES = [
+  "campaign_finance/ny/committees.parquet",
+]
+
 /** Storage/local key (relative to the bucket root and to `data/`). */
 export const CAMPAIGN_FINANCE_FILES = [
   // NY disclosures — powers contact↔donation matching (donations.ts, committeeDonors.ts).
@@ -33,7 +41,7 @@ export const VOTER_FILES = [
 ]
 
 /** The set the seed script hydrates in production. */
-export const SEED_FILES = [...CAMPAIGN_FINANCE_FILES, ...VOTER_FILES]
+export const SEED_FILES = [...REGISTRY_FILES, ...CAMPAIGN_FINANCE_FILES, ...VOTER_FILES]
 
 /** Resolve the public object URL for a key, given the Supabase project URL. */
 export function publicUrl(supabaseUrl, key) {

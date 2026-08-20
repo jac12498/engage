@@ -19,7 +19,7 @@ import path from "path"
 import "dotenv/config"
 import { createClient } from "@supabase/supabase-js"
 import * as tus from "tus-js-client"
-import { BUCKET, CAMPAIGN_FINANCE_FILES, VOTER_FILES } from "./data-manifest.mjs"
+import { BUCKET, REGISTRY_FILES, CAMPAIGN_FINANCE_FILES, VOTER_FILES } from "./data-manifest.mjs"
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -32,7 +32,7 @@ if (!SUPABASE_URL || !SERVICE_KEY) {
 }
 
 const includeVoters = process.argv.includes("--voters")
-const FILES = [...CAMPAIGN_FINANCE_FILES, ...(includeVoters ? VOTER_FILES : [])]
+const FILES = [...REGISTRY_FILES, ...CAMPAIGN_FINANCE_FILES, ...(includeVoters ? VOTER_FILES : [])]
 const ROOT = process.cwd()
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
