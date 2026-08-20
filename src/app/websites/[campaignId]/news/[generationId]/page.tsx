@@ -5,17 +5,16 @@ import type { CSSProperties } from "react"
 import { prisma } from "@/lib/prisma"
 import { CONTENT_TYPE_LABELS, type ContentType } from "@/lib/comms/prompts"
 import { WEBSITE_NEWS_TYPES } from "@/lib/website/blocks"
-import { formatBallotLine } from "@/lib/party"
 import { loadPublicSite, FONT_STACK, paragraphs } from "../../_render/site"
 
 export const dynamic = "force-dynamic"
 
-/** The published, website-appropriate generation for this campaign — or null. */
-async function loadArticle(campaignId: string, generationId: string) {
+/** A published, website-appropriate generation from any of the committee's campaigns. */
+async function loadArticle(committeeId: string, generationId: string) {
   return prisma.generation.findFirst({
     where: {
       id: generationId,
-      campaignId,
+      campaign: { candidate: { committeeId } },
       published: true,
       type: { in: WEBSITE_NEWS_TYPES as unknown as string[] },
     },
@@ -46,7 +45,6 @@ export default async function NewsDetailPage({
   ])
   if (!site || !site.published || !article) notFound()
 
-  const { campaign } = site
   const font = FONT_STACK[site.fontTheme] ?? FONT_STACK.classic
   const themeVars = {
     "--site-primary": site.primaryColor,
@@ -64,7 +62,7 @@ export default async function NewsDetailPage({
             className="text-lg font-bold"
             style={{ color: "var(--site-primary)" }}
           >
-            {campaign.candidateName}
+            {site.siteTitle}
           </Link>
           {site.donateUrl && (
             <a
@@ -96,23 +94,15 @@ export default async function NewsDetailPage({
         </div>
         <div className="mt-12">
           <Link href={`/websites/${campaignId}`} className="text-sm font-medium hover:underline" style={{ color: "var(--site-primary)" }}>
-            ← Back to {campaign.candidateName}
+            ← Back to {site.siteTitle}
           </Link>
         </div>
       </article>
 
       <footer style={{ backgroundColor: "var(--site-primary)" }} className="text-white/80">
         <div className="mx-auto max-w-5xl px-6 py-10 text-sm">
-          <p className="font-semibold text-white">
-            {campaign.candidateName} for {campaign.office}
-          </p>
-          <p className="mt-4 text-xs text-white/50">
-            Paid for by {campaign.committeeName || `${campaign.candidateName} for ${campaign.office}`}
-            {formatBallotLine(campaign.party, campaign.additionalParties)
-              ? ` · ${formatBallotLine(campaign.party, campaign.additionalParties)}`
-              : ""}
-            .
-          </p>
+          <p className="font-semibold text-white">{site.siteTitle}</p>
+          <p className="mt-4 text-xs text-white/50">Paid for by {site.paidForBy}.</p>
         </div>
       </footer>
     </div>

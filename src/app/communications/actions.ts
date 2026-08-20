@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import { getActiveContext } from "@/lib/context"
+import type { PermissionKey } from "@/lib/permissions"
 import { buildUserPrompt, isContentType } from "@/lib/comms/prompts"
 import { composeLeanSummary, type InterviewData } from "@/lib/comms/interview"
 
@@ -29,13 +30,16 @@ export async function saveGeneration(input: SaveGenerationInput): Promise<SaveRe
   if (!input.content?.trim()) return { ok: false, error: "There's nothing to save yet." }
 
   const ctx = await getActiveContext()
-  if (!ctx) return { ok: false, error: "You must be signed in." }
-  const campaign = ctx.campaign
-  if (!campaign) return { ok: false, error: "No campaign found." }
+  const savePerm: PermissionKey = input.id ? "ai-communications:update" : "ai-communications:create"
+  if (!ctx || !ctx.permissions.has(savePerm)) {
+    return { ok: false, error: "You don't have permission to save communications." }
+  }
+  const { campaign, candidate } = ctx
+  if (!campaign || !candidate) return { ok: false, error: "No campaign found." }
 
   // Reconstruct the instruction for a faithful record of what produced this.
   const topic = input.topicLabel || input.newsHook || ""
-  const prompt = buildUserPrompt(input.type, campaign.candidateName, topic, "")
+  const prompt = buildUserPrompt(input.type, candidate.candidateName, topic, "")
 
   // Persist the refine history. Fall back to a single v1 if none was supplied.
   const versions =
@@ -106,7 +110,7 @@ export async function getGenerationForEdit(id: string): Promise<
     }
   | { ok: false; error: string }
 > {
-  const campaignId = await requireCampaignId()
+  const campaignId = await requireCampaignId("ai-communications:update")
   if (!campaignId) return { ok: false, error: "Not signed in." }
 
   const g = await prisma.generation.findFirst({
@@ -136,7 +140,7 @@ export async function getGenerationForEdit(id: string): Promise<
 }
 
 export async function deleteGeneration(id: string): Promise<{ ok: boolean }> {
-  const campaignId = await requireCampaignId()
+  const campaignId = await requireCampaignId("ai-communications:update")
   if (!campaignId) return { ok: false }
 
   // Scope the delete to the active campaign.
@@ -147,9 +151,19 @@ export async function deleteGeneration(id: string): Promise<{ ok: boolean }> {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-async function requireCampaignId(): Promise<string | null> {
+async function requireCampaignId(perm: PermissionKey): Promise<string | null> {
   const ctx = await getActiveContext()
-  return ctx?.campaign?.id ?? null
+  if (!ctx?.campaign) return null
+  if (!ctx.permissions.has(perm)) return null
+  return ctx.campaign.id
+}
+
+/** The active candidate id (person-profile updates target the Candidate, not a run). */
+async function requireCandidateId(perm: PermissionKey): Promise<string | null> {
+  const ctx = await getActiveContext()
+  if (!ctx?.candidate) return null
+  if (!ctx.permissions.has(perm)) return null
+  return ctx.candidate.id
 }
 
 // ─── Candidate interview / profile ───────────────────────────────────────────
@@ -176,8 +190,8 @@ const PROFILE_KEYS: (keyof ProfileInput)[] = [
 export async function updateCampaignProfile(
   input: ProfileInput
 ): Promise<{ ok: boolean; error?: string }> {
-  const campaignId = await requireCampaignId()
-  if (!campaignId) return { ok: false, error: "Not signed in." }
+  const candidateId = await requireCandidateId("ai-communications:update")
+  if (!candidateId) return { ok: false, error: "Not signed in." }
 
   // Whitelist + normalize (empty string → null).
   const data: Record<string, string | null> = {}
@@ -186,7 +200,7 @@ export async function updateCampaignProfile(
   }
   if (Object.keys(data).length === 0) return { ok: true }
 
-  await prisma.campaign.update({ where: { id: campaignId }, data })
+  await prisma.candidate.update({ where: { id: candidateId }, data })
   revalidatePath("/communications")
   return { ok: true }
 }
@@ -200,11 +214,11 @@ export async function saveInterview(input: {
   data: InterviewData
   coreValues?: string
 }): Promise<{ ok: boolean; error?: string }> {
-  const campaignId = await requireCampaignId()
-  if (!campaignId) return { ok: false, error: "Not signed in." }
+  const candidateId = await requireCandidateId("ai-communications:update")
+  if (!candidateId) return { ok: false, error: "Not signed in." }
 
-  await prisma.campaign.update({
-    where: { id: campaignId },
+  await prisma.candidate.update({
+    where: { id: candidateId },
     data: {
       interview: input.data as object,
       politicalLean: composeLeanSummary(input.data) || null,
@@ -228,7 +242,7 @@ export interface TopicInput {
 }
 
 export async function saveTopic(input: TopicInput): Promise<{ ok: boolean; error?: string }> {
-  const campaignId = await requireCampaignId()
+  const campaignId = await requireCampaignId("ai-communications:update")
   if (!campaignId) return { ok: false, error: "Not signed in." }
   if (!input.title.trim()) return { ok: false, error: "A title is required." }
 
@@ -251,7 +265,7 @@ export async function saveTopic(input: TopicInput): Promise<{ ok: boolean; error
 }
 
 export async function deleteTopic(id: string): Promise<{ ok: boolean }> {
-  const campaignId = await requireCampaignId()
+  const campaignId = await requireCampaignId("ai-communications:update")
   if (!campaignId) return { ok: false }
   await prisma.topic.deleteMany({ where: { id, campaignId } })
   revalidatePath("/communications/topics")
@@ -278,7 +292,7 @@ const CONTEXT_TYPES = new Set(["note", "position", "reference"])
 export async function saveContextItem(
   input: ContextItemInput
 ): Promise<{ ok: boolean; error?: string }> {
-  const campaignId = await requireCampaignId()
+  const campaignId = await requireCampaignId("ai-communications:update")
   if (!campaignId) return { ok: false, error: "Not signed in." }
   if (!input.body.trim()) return { ok: false, error: "Context text is required." }
 
@@ -322,7 +336,7 @@ export async function saveContextItem(
 }
 
 export async function deleteContextItem(id: string): Promise<{ ok: boolean }> {
-  const campaignId = await requireCampaignId()
+  const campaignId = await requireCampaignId("ai-communications:update")
   if (!campaignId) return { ok: false }
   await prisma.contextItem.deleteMany({ where: { id, campaignId } })
   revalidatePath("/communications/context")

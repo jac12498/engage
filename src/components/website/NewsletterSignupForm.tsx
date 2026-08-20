@@ -6,11 +6,11 @@ const inputCls =
   "w-full rounded-lg border border-black/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-black/30"
 
 export function NewsletterSignupForm({
-  campaignId,
+  committeeId,
   accent,
   buttonLabel,
 }: {
-  campaignId: string
+  committeeId: string
   accent: string
   buttonLabel?: string
 }) {
@@ -26,7 +26,7 @@ export function NewsletterSignupForm({
       const res = await fetch("/api/website/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ campaignId, email, name }),
+        body: JSON.stringify({ committeeId, email, name }),
       })
       setStatus(res.ok ? "done" : "error")
     } catch {

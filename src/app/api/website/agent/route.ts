@@ -1,6 +1,7 @@
 import { revalidatePath } from "next/cache"
 import type Anthropic from "@anthropic-ai/sdk"
 import { getActiveContext } from "@/lib/context"
+import { prisma } from "@/lib/prisma"
 import { anthropic } from "@/lib/comms/anthropic"
 import { resolveModel, toPlanId } from "@/lib/entitlements"
 import { consumeWebsiteEdit } from "@/lib/comms/usage"
@@ -19,21 +20,32 @@ interface ClientTurn {
   text: string
 }
 
+interface PromptCandidate {
+  candidateName: string
+  office: string
+  party: string | null
+  additionalParties: string[]
+  state: string | null
+}
+
 function systemPrompt(
-  campaign: {
-    candidateName: string
-    office: string
-    party: string | null
-    additionalParties: string[]
-    state: string | null
-  },
+  committeeName: string,
+  candidates: PromptCandidate[],
   snapshot: unknown
 ): string {
-  return `You are the conversational website builder for a political candidate's campaign site. You edit the site by calling tools — never claim to have made a change you didn't make with a tool.
+  const roster = candidates
+    .map((c) => {
+      const ballot = formatBallotLine(c.party, c.additionalParties)
+      return `- ${c.candidateName} — ${c.office}${ballot ? ` (${ballot})` : ""}${c.state ? `, ${c.state}` : ""}`
+    })
+    .join("\n")
+  const single = candidates.length === 1
+  return `You are the conversational website builder for a political ${single ? "candidate's campaign" : "committee's"} site. You edit the site by calling tools — never claim to have made a change you didn't make with a tool.
 
-CANDIDATE
-Name: ${campaign.candidateName}
-Office: ${campaign.office}${formatBallotLine(campaign.party, campaign.additionalParties) ? `\nParty: ${formatBallotLine(campaign.party, campaign.additionalParties)}` : ""}${campaign.state ? `\nState: ${campaign.state}` : ""}
+COMMITTEE
+Name: ${committeeName}
+${single ? "CANDIDATE" : "CANDIDATES"}
+${roster || "(no candidates yet)"}
 
 HOW THE SITE WORKS
 The site is a set of PAGES, each an ordered list of BLOCKS. You change content by adding, editing, moving, and deleting blocks, and by creating/updating pages. Every block has a fixed set of props for its type. To edit a block you replace its full props object, so preserve fields you don't intend to change.
@@ -73,11 +85,31 @@ export async function POST(req: Request) {
 async function handlePost(req: Request) {
   const ctx = await getActiveContext()
   if (!ctx) return new Response("Unauthorized", { status: 401 })
-  const { committee, campaign } = ctx
-  if (!campaign) return new Response("No campaign", { status: 400 })
+  const { committee } = ctx
 
-  const snapshot0 = await getSiteSnapshot(campaign.id)
+  const snapshot0 = await getSiteSnapshot(committee.id)
   if (!snapshot0) return new Response("No website yet", { status: 400 })
+
+  // The committee's candidates + their latest run, for the builder's context.
+  const roster = await prisma.candidate.findMany({
+    where: { committeeId: committee.id },
+    orderBy: { createdAt: "asc" },
+    select: {
+      candidateName: true,
+      campaigns: {
+        orderBy: { cycle: "desc" },
+        take: 1,
+        select: { office: true, party: true, additionalParties: true, state: true },
+      },
+    },
+  })
+  const promptCandidates: PromptCandidate[] = roster.map((c) => ({
+    candidateName: c.candidateName,
+    office: c.campaigns[0]?.office ?? "",
+    party: c.campaigns[0]?.party ?? null,
+    additionalParties: c.campaigns[0]?.additionalParties ?? [],
+    state: c.campaigns[0]?.state ?? null,
+  }))
 
   const body = (await req.json().catch(() => ({}))) as { messages?: ClientTurn[]; model?: string }
   const turns = Array.isArray(body.messages) ? body.messages : []
@@ -106,7 +138,7 @@ async function handlePost(req: Request) {
       const send = (o: unknown) => controller.enqueue(line(o))
       let mutated = false
       try {
-        const system = systemPrompt(campaign, snapshot0)
+        const system = systemPrompt(committee.name, promptCandidates, snapshot0)
 
         for (let turn = 0; turn < MAX_TURNS; turn++) {
           const res = await anthropic.messages.create({
@@ -135,7 +167,7 @@ async function handlePost(req: Request) {
 
           const results: Anthropic.ToolResultBlockParam[] = []
           for (const tu of toolUses) {
-            const outcome = await executeTool(campaign.id, tu.name, (tu.input ?? {}) as Record<string, unknown>)
+            const outcome = await executeTool(committee.id, tu.name, (tu.input ?? {}) as Record<string, unknown>)
             if (outcome.mutated) mutated = true
             if (outcome.summary) send({ type: "tool", summary: outcome.summary })
             results.push({
@@ -154,7 +186,7 @@ async function handlePost(req: Request) {
         if (mutated) {
           revalidatePath("/website")
           revalidatePath("/website/preview")
-          revalidatePath(`/websites/${campaign.id}`)
+          revalidatePath(`/websites/${committee.id}`)
         }
         send({ type: "done", used: usage.used, limit: usage.limit, mutated })
       } catch (e) {

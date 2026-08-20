@@ -8,12 +8,10 @@ import { Button } from "@/components/ui/button"
 import { generateSite } from "@/app/website/actions"
 
 export function CreateSitePanel({
-  candidateName,
-  office,
+  committeeName,
   thinProfile,
 }: {
-  candidateName: string
-  office: string
+  committeeName: string
   thinProfile: boolean
 }) {
   const router = useRouter()
@@ -32,9 +30,9 @@ export function CreateSitePanel({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-[#1a1a2e]">Candidate Website</h1>
+        <h1 className="text-2xl font-bold text-[#1a1a2e]">Committee Website</h1>
         <p className="mt-1 text-muted-foreground">
-          A clean, mobile-ready campaign site — drafted from everything you&apos;ve already told us.
+          A clean, mobile-ready site for your committee — drafted from your candidates&apos; profiles.
         </p>
       </div>
 
@@ -43,11 +41,11 @@ export function CreateSitePanel({
           <Globe className="h-7 w-7" />
         </div>
         <h2 className="mt-5 text-lg font-semibold text-[#1a1a2e]">
-          Build {candidateName}&apos;s campaign website
+          Build {committeeName}&apos;s website
         </h2>
         <p className="mx-auto mt-1.5 max-w-md text-sm text-muted-foreground">
-          We&apos;ll draft your homepage, an About section, your issues, and a volunteer signup — using
-          your profile, values, and positions for {office}. You can edit everything before it goes live.
+          We&apos;ll draft a homepage, an About section, your issues, a section featuring your
+          candidates, and a volunteer signup. You can edit everything before it goes live.
         </p>
 
         {thinProfile && (

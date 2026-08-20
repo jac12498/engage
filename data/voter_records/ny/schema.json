@@ -1,0 +1,618 @@
+{
+  "state": "NY",
+  "description": "New York State Board of Elections voter file format",
+  "version": "2026",
+  "hasHeaders": false,
+  "delimiter": ",",
+  "encoding": "utf-8",
+  
+  "columns": [
+    {
+      "index": 0,
+      "name": "last_name",
+      "type": "VARCHAR",
+      "description": "Voter last name",
+      "required": true
+    },
+    {
+      "index": 1,
+      "name": "first_name",
+      "type": "VARCHAR",
+      "description": "Voter first name",
+      "required": true
+    },
+    {
+      "index": 2,
+      "name": "middle_name",
+      "type": "VARCHAR",
+      "description": "Voter middle name or initial",
+      "required": false
+    },
+    {
+      "index": 3,
+      "name": "name_suffix",
+      "type": "VARCHAR",
+      "description": "Name suffix (Jr, Sr, III, etc.)",
+      "required": false
+    },
+    {
+      "index": 4,
+      "name": "residence_address_number",
+      "type": "VARCHAR",
+      "description": "Residence house number",
+      "required": false
+    },
+    {
+      "index": 5,
+      "name": "residence_fractional_address",
+      "type": "VARCHAR",
+      "description": "Residence fractional address",
+      "required": false
+    },
+    {
+      "index": 6,
+      "name": "residence_pre_street_direction",
+      "type": "VARCHAR",
+      "description": "Residence pre-street directional (N, S, E, W)",
+      "required": false
+    },
+    {
+      "index": 7,
+      "name": "residence_street",
+      "type": "VARCHAR",
+      "description": "Street name",
+      "required": false
+    },
+    {
+      "index": 8,
+      "name": "residence_post_direction",
+      "type": "VARCHAR",
+      "description": "Street post-directional (N, S, E, W)",
+      "required": false
+    },
+    {
+      "index": 9,
+      "name": "residence_apt_type",
+      "type": "VARCHAR",
+      "description": "Apartment type (APT, UNIT, FL, etc.)",
+      "required": false
+    },
+    {
+      "index": 10,
+      "name": "residence_apt_code",
+      "type": "VARCHAR",
+      "description": "Apartment/unit number",
+      "required": false
+    },
+    {
+      "index": 11,
+      "name": "residence_address_nonstandard",
+      "type": "VARCHAR",
+      "description": "Non-standard address information",
+      "required": false
+    },
+    {
+      "index": 12,
+      "name": "residence_city",
+      "type": "VARCHAR",
+      "description": "City name",
+      "required": true
+    },
+    {
+      "index": 13,
+      "name": "residence_zip5",
+      "type": "VARCHAR",
+      "description": "5-digit ZIP code",
+      "required": true
+    },
+    {
+      "index": 14,
+      "name": "residence_zip4",
+      "type": "VARCHAR",
+      "description": "ZIP+4 extension",
+      "required": false
+    },
+    {
+      "index": 15,
+      "name": "mailing_address_1",
+      "type": "VARCHAR",
+      "description": "Mailing address line 1",
+      "required": false
+    },
+    {
+      "index": 16,
+      "name": "mailing_address_2",
+      "type": "VARCHAR",
+      "description": "Mailing address line 2",
+      "required": false
+    },
+    {
+      "index": 17,
+      "name": "mailing_address_3",
+      "type": "VARCHAR",
+      "description": "Mailing address line 3",
+      "required": false
+    },
+    {
+      "index": 18,
+      "name": "mailing_address_4",
+      "type": "VARCHAR",
+      "description": "Mailing address line 4",
+      "required": false
+    },
+    {
+      "index": 19,
+      "name": "dob",
+      "type": "DATE",
+      "description": "Date of birth (YYYYMMDD format)",
+      "required": true,
+      "format": "YYYYMMDD"
+    },
+    {
+      "index": 20,
+      "name": "gender",
+      "type": "VARCHAR",
+      "description": "Gender code",
+      "required": false,
+      "valueMappings": {
+        "M": "Male",
+        "F": "Female",
+        "U": "Unknown/Undisclosed",
+        "I": "Intersex",
+        "X": "Undisclosed"
+      }
+    },
+    {
+      "index": 21,
+      "name": "registration_party",
+      "type": "VARCHAR",
+      "description": "Enrolled party affiliation",
+      "required": true,
+      "valueMappings": {
+        "DEM": "Democratic",
+        "REP": "Republican",
+        "CON": "Conservative",
+        "WOR": "Working Families",
+        "OTH": "Other",
+        "BLK": "Blank/No Party"
+      }
+    },
+    {
+      "index": 22,
+      "name": "registration_other_party",
+      "type": "VARCHAR",
+      "description": "Name of Party of Voter checked 'Other' for registration_party",
+      "required": false,
+      "valueMappings": {
+        "GRE": "Green",
+        "LBT": "Libertarian",
+        "SAM": "Serve America Movement",
+        "IND": "Independence",
+        "WEP": "Women's Equality",
+        "REF": "Reform",
+        "OTH": "Other"
+      }
+    },
+    {
+      "index": 23,
+      "name": "county_code",
+      "type": "VARCHAR",
+      "description": "County of residence (BOE 2-digit code)",
+      "required": true,
+      "valueMappings": {
+        "01": "Albany",
+        "02": "Allegany",
+        "03": "Bronx",
+        "04": "Broome",
+        "05": "Cattaraugus",
+        "06": "Cayuga",
+        "07": "Chautauqua",
+        "08": "Chemung",
+        "09": "Chenango",
+        "10": "Clinton",
+        "11": "Columbia",
+        "12": "Cortland",
+        "13": "Delaware",
+        "14": "Dutchess",
+        "15": "Erie",
+        "16": "Essex",
+        "17": "Franklin",
+        "18": "Fulton",
+        "19": "Genesee",
+        "20": "Greene",
+        "21": "Hamilton",
+        "22": "Herkimer",
+        "23": "Jefferson",
+        "24": "Kings (Brooklyn)",
+        "25": "Lewis",
+        "26": "Livingston",
+        "27": "Madison",
+        "28": "Monroe",
+        "29": "Montgomery",
+        "30": "Nassau",
+        "31": "New York (Manhattan)",
+        "32": "Niagara",
+        "33": "Oneida",
+        "34": "Onondaga",
+        "35": "Ontario",
+        "36": "Orange",
+        "37": "Orleans",
+        "38": "Oswego",
+        "39": "Otsego",
+        "40": "Putnam",
+        "41": "Queens",
+        "42": "Rensselaer",
+        "43": "Richmond (Staten Island)",
+        "44": "Rockland",
+        "45": "Saratoga",
+        "46": "Schenectady",
+        "47": "Schoharie",
+        "48": "Schuyler",
+        "49": "Seneca",
+        "50": "St. Lawrence",
+        "51": "Steuben",
+        "52": "Suffolk",
+        "53": "Sullivan",
+        "54": "Tioga",
+        "55": "Tompkins",
+        "56": "Ulster",
+        "57": "Warren",
+        "58": "Washington",
+        "59": "Wayne",
+        "60": "Westchester",
+        "61": "Wyoming",
+        "62": "Yates"
+      }        
+    },
+    {
+      "index": 24,
+      "name": "district_ed",
+      "type": "VARCHAR",
+      "description": "Election district",
+      "required": false
+    },
+    {
+      "index": 25,
+      "name": "district_ld",
+      "type": "VARCHAR",
+      "description": "Legislative district",
+      "required": false
+    },
+    {
+      "index": 26,
+      "name": "district_town",
+      "type": "VARCHAR",
+      "description": "Town code",
+      "required": false
+    },
+    {
+      "index": 27,
+      "name": "district_ward",
+      "type": "VARCHAR",
+      "description": "Ward",
+      "required": false
+    },
+    {
+      "index": 28,
+      "name": "district_cd",
+      "type": "VARCHAR",
+      "description": "Congressional district",
+      "required": false
+    },
+    {
+      "index": 29,
+      "name": "district_sd",
+      "type": "VARCHAR",
+      "description": "State Senate district",
+      "required": false
+    },
+    {
+      "index": 30,
+      "name": "district_ad",
+      "type": "VARCHAR",
+      "description": "State Assembly district",
+      "required": false
+    },
+    {
+      "index": 31,
+      "name": "last_voting_date",
+      "type": "DATE",
+      "description": "Date of last vote (YYYYMMDD format)",
+      "required": false,
+      "format": "YYYYMMDD"
+    },
+    {
+      "index": 32,
+      "name": "last_voting_year",
+      "type": "VARCHAR",
+      "description": "Year of last vote",
+      "required": false
+    },
+    {
+      "index": 33,
+      "name": "last_vote_county_code",
+      "type": "VARCHAR",
+      "description": "County code where last vote was cast",
+      "required": false,
+      "valueMappings": {
+        "01": "Albany",
+        "02": "Allegany",
+        "03": "Bronx",
+        "04": "Broome",
+        "05": "Cattaraugus",
+        "06": "Cayuga",
+        "07": "Chautauqua",
+        "08": "Chemung",
+        "09": "Chenango",
+        "10": "Clinton",
+        "11": "Columbia",
+        "12": "Cortland",
+        "13": "Delaware",
+        "14": "Dutchess",
+        "15": "Erie",
+        "16": "Essex",
+        "17": "Franklin",
+        "18": "Fulton",
+        "19": "Genesee",
+        "20": "Greene",
+        "21": "Hamilton",
+        "22": "Herkimer",
+        "23": "Jefferson",
+        "24": "Kings (Brooklyn)",
+        "25": "Lewis",
+        "26": "Livingston",
+        "27": "Madison",
+        "28": "Monroe",
+        "29": "Montgomery",
+        "30": "Nassau",
+        "31": "New York (Manhattan)",
+        "32": "Niagara",
+        "33": "Oneida",
+        "34": "Onondaga",
+        "35": "Ontario",
+        "36": "Orange",
+        "37": "Orleans",
+        "38": "Oswego",
+        "39": "Otsego",
+        "40": "Putnam",
+        "41": "Queens",
+        "42": "Rensselaer",
+        "43": "Richmond (Staten Island)",
+        "44": "Rockland",
+        "45": "Saratoga",
+        "46": "Schenectady",
+        "47": "Schoharie",
+        "48": "Schuyler",
+        "49": "Seneca",
+        "50": "St. Lawrence",
+        "51": "Steuben",
+        "52": "Suffolk",
+        "53": "Sullivan",
+        "54": "Tioga",
+        "55": "Tompkins",
+        "56": "Ulster",
+        "57": "Warren",
+        "58": "Washington",
+        "59": "Wayne",
+        "60": "Westchester",
+        "61": "Wyoming",
+        "62": "Yates"
+      }        
+    },
+    {
+      "index": 34,
+      "name": "last_registered_address",
+      "type": "VARCHAR",
+      "description": "Last registered address",
+      "required": false
+    },
+    {
+      "index": 35,
+      "name": "last_registered_name",
+      "type": "VARCHAR",
+      "description": "Last registered name",
+      "required": false
+    },
+    {
+      "index": 36,
+      "name": "county_registration_number",
+      "type": "VARCHAR",
+      "description": "County registration number",
+      "required": true
+    },
+    {
+      "index": 37,
+      "name": "registration_date",
+      "type": "DATE",
+      "description": "Original registration date (YYYYMMDD format)",
+      "required": true,
+      "format": "YYYYMMDD"
+    },
+    {
+      "index": 38,
+      "name": "registration_source",
+      "type": "VARCHAR",
+      "description": "Registration source code",
+      "required": false,
+      "valueMappings": {
+        "AGCY": "Agency-based registration",
+        "CBOE": "County Board of Elections",
+        "DMV": "Department of Motor Vehicles",
+        "LOCALREG": "Local Registrar",
+        "MAIL": "Mail-in registration",
+        "SCH": "School"
+      }
+    },
+    {
+      "index": 39,
+      "name": "registration_id_required",
+      "type": "VARCHAR",
+      "description": "ID requirement flag",
+      "required": false,
+      "valueMappings": {
+        "Y": "Yes",
+        "N": "No"
+      }
+    },
+    {
+      "index": 40,
+      "name": "registration_id_met",
+      "type": "VARCHAR",
+      "description": "ID requirement met flag",
+      "required": false,
+      "valueMappings": {
+        "Y": "Yes",
+        "N": "No"
+      }
+    },
+    {
+      "index": 41,
+      "name": "registration_status",
+      "type": "VARCHAR",
+      "description": "Registration status code",
+      "required": true,
+      "valueMappings": {
+        "A": "Active",
+        "AM": "Active Military",
+        "AF": "Active Special Federal",
+        "AP": "Active Special Presidential",
+        "AU": "Active UOCAVA",
+        "I": "Inactive",
+        "P": "Purged",
+        "17": "17 Year Old (Pre-registered)"
+      }
+    },
+    {
+      "index": 42,
+      "name": "status_reason_code",
+      "type": "VARCHAR",
+      "description": "Reason for current registration status",
+      "required": true,
+      "valueMappings": {
+        "ADJ-INCOMP": "Adjudicated Incompetent",
+        "DEATH": "Deceased",
+        "DUPLICATE": "Duplicate Registration",
+        "FELON": "Felony Conviction",
+        "MAIL-CHECK": "Mail Check",
+        "MOVED": "Moved out of county",
+        "NCOA": "National Change of Address",
+        "NVRA": "Cancellations per interstate notices",
+        "RETURN-MAIL": "Returned Mail",
+        "VOTER-REQ": "Voter Requested"
+      }
+    },
+    {
+      "index": 43,
+      "name": "registration_inactive_date",
+      "type": "VARCHAR",
+      "description": "Date voter became inactive (if applicable)",
+      "required": false
+    },
+    {
+      "index": 44,
+      "name": "registration_purge_date",
+      "type": "VARCHAR",
+      "description": "Date voter was purged (if applicable)",
+      "required": false
+    },
+    {
+      "index": 45,
+      "name": "state_voter_id",
+      "type": "VARCHAR",
+      "description": "Statewide unique voter ID number",
+      "required": true
+    },
+    {
+      "index": 46,
+      "name": "voting_history_raw",
+      "type": "VARCHAR",
+      "description": "Semicolon-separated voting history with vote methods in parentheses",
+      "required": false,
+      "format": "ELECTIONCODE(METHOD);ELECTIONCODE(METHOD);...",
+      "example": "2024GE(A);2022GE(E);2020PP(M);2018GE(P)",
+      "notes": [
+        "Each election code is followed by vote method in parentheses",
+        "Semicolons separate individual election events",
+        "Will be parsed into normalized voting_history.parquet file",
+        "Common vote methods: A=Absentee, E=Early, M=Mail, P=In Person, X=Affidavit"
+      ]
+    }
+  ],
+  
+  "prismaFieldMapping": {
+    "id": "state_voter_id",
+    "stateVoterId": "state_voter_id",
+    "countyVoterId": "county_registration_number",
+    "lastName": "last_name",
+    "firstName": "first_name",
+    "middleName": "middle_name",
+    "nameSuffix": "name_suffix",
+    "previousName": "last_registered_name",
+    "residencePreCode": "residence_pre_street_direction",
+    "residenceAddressNumber": "residence_address_number",
+    "residenceHalfCode": "residence_fractional_address",
+    "residenceStreet": "residence_street",
+    "residencePostDirection": "residence_post_direction",
+    "residenceAptType": "residence_apt_type",
+    "residenceAptCode": "residence_apt_code",
+    "residenceAddressNonstandard": "residence_address_nonstandard",
+    "residenceCity": "residence_city",
+    "residenceState": "residence_state",
+    "residenceZip5": "residence_zip5",
+    "residenceZip4": "residence_zip4",
+    "residenceLat": "residence_lat",
+    "residenceLng": "residence_lng",
+    "mailingAddress1": "mailing_address_1",
+    "mailingAddress2": "mailing_address_2",
+    "mailingAddress3": "mailing_address_3",
+    "mailingAddress4": "mailing_address_4",
+    "previousResidenceAddress": "last_registered_address",
+    "dob": "dob",
+    "gender": "gender",
+    "registrationDate": "registration_date",
+    "registrationParty": "registration_party",
+    "registrationOtherParty": "registration_other_party",
+    "registrationStatus": "registration_status",
+    "registrationReasonCode": "status_reason_code",
+    "registrationSource": "registration_source",
+    "registrationIdRequired": "registration_id_required",
+    "registrationIdMet": "registration_id_met",
+    "registrationInactiveDate": "registration_inactive_date",
+    "districtCountyCode": "county_code",
+    "districtEd": "district_ed",
+    "districtLd": "district_ld",
+    "districtMunicipality": "district_town",
+    "districtWard": "district_ward",
+    "districtCd": "district_cd",
+    "districtSd": "district_sd",
+    "districtAd": "district_ad",
+    "districtState": "residence_state",
+    "previousCountyCode": "last_vote_county_code",
+    "lastVotingDate": "last_voting_date",
+    "phoneNumber": "phone_number",
+    "email": "email_address"
+  },
+  
+  "voterIdFormat": {
+    "type": "prefixed_numeric",
+    "statePrefix": "NY",
+    "format": "NY000000000000000000",
+    "length": 20,
+    "example": "NY000000000034684935",
+    "description": "NY state prefix followed by 18-digit zero-padded voter ID",
+    "uniqueAcrossStates": true,
+    "notes": [
+      "Voter IDs are globally unique due to state prefix",
+      "Numeric portion is zero-padded to 18 digits",
+      "Total length is always 20 characters"
+    ]
+  },
+  
+  "notes": [
+    "NY State BOE does not provide phone numbers or email addresses in the voter file",
+    "Date fields are typically in YYYYMMDD format without separators",
+    "Some counties may have additional columns at the end - these are county-specific",
+    "Empty/null values are typically represented as empty strings between commas",
+    "prismaFieldMapping maps Prisma Voter model fields (camelCase) to Parquet columns (snake_case)"
+  ]
+}

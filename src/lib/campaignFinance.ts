@@ -39,6 +39,35 @@ export const NY_COMMITTEE_COLUMNS = {
   zip: 16,
 } as const
 
+// NYSBOE disclosure (contribution) headerless column positions → fields. 54 columns
+// (column00..column53); only the mapped ones are listed (the rest are unused/unknown).
+// This is the code-side source of truth the contact↔donation matching uses; the human
+// reference lives in data/campaign_finance/ny/disclosures/schema.json. Contributions
+// (money given) are schedule "A" (see scheduleCode); filter on that when matching.
+export const NY_DISCLOSURE_COLUMNS = {
+  filerId: 0, // committee/filer id — joins to committees.column00
+  committeeName: 2,
+  electionYear: 3,
+  electionType: 4,
+  disclosurePeriod: 6, // A–M period code
+  filingCategory: 9, // Itemized | No Activity
+  scheduleCode: 10, // "A" = Monetary Contributions/Receipts (the donations)
+  scheduleDesc: 11,
+  contributionDate: 15,
+  contributorType: 17, // Individual | Political Committee | ...
+  organizationName: 24, // set when the contributor is an org; else use 25–27
+  donorFirstName: 25,
+  donorMiddleName: 26,
+  donorLastName: 27,
+  street: 28,
+  city: 29,
+  state: 30,
+  zip: 31,
+  amount: 36, // stored as text in the parquet — CAST(... AS DOUBLE) to sum
+  employer: 52,
+  occupation: 53,
+} as const
+
 export type CampaignFinanceCommittee = {
   routeId: string
   state: string
@@ -166,6 +195,60 @@ export async function fetchCommitteeByFilerId(
       addressState: clean(r.addressState),
       zip: clean(r.zip),
     }
+  } finally {
+    conn.closeSync()
+  }
+}
+
+export type CampaignFinanceCommitteeMatch = {
+  committeeId: string
+  committeeName: string
+  committeeType: string | null // raw NYSBOE label
+  filerType: string | null
+  status: string | null
+  city: string | null
+  addressState: string | null
+}
+
+/**
+ * Search the committee registry by name (for people who don't know their Filer ID).
+ * Case-insensitive substring match on the committee name; ACTIVE committees first,
+ * then by name. Returns [] when the state is unsupported, the file is missing, or the
+ * query is too short. Only NY is supported today.
+ */
+export async function searchCommitteesByName(
+  state: string,
+  query: string,
+  limit = 25
+): Promise<CampaignFinanceCommitteeMatch[]> {
+  const stateCode = state.toLowerCase()
+  const q = query.trim()
+  if (q.length < 3) return []
+
+  const relation = await committeeRegistryRelation(stateCode)
+  if (!relation) return []
+
+  const db = await getDuckDBInstance()
+  const conn = await db.connect()
+  try {
+    const sql =
+      `SELECT TRIM(column00,'"') AS committeeId, TRIM(column01,'"') AS committeeName, ` +
+      `TRIM(column02,'"') AS filerType, TRIM(column04,'"') AS status, TRIM(column05,'"') AS committeeType, ` +
+      `TRIM(column14,'"') AS city, TRIM(column15,'"') AS addressState ` +
+      `FROM ${relation} ` +
+      `WHERE UPPER(TRIM(column01,'"')) LIKE UPPER(${sqlString("%" + q + "%")}) ` +
+      `AND NULLIF(TRIM(column00,'"'), '') IS NOT NULL ` +
+      `ORDER BY (UPPER(TRIM(column04,'"')) = 'ACTIVE') DESC, committeeName LIMIT ${limit}`
+    const rows = (await conn.runAndReadAll(sql)).getRowObjects() as Record<string, unknown>[]
+    return rows.map((r) => ({
+      committeeId: clean(r.committeeId) ?? "",
+      committeeName: clean(r.committeeName) ?? "Unknown Committee",
+      committeeType: clean(r.committeeType),
+      filerType: clean(r.filerType),
+      status: clean(r.status),
+      city: clean(r.city),
+      addressState: clean(r.addressState),
+    }))
   } finally {
     conn.closeSync()
   }

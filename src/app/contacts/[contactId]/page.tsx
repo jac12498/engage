@@ -1,8 +1,11 @@
 import { notFound } from "next/navigation"
 import { prisma } from "@/lib/prisma"
-import { requireCommittee } from "@/lib/context"
+import { requirePrivilege } from "@/lib/context"
 import { ContactDetail } from "@/components/contacts/ContactDetail"
 import type { ContactRow } from "@/components/contacts/ContactsManager"
+import { getVoterById, getVotingHistory, voterFileAvailable, type VoterRecord, type VotingHistory } from "@/lib/voters"
+import { donationsSearchable } from "@/lib/donations"
+import type { ContactDonationRow } from "@/components/contacts/DonationsCard"
 
 export const dynamic = "force-dynamic"
 
@@ -12,7 +15,7 @@ export default async function ContactDetailPage({
   params: Promise<{ contactId: string }>
 }) {
   const { contactId } = await params
-  const { committee } = await requireCommittee()
+  const { committee, permissions } = await requirePrivilege("contacts:read")
 
   const tags = await prisma.tag.findMany({
     where: { committeeId: committee.id },
@@ -28,6 +31,7 @@ export default async function ContactDetailPage({
       addresses: { orderBy: { order: "asc" } },
       contactNotes: { orderBy: { createdAt: "desc" } },
       contactTags: { include: { tag: true } },
+      donations: { orderBy: { createdAt: "desc" } },
     },
   })
   if (!c) notFound()
@@ -61,5 +65,38 @@ export default async function ContactDetailPage({
     })),
   }
 
-  return <ContactDetail contact={contact} allTags={tags.map((t) => t.name)} />
+  // Linked voter record (read from the voter parquets; degrades gracefully if absent).
+  const voterAvailable = voterFileAvailable("ny")
+  let voter: VoterRecord | null = null
+  let votingHistory: VotingHistory | null = null
+  if (c.stateVoterId && c.voterState) {
+    voter = await getVoterById(c.voterState, c.stateVoterId)
+    if (voter) votingHistory = await getVotingHistory(c.voterState, c.stateVoterId)
+  }
+
+  const donations: ContactDonationRow[] = c.donations.map((d) => ({
+    id: d.id,
+    source: d.source === "fec" ? "fec" : "ny",
+    refKey: d.refKey,
+    donorName: d.donorName,
+    recipient: d.recipient,
+    amount: d.amount,
+    donationDate: d.donationDate,
+    cycle: d.cycle,
+    city: d.city,
+    state: d.state,
+  }))
+
+  return (
+    <ContactDetail
+      contact={contact}
+      allTags={tags.map((t) => t.name)}
+      voter={voter}
+      votingHistory={votingHistory}
+      voterAvailable={voterAvailable}
+      canEditContacts={permissions.has("contacts:update")}
+      donations={donations}
+      donationsSearchable={donationsSearchable()}
+    />
+  )
 }

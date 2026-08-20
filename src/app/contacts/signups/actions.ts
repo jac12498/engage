@@ -2,22 +2,23 @@
 
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
-import { getActiveContext, roleAtLeast, type Role } from "@/lib/context"
+import { getActiveContext } from "@/lib/context"
+import type { PermissionKey } from "@/lib/permissions"
 
 export type SignupResult = { ok: true; contactId?: string } | { ok: false; error: string }
 
-/** Resolve the active committee id, or null (optionally requiring a role). */
-async function requireCommitteeId(min: Role = "viewer"): Promise<string | null> {
+/** Resolve the active committee id, requiring a specific privilege, or null. */
+async function requireCommitteeIdFor(perm: PermissionKey): Promise<string | null> {
   const ctx = await getActiveContext()
   if (!ctx) return null
-  if (!roleAtLeast(ctx.role, min)) return null
+  if (!ctx.permissions.has(perm)) return null
   return ctx.committee.id
 }
 
 /** Load a signup only if it belongs to the committee (via its website's campaign). */
 async function loadOwnedSignup(signupId: string, committeeId: string) {
   return prisma.volunteerSignup.findFirst({
-    where: { id: signupId, website: { campaign: { committeeId } } },
+    where: { id: signupId, website: { committeeId } },
   })
 }
 
@@ -34,8 +35,8 @@ function splitName(name: string): { firstName: string; lastName: string } {
  * links it to the resulting Contact.
  */
 export async function acceptSignup(signupId: string): Promise<SignupResult> {
-  const committeeId = await requireCommitteeId("editor")
-  if (!committeeId) return { ok: false, error: "You must be signed in." }
+  const committeeId = await requireCommitteeIdFor("contacts:create")
+  if (!committeeId) return { ok: false, error: "You don't have permission to accept signups." }
 
   const signup = await loadOwnedSignup(signupId, committeeId)
   if (!signup) return { ok: false, error: "Signup not found." }
@@ -110,8 +111,8 @@ export async function acceptSignup(signupId: string): Promise<SignupResult> {
 
 /** Reject a signup (kept for audit; no Contact created). */
 export async function rejectSignup(signupId: string): Promise<SignupResult> {
-  const committeeId = await requireCommitteeId("editor")
-  if (!committeeId) return { ok: false, error: "You must be signed in." }
+  const committeeId = await requireCommitteeIdFor("contacts:update")
+  if (!committeeId) return { ok: false, error: "You don't have permission to review signups." }
 
   const signup = await loadOwnedSignup(signupId, committeeId)
   if (!signup) return { ok: false, error: "Signup not found." }
@@ -127,8 +128,8 @@ export async function rejectSignup(signupId: string): Promise<SignupResult> {
 
 /** Permanently delete a signup record. */
 export async function deleteSignup(signupId: string): Promise<SignupResult> {
-  const committeeId = await requireCommitteeId("editor")
-  if (!committeeId) return { ok: false, error: "You must be signed in." }
+  const committeeId = await requireCommitteeIdFor("contacts:delete")
+  if (!committeeId) return { ok: false, error: "You don't have permission to delete signups." }
 
   const signup = await loadOwnedSignup(signupId, committeeId)
   if (!signup) return { ok: false, error: "Signup not found." }

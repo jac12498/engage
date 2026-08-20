@@ -44,6 +44,21 @@ next-env.d.ts
 # data/campaign_finance/{state}/ path.
 /data/campaign_finance/**/COMMCAND*.CSV
 /data/campaign_finance/**/*.csv
-/data/campaign_finance/**/disclosures/
+# Ignore the big disclosures parquet, but keep small tracked docs (schema.json,
+# README) in the disclosures/ folder version-controlled.
+/data/campaign_finance/**/disclosures/*.parquet
 /data/campaign_finance/**/*donor_geocodes*
 /data/campaign_finance/**/*.duckdb
+# FEC (federal) bulk data + built parquets are huge — keep them out of git (built
+# offline via `npm run finance:generate-fec`, served from a Railway volume in prod).
+# Small tracked docs (schema.json, README) in fec/ stay version-controlled.
+/data/campaign_finance/fec/*.zip
+/data/campaign_finance/fec/*.parquet
+/data/campaign_finance/fec/*.txt
+/data/campaign_finance/fec/_*/
+# NY voter file: the source CSV (6+ GB, PII) and built parquets are huge — built
+# offline via `npm run voters:convert-ny`, served from a Railway volume in prod.
+# Small tracked docs (schema.json, election_mappings.json, README) stay in git.
+/data/voter_records/**/*.csv
+/data/voter_records/**/*.parquet
+/data/voter_records/**/unmapped_election_codes.json

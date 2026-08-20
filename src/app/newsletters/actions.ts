@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
-import { getActiveContext, roleAtLeast } from "@/lib/context"
+import { getActiveContext } from "@/lib/context"
 import { sendNewsletterNow, sendTestNewsletterNow, type SendResult, type TestSendResult } from "@/lib/newsletterSend"
 import { parseBlocks } from "@/lib/newsletter/blocks"
 import { parseTemplate } from "@/lib/newsletter/template"
@@ -15,7 +15,7 @@ export type CreateResult = { ok: true; id: string } | { ok: false; error: string
 /** Active campaign id, editor-gated (newsletter actions are all mutations), or null. */
 async function requireCampaignId(): Promise<string | null> {
   const ctx = await getActiveContext()
-  if (!ctx || !roleAtLeast(ctx.role, "editor")) return null
+  if (!ctx || !ctx.permissions.has("newsletter:update")) return null
   return ctx.campaign?.id ?? null
 }
 

@@ -1,14 +1,14 @@
 import { prisma } from "@/lib/prisma"
-import { requireCommittee } from "@/lib/context"
+import { requirePrivilege } from "@/lib/context"
 import { SignupsReview, type SignupRow } from "@/components/contacts/SignupsReview"
 
 export const dynamic = "force-dynamic"
 
 export default async function SignupsPage() {
-  const { committee } = await requireCommittee()
+  const { committee } = await requirePrivilege("contacts:read")
 
   const signups = await prisma.volunteerSignup.findMany({
-    where: { website: { campaign: { committeeId: committee.id } } },
+    where: { website: { committeeId: committee.id } },
     orderBy: [{ createdAt: "desc" }],
   })
 

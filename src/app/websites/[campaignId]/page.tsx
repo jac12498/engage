@@ -13,10 +13,9 @@ export async function generateMetadata({
   const { campaignId } = await params
   const site = await loadPublicSite(campaignId)
   if (!site || !site.published) return { title: "Not found" }
-  const name = site.campaign.candidateName
   return {
-    title: `${name} for ${site.campaign.office}`,
-    description: `Official campaign site for ${name}.`,
+    title: site.siteTitle,
+    description: `Official site for ${site.siteTitle}.`,
   }
 }
 

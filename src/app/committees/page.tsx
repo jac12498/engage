@@ -22,7 +22,7 @@ export default async function CommitteesPage() {
           name: true,
           state: true,
           committeeType: true,
-          _count: { select: { campaigns: true } },
+          _count: { select: { candidates: true } },
         },
       },
     },
@@ -35,7 +35,7 @@ export default async function CommitteesPage() {
     role: m.role,
     typeLabel: committeeTypeLabel(m.committee.state, m.committee.committeeType),
     state: m.committee.state,
-    campaignCount: m.committee._count.campaigns,
+    campaignCount: m.committee._count.candidates,
   }))
 
   return (

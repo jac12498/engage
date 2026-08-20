@@ -22,6 +22,48 @@ export interface StateOption {
   name: string
 }
 
+/**
+ * A committee registers under a jurisdiction — state (a state Board of Elections)
+ * or federal (the FEC). These are distinct regimes: a federal contribution never
+ * matches a state committee id, so donor imports read only the committee's own
+ * jurisdiction's data, scoped to its recipient id (Committee.filerId).
+ */
+export type Jurisdiction = "state" | "federal"
+
+export interface JurisdictionOption {
+  code: Jurisdiction
+  label: string
+  description: string
+}
+
+export const JURISDICTIONS: JurisdictionOption[] = [
+  {
+    code: "state",
+    label: "State",
+    description:
+      "Registered with a state Board of Elections (e.g. a NY county or town committee, a state PAC).",
+  },
+  {
+    code: "federal",
+    label: "Federal",
+    description:
+      "Registered with the Federal Election Commission (a U.S. House, Senate, presidential, or federal PAC committee).",
+  },
+]
+
+export function isJurisdiction(v: string | null | undefined): v is Jurisdiction {
+  return v === "state" || v === "federal"
+}
+
+/**
+ * FEC committee ids are the letter "C" followed by 8 digits (e.g. "C00401224").
+ * Used to validate a federal committee's filer id on onboarding + lookup.
+ */
+export function normalizeFecCommitteeId(raw: string | null | undefined): string | null {
+  const id = (raw ?? "").trim().toUpperCase()
+  return /^C\d{8}$/.test(id) ? id : null
+}
+
 /** States we support today. Others are shown but disabled ("coming soon"). */
 export const SUPPORTED_STATES: StateOption[] = [{ code: "NY", name: "New York" }]
 
@@ -68,6 +110,17 @@ export const COMMITTEE_TYPES_BY_STATE: Record<string, CommitteeType[]> = {
         "Party/constituted committees only — a segregated account for non-campaign operating expenses (NYSBOE CF-02 Types 3H–7H).",
     },
   ],
+}
+
+/**
+ * How many candidates a committee of this type may field. A **single-candidate**
+ * committee supports exactly one; every other type (constituted/party, multi-
+ * candidate, PAC, …) may have many. Unknown/unset type → treated as multi (don't
+ * over-restrict before the committee has chosen a type). Drives the "Add candidate"
+ * gate and the singular-vs-list candidate UI.
+ */
+export function allowsMultipleCandidates(committeeType: string | null | undefined): boolean {
+  return committeeType !== "authorized_single"
 }
 
 /** Committee types available for a state (empty if the state isn't supported). */

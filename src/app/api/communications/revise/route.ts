@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma"
-import { getActiveContext } from "@/lib/context"
+import { getActiveContext, campaignProfile } from "@/lib/context"
 import { anthropic } from "@/lib/comms/anthropic"
 import { buildSystemPrompt, buildRevisionPrompt, draftingThinking, isContentType, toContextBundle } from "@/lib/comms/prompts"
 import { toPlanId, resolveModel } from "@/lib/entitlements"
@@ -23,8 +23,9 @@ export async function POST(req: Request) {
   if (!body.currentDraft?.trim()) return new Response("Nothing to revise", { status: 400 })
   if (!body.notes?.trim()) return new Response("Revision notes required", { status: 400 })
 
-  const { committee, campaign } = ctx
-  if (!campaign) return new Response("No campaign found", { status: 404 })
+  const { committee, campaign, candidate } = ctx
+  if (!campaign || !candidate) return new Response("No campaign found", { status: 404 })
+  const profile = campaignProfile(candidate, campaign)
 
   const plan = toPlanId(committee.plan)
 
@@ -48,7 +49,7 @@ export async function POST(req: Request) {
     orderBy: [{ type: "asc" }, { order: "asc" }, { createdAt: "asc" }],
   })
 
-  const systemPrompt = buildSystemPrompt(campaign, toContextBundle(contextItems))
+  const systemPrompt = buildSystemPrompt(profile, toContextBundle(contextItems))
   const userPrompt = buildRevisionPrompt(body.type, body.currentDraft, body.notes)
 
   const thinking = draftingThinking(usedModel)

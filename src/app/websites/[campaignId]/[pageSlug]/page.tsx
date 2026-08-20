@@ -15,7 +15,7 @@ export async function generateMetadata({
   if (!site || !site.published) return { title: "Not found" }
   const page = site.pages.find((p) => p.slug === pageSlug && p.published)
   if (!page) return { title: "Not found" }
-  return { title: `${page.title} — ${site.campaign.candidateName}` }
+  return { title: `${page.title} — ${site.siteTitle}` }
 }
 
 export default async function PublicSitePage({

@@ -2,6 +2,9 @@ import { redirect } from "next/navigation"
 import { prisma } from "@/lib/prisma"
 import { getActiveContext } from "@/lib/context"
 import { toPlanId } from "@/lib/entitlements"
+import { allowsMultipleCandidates } from "@/lib/committeeTypes"
+import { stopImpersonation } from "@/app/admin/actions"
+import { dismissRegistryAlert } from "@/app/actions/registry"
 import { AppSidebar } from "./AppSidebar"
 
 /**
@@ -16,32 +19,55 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
   // out too; onboarding itself re-gates and bounces signed-out users to /sign-in.)
   if (!ctx) redirect("/onboarding")
 
-  const { userId, committee, role, campaign } = ctx
+  const { userId, committee, role, candidate, campaign, permissions, isSystemAdmin } = ctx
 
-  // Data for the two switchers: every committee the user belongs to, and every
-  // campaign within the active committee.
-  const [memberships, campaigns] = await Promise.all([
+  // Switcher data: committees the user belongs to, candidates in the active committee,
+  // and campaigns (runs) under the active candidate.
+  const [memberships, candidates, campaignRuns] = await Promise.all([
     prisma.committeeMembership.findMany({
       where: { userId },
       select: { role: true, committee: { select: { id: true, name: true } } },
       orderBy: { createdAt: "asc" },
     }),
-    prisma.campaign.findMany({
+    prisma.candidate.findMany({
       where: { committeeId: committee.id },
-      select: { id: true, candidateName: true, committeeName: true },
+      select: { id: true, candidateName: true },
       orderBy: { createdAt: "asc" },
     }),
+    candidate
+      ? prisma.campaign.findMany({
+          where: { candidateId: candidate.id },
+          select: { id: true, cycle: true, office: true },
+          orderBy: [{ cycle: "desc" }, { createdAt: "desc" }],
+        })
+      : Promise.resolve([]),
   ])
 
-  // Active-campaign identity for the header (falls back to the committee name).
-  const sidebarCampaign = campaign
+  // When a system admin is impersonating, resolve the target's display name for
+  // the banner (ctx.userId is the impersonated member; committee is theirs).
+  let impersonation: { name: string; committee: string } | null = null
+  if (ctx.impersonating) {
+    const target = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true, email: true },
+    })
+    impersonation = { name: target?.name || target?.email || "member", committee: committee.name }
+  }
+
+  // Active-candidate identity for the header (falls back to the committee name).
+  const sidebarCampaign = candidate
     ? {
-        id: campaign.id,
-        candidateName: campaign.candidateName,
-        committeeName: campaign.committeeName,
-        headshotMime: campaign.headshotMime,
+        id: candidate.id,
+        candidateName: candidate.candidateName,
+        committeeName: campaign?.committeeName ?? null,
+        headshotMime: candidate.headshotMime,
       }
     : null
+
+  // Candidate cardinality: single-candidate committees cap at one; party/multi allow many.
+  const multiCandidate = allowsMultipleCandidates(committee.committeeType)
+  const canAddCandidate =
+    permissions.has("campaigns:manage") && (multiCandidate || candidates.length === 0)
 
   return (
     <div className="min-h-screen bg-[#f4f6f9]">
@@ -49,13 +75,61 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         campaign={sidebarCampaign}
         plan={toPlanId(committee.plan)}
         role={role}
+        permissions={[...permissions]}
+        isSystemAdmin={isSystemAdmin}
         committees={memberships.map((m) => ({ id: m.committee.id, name: m.committee.name }))}
         activeCommitteeId={committee.id}
         committeeName={committee.name}
-        campaigns={campaigns}
+        candidates={candidates.map((c) => ({ id: c.id, candidateName: c.candidateName }))}
+        activeCandidateId={candidate?.id ?? null}
+        campaigns={campaignRuns.map((c) => ({ id: c.id, cycle: c.cycle, office: c.office }))}
         activeCampaignId={campaign?.id ?? null}
+        canAddCandidate={canAddCandidate}
+        multiCandidate={multiCandidate}
       />
       <div className="md:pl-60">
+        {impersonation && (
+          <div className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-2 bg-[#c4910a] px-6 py-2 text-sm text-white">
+            <span>
+              Viewing as <strong>{impersonation.name}</strong> in <strong>{impersonation.committee}</strong>{" "}
+              <span className="opacity-80">· system admin</span>
+            </span>
+            <form action={stopImpersonation}>
+              <button className="rounded-md bg-white/20 px-3 py-1 text-xs font-semibold transition-colors hover:bg-white/30">
+                Stop
+              </button>
+            </form>
+          </div>
+        )}
+        {committee.registryAlert && (
+          <div
+            className={`flex flex-wrap items-center justify-between gap-2 border-b px-6 py-2.5 text-sm ${
+              committee.registryAlert === "terminated"
+                ? "border-red-200 bg-red-50 text-red-800"
+                : "border-[#c4910a]/30 bg-[#c4910a]/10 text-[#7a5a00]"
+            }`}
+          >
+            <span>
+              {committee.registryAlert === "terminated" ? (
+                <>
+                  <strong>{committee.name}</strong>&rsquo;s state registration now shows{" "}
+                  <strong>{committee.registryStatus}</strong> in the Board of Elections registry. Your account isn&rsquo;t
+                  affected — this is for your awareness.
+                </>
+              ) : (
+                <>
+                  <strong>{committee.name}</strong>&rsquo;s Board of Elections registry details changed (name, treasurer,
+                  or address). Please review your committee&rsquo;s information.
+                </>
+              )}
+            </span>
+            <form action={dismissRegistryAlert}>
+              <button className="rounded-md border border-current/30 px-3 py-1 text-xs font-semibold transition-colors hover:bg-black/5">
+                Dismiss
+              </button>
+            </form>
+          </div>
+        )}
         <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
       </div>
     </div>

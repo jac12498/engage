@@ -13,6 +13,11 @@ const nextConfig: NextConfig = {
     "@duckdb/node-bindings-darwin-arm64",
     "@duckdb/node-bindings-win32-x64",
   ],
+  experimental: {
+    // Admin data-import tool uploads raw source files (e.g. the ~11 MB NYSBOE
+    // COMMCAND.CSV) through a Server Action, well over the 1 MB default.
+    serverActions: { bodySizeLimit: "30mb" },
+  },
 };
 
 export default nextConfig;

@@ -5,7 +5,7 @@ import { useState } from "react"
 const inputCls =
   "w-full rounded-lg border border-black/10 bg-white px-3 py-2.5 text-sm outline-none focus:border-black/30"
 
-export function VolunteerForm({ campaignId, accent }: { campaignId: string; accent: string }) {
+export function VolunteerForm({ committeeId, accent }: { committeeId: string; accent: string }) {
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [phone, setPhone] = useState("")
@@ -20,7 +20,7 @@ export function VolunteerForm({ campaignId, accent }: { campaignId: string; acce
       const res = await fetch("/api/website/volunteer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ campaignId, name, email, phone, message }),
+        body: JSON.stringify({ committeeId, name, email, phone, message }),
       })
       setStatus(res.ok ? "done" : "error")
     } catch {

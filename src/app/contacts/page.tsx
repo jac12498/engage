@@ -1,11 +1,11 @@
 import { prisma } from "@/lib/prisma"
-import { requireCommittee } from "@/lib/context"
+import { requirePrivilege } from "@/lib/context"
 import { ContactsManager, type ContactRow } from "@/components/contacts/ContactsManager"
 
 export const dynamic = "force-dynamic"
 
 export default async function ContactsPage() {
-  const { committee } = await requireCommittee()
+  const { committee, permissions } = await requirePrivilege("contacts:read")
 
   const [tags, contactRows] = await Promise.all([
     prisma.tag.findMany({
@@ -59,8 +59,23 @@ export default async function ContactsPage() {
 
   // Pending signups across every campaign website in the committee.
   const pendingSignups = await prisma.volunteerSignup.count({
-    where: { website: { campaign: { committeeId: committee.id } }, status: "pending" },
+    where: { website: { committeeId: committee.id }, status: "pending" },
   })
 
-  return <ContactsManager contacts={contacts} allTags={allTags} pendingSignups={pendingSignups} />
+  // Donor import is available if there's any filer id to scope to — the committee's own,
+  // or one of its candidates' committees.
+  const candidateFilers = await prisma.campaign.count({
+    where: { candidate: { committeeId: committee.id }, filerId: { not: null } },
+  })
+  const canImportDonors =
+    permissions.has("contacts:create") && (!!committee.filerId || candidateFilers > 0)
+
+  return (
+    <ContactsManager
+      contacts={contacts}
+      allTags={allTags}
+      pendingSignups={pendingSignups}
+      canImportDonors={canImportDonors}
+    />
+  )
 }

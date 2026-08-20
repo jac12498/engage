@@ -1,7 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { getActiveContext, roleAtLeast } from "@/lib/context"
+import { getActiveContext } from "@/lib/context"
 import {
   svcCreatePage,
   svcUpdatePage,
@@ -17,15 +17,15 @@ import {
   type SvcResult,
 } from "@/lib/website/blockService"
 
-async function currentCampaignId(): Promise<string | null> {
+async function currentCommitteeId(): Promise<string | null> {
   const ctx = await getActiveContext()
-  if (!ctx || !roleAtLeast(ctx.role, "editor")) return null
-  return ctx.campaign?.id ?? null
+  if (!ctx || !ctx.permissions.has("candidate-websites:update")) return null
+  return ctx.committee.id
 }
 
-function revalidate(campaignId: string) {
+function revalidate(committeeId: string) {
   revalidatePath("/website")
-  revalidatePath(`/websites/${campaignId}`)
+  revalidatePath(`/websites/${committeeId}`)
 }
 
 /**
@@ -33,12 +33,12 @@ function revalidate(campaignId: string) {
  * calls these; the conversational builder calls the underlying `svc*` directly.
  */
 async function withCampaign<T extends object>(
-  op: (campaignId: string) => Promise<SvcResult<T>>
+  op: (committeeId: string) => Promise<SvcResult<T>>
 ): Promise<SvcResult<T>> {
-  const campaignId = await currentCampaignId()
-  if (!campaignId) return { ok: false, error: "Not signed in." }
-  const res = await op(campaignId)
-  if (res.ok) revalidate(campaignId)
+  const committeeId = await currentCommitteeId()
+  if (!committeeId) return { ok: false, error: "Not signed in." }
+  const res = await op(committeeId)
+  if (res.ok) revalidate(committeeId)
   return res
 }
 

@@ -16,32 +16,35 @@ export default async function NewsletterEditorPage({
   params: Promise<{ newsletterId: string }>
 }) {
   const { newsletterId } = await params
-  const { campaign: active, committee } = await requireActiveCampaign()
+  const { candidate, campaign: activeCampaign, committee } = await requireActiveCampaign()
 
   const campaign = await prisma.campaign.findUnique({
-    where: { id: active.id },
+    where: { id: activeCampaign.id },
     select: {
       id: true,
-      candidateName: true,
       committeeName: true,
       mailingStreet: true,
       mailingStreet2: true,
       mailingCity: true,
       mailingState: true,
       mailingZip: true,
-      headshotMime: true,
       newsletterTemplate: true,
-      site: { select: { published: true } },
       topics: { orderBy: { updatedAt: "desc" }, select: { id: true, title: true } },
     },
   })
   if (!campaign) redirect("/onboarding")
 
+  // Website + subscribers are per-candidate in 2a (public routes key on the candidate id).
+  const site = await prisma.website.findUnique({
+    where: { committeeId: committee.id },
+    select: { published: true },
+  })
+
   const n = await prisma.newsletter.findFirst({ where: { id: newsletterId, campaignId: campaign.id } })
   if (!n) notFound()
 
   const activeSubscribers = await prisma.newsletterSubscriber.count({
-    where: { campaignId: campaign.id, status: "active" },
+    where: { committeeId: committee.id, status: "active" },
   })
 
   // Saved Communications "Newsletter Article" pieces, for the "Insert from
@@ -71,17 +74,17 @@ export default async function NewsletterEditorPage({
 
   return (
     <NewsletterEditor
-      campaignId={campaign.id}
-      sitePublished={campaign.site?.published ?? false}
+      campaignId={candidate.id}
+      sitePublished={site?.published ?? false}
       defaultModel={resolveModel(committee.aiModel)}
       activeSubscribers={activeSubscribers}
       hasMailingAddress={hasMailingAddress}
       topics={campaign.topics}
       commsArticles={commsArticles}
       campaign={{
-        candidateName: campaign.candidateName,
+        candidateName: candidate.candidateName,
         committeeName: campaign.committeeName,
-        headshotMime: campaign.headshotMime,
+        headshotMime: candidate.headshotMime,
         mailing: {
           street: campaign.mailingStreet,
           street2: campaign.mailingStreet2,

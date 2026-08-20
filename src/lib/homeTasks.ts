@@ -23,43 +23,44 @@ export interface HomeData {
  * assistant can layer on top of this later to prioritize / act on these.
  */
 export async function computeHomeTasks(
+  candidateId: string,
   campaignId: string,
   committeeId: string
 ): Promise<HomeData | null> {
+  const candidate = await prisma.candidate.findUnique({
+    where: { id: candidateId },
+    select: { candidateName: true, bio: true, whyRunning: true, headshotMime: true },
+  })
+  if (!candidate) return null
+
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId },
-    select: {
-      id: true,
-      candidateName: true,
-      bio: true,
-      whyRunning: true,
-      mailingStreet: true,
-      mailingCity: true,
-      mailingState: true,
-      mailingZip: true,
-      headshotMime: true,
-      site: { select: { published: true } },
-    },
+    select: { mailingStreet: true, mailingCity: true, mailingState: true, mailingZip: true },
   })
-  if (!campaign) return null
+
+  // The website is committee-owned (2b-2).
+  const site = await prisma.website.findUnique({
+    where: { committeeId },
+    select: { published: true },
+  })
 
   const [generations, contacts, newsletters] = await Promise.all([
-    prisma.generation.count({ where: { campaignId: campaign.id } }),
-    // Contacts are committee-wide (shared CRM across the committee's campaigns).
+    prisma.generation.count({ where: { campaignId } }),
+    // Contacts are committee-wide (shared CRM across the committee's candidates).
     prisma.contact.count({ where: { committeeId } }),
-    prisma.newsletter.count({ where: { campaignId: campaign.id } }),
+    prisma.newsletter.count({ where: { campaignId } }),
   ])
 
-  const hasProfile = Boolean(campaign.bio?.trim() && campaign.whyRunning?.trim())
+  const hasProfile = Boolean(candidate.bio?.trim() && candidate.whyRunning?.trim())
   const hasAddress = Boolean(
-    campaign.mailingStreet?.trim() &&
-      campaign.mailingCity?.trim() &&
-      campaign.mailingState?.trim() &&
-      campaign.mailingZip?.trim()
+    campaign?.mailingStreet?.trim() &&
+      campaign?.mailingCity?.trim() &&
+      campaign?.mailingState?.trim() &&
+      campaign?.mailingZip?.trim()
   )
-  const hasHeadshot = Boolean(campaign.headshotMime)
-  const hasSite = Boolean(campaign.site)
-  const sitePublished = Boolean(campaign.site?.published)
+  const hasHeadshot = Boolean(candidate.headshotMime)
+  const hasSite = Boolean(site)
+  const sitePublished = Boolean(site?.published)
 
   const tasks: HomeTask[] = [
     {
@@ -126,5 +127,5 @@ export async function computeHomeTasks(
   tasks.sort((a, b) => Number(a.done) - Number(b.done))
   const doneCount = tasks.filter((t) => t.done).length
 
-  return { candidateName: campaign.candidateName, tasks, doneCount, total: tasks.length }
+  return { candidateName: candidate.candidateName, tasks, doneCount, total: tasks.length }
 }

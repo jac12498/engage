@@ -2,14 +2,14 @@ import { prisma } from "@/lib/prisma"
 
 // Public, unauthenticated: the volunteer form on a published candidate site.
 export async function POST(req: Request) {
-  let body: { campaignId?: string; name?: string; email?: string; phone?: string; message?: string }
+  let body: { committeeId?: string; name?: string; email?: string; phone?: string; message?: string }
   try {
     body = await req.json()
   } catch {
     return new Response("Bad request", { status: 400 })
   }
 
-  const campaignId = typeof body.campaignId === "string" ? body.campaignId : ""
+  const committeeId = typeof body.committeeId === "string" ? body.committeeId : ""
   const name = typeof body.name === "string" ? body.name.trim() : ""
   const email = typeof body.email === "string" ? body.email.trim() : ""
   const phone = typeof body.phone === "string" ? body.phone.trim() : ""
@@ -21,7 +21,7 @@ export async function POST(req: Request) {
 
   // Only accept signups for a published site.
   const site = await prisma.website.findUnique({
-    where: { campaignId },
+    where: { committeeId },
     select: { id: true, published: true },
   })
   if (!site || !site.published) return new Response("Not found", { status: 404 })

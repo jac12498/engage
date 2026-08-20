@@ -16,6 +16,8 @@ const inputCls =
   "w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-[#1a1a2e] outline-none transition-colors focus:border-[#1b3a6b] focus:ring-2 focus:ring-[#1b3a6b]/15"
 
 export interface SiteSettingsValues {
+  siteTitle: string
+  paidForBy: string
   primaryColor: string
   accentColor: string
   fontTheme: string
@@ -23,10 +25,11 @@ export interface SiteSettingsValues {
   contactEmail: string
 }
 
-/** Theme + calls-to-action for the public site. (The candidate headshot is managed
- *  in Campaign Settings — it's part of the profile, not the site.) */
+/** Identity, theme + calls-to-action for the committee's public site. */
 export function SiteSettingsForm({ initial }: { initial: SiteSettingsValues }) {
   const router = useRouter()
+  const [siteTitle, setSiteTitle] = useState(initial.siteTitle)
+  const [paidForBy, setPaidForBy] = useState(initial.paidForBy)
   const [primaryColor, setPrimary] = useState(initial.primaryColor)
   const [accentColor, setAccent] = useState(initial.accentColor)
   const [fontTheme, setFont] = useState(initial.fontTheme)
@@ -41,7 +44,7 @@ export function SiteSettingsForm({ initial }: { initial: SiteSettingsValues }) {
   function save() {
     setError(null)
     startSaving(async () => {
-      const res = await updateSiteSettings({ primaryColor, accentColor, fontTheme, donateUrl, contactEmail })
+      const res = await updateSiteSettings({ siteTitle, paidForBy, primaryColor, accentColor, fontTheme, donateUrl, contactEmail })
       if (res.ok) {
         setSaved(true)
         router.refresh()
@@ -54,7 +57,19 @@ export function SiteSettingsForm({ initial }: { initial: SiteSettingsValues }) {
 
   return (
     <div className="rounded-2xl border border-border bg-white p-6">
-      <h2 className="text-sm font-semibold uppercase tracking-wider text-[#c4910a]">Theme & links</h2>
+      <h2 className="text-sm font-semibold uppercase tracking-wider text-[#c4910a]">Identity</h2>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-[#1a1a2e]">Site title</span>
+          <input value={siteTitle} onChange={(e) => { setSiteTitle(e.target.value); dirty() }} placeholder="Committee name" className={inputCls} />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-[#1a1a2e]">&ldquo;Paid for by&rdquo; line</span>
+          <input value={paidForBy} onChange={(e) => { setPaidForBy(e.target.value); dirty() }} placeholder="Committee name" className={inputCls} />
+        </label>
+      </div>
+
+      <h2 className="mt-6 text-sm font-semibold uppercase tracking-wider text-[#c4910a]">Theme & links</h2>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <label className="block">
           <span className="mb-1 block text-sm font-medium text-[#1a1a2e]">Primary color</span>

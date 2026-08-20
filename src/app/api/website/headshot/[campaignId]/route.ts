@@ -10,7 +10,7 @@ export async function GET(
   { params }: { params: Promise<{ campaignId: string }> }
 ) {
   const { campaignId } = await params
-  const campaign = await prisma.campaign.findUnique({
+  const campaign = await prisma.candidate.findUnique({
     where: { id: campaignId },
     select: { headshotData: true, headshotMime: true },
   })

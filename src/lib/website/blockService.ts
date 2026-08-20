@@ -7,9 +7,9 @@ import { slugify } from "@/lib/website/slug"
 
 /**
  * Website content service — the ONE place block/page/site mutations happen.
- * Every function takes a `campaignId` the caller has already authenticated, and
+ * Every function takes a `committeeId` the caller has already authenticated, and
  * re-verifies that the target page/block belongs to that campaign (block → page →
- * website → campaignId) before mutating. It does NOT touch the session or call
+ * website → committeeId) before mutating. It does NOT touch the session or call
  * revalidatePath — those are the callers' concern:
  *   - the server actions in `app/website/blocks-actions.ts` wrap these with the
  *     session lookup + revalidate,
@@ -21,18 +21,18 @@ import { slugify } from "@/lib/website/slug"
 
 export type SvcResult<T = object> = ({ ok: true } & T) | { ok: false; error: string }
 
-async function ownedSite(campaignId: string) {
-  return prisma.website.findUnique({ where: { campaignId }, select: { id: true } })
+async function ownedSite(committeeId: string) {
+  return prisma.website.findUnique({ where: { committeeId }, select: { id: true } })
 }
-async function ownedPage(campaignId: string, pageId: string) {
+async function ownedPage(committeeId: string, pageId: string) {
   return prisma.page.findFirst({
-    where: { id: pageId, website: { campaignId } },
+    where: { id: pageId, website: { committeeId } },
     select: { id: true, websiteId: true, isHome: true },
   })
 }
-async function ownedBlock(campaignId: string, blockId: string) {
+async function ownedBlock(committeeId: string, blockId: string) {
   return prisma.block.findFirst({
-    where: { id: blockId, page: { website: { campaignId } } },
+    where: { id: blockId, page: { website: { committeeId } } },
     select: { id: true, pageId: true, type: true, order: true },
   })
 }
@@ -55,8 +55,8 @@ async function uniquePageSlug(websiteId: string, base: string, excludeId?: strin
 
 // ─── Pages ───────────────────────────────────────────────────────────────────
 
-export async function svcCreatePage(campaignId: string, title: string): Promise<SvcResult<{ pageId: string }>> {
-  const site = await ownedSite(campaignId)
+export async function svcCreatePage(committeeId: string, title: string): Promise<SvcResult<{ pageId: string }>> {
+  const site = await ownedSite(committeeId)
   if (!site) return { ok: false, error: "No website yet." }
 
   const cleanTitle = safeStr(title, 100) ?? "New page"
@@ -86,8 +86,8 @@ export interface PagePatch {
   published?: boolean
 }
 
-export async function svcUpdatePage(campaignId: string, id: string, patch: PagePatch): Promise<SvcResult> {
-  const page = await ownedPage(campaignId, id)
+export async function svcUpdatePage(committeeId: string, id: string, patch: PagePatch): Promise<SvcResult> {
+  const page = await ownedPage(committeeId, id)
   if (!page) return { ok: false, error: "Page not found." }
 
   const data: Prisma.PageUpdateInput = {}
@@ -101,8 +101,8 @@ export async function svcUpdatePage(campaignId: string, id: string, patch: PageP
   return { ok: true }
 }
 
-export async function svcDeletePage(campaignId: string, id: string): Promise<SvcResult> {
-  const page = await ownedPage(campaignId, id)
+export async function svcDeletePage(committeeId: string, id: string): Promise<SvcResult> {
+  const page = await ownedPage(committeeId, id)
   if (!page) return { ok: false, error: "Page not found." }
   if (page.isHome) return { ok: false, error: "The home page can't be deleted." }
 
@@ -110,8 +110,8 @@ export async function svcDeletePage(campaignId: string, id: string): Promise<Svc
   return { ok: true }
 }
 
-export async function svcReorderPages(campaignId: string, orderedIds: string[]): Promise<SvcResult> {
-  const site = await ownedSite(campaignId)
+export async function svcReorderPages(committeeId: string, orderedIds: string[]): Promise<SvcResult> {
+  const site = await ownedSite(committeeId)
   if (!site) return { ok: false, error: "No website." }
 
   const pages = await prisma.page.findMany({ where: { websiteId: site.id }, select: { id: true } })
@@ -125,13 +125,13 @@ export async function svcReorderPages(campaignId: string, orderedIds: string[]):
 // ─── Blocks ──────────────────────────────────────────────────────────────────
 
 export async function svcAddBlock(
-  campaignId: string,
+  committeeId: string,
   pageId: string,
   type: string,
   atIndex?: number,
   initialProps?: unknown
 ): Promise<SvcResult<{ blockId: string }>> {
-  const page = await ownedPage(campaignId, pageId)
+  const page = await ownedPage(committeeId, pageId)
   if (!page) return { ok: false, error: "Page not found." }
   if (!isBlockType(type)) return { ok: false, error: `Unknown block type "${type}".` }
 
@@ -162,11 +162,11 @@ export async function svcAddBlock(
 }
 
 export async function svcUpdateBlockProps(
-  campaignId: string,
+  committeeId: string,
   blockId: string,
   rawProps: unknown
 ): Promise<SvcResult> {
-  const block = await ownedBlock(campaignId, blockId)
+  const block = await ownedBlock(committeeId, blockId)
   if (!block) return { ok: false, error: "Block not found." }
 
   const validated = validateBlock(block.type, rawProps)
@@ -181,17 +181,17 @@ export async function svcUpdateBlockProps(
 
 /** Reposition a block to `toIndex` within its page (or move it to `toPageId`). */
 export async function svcMoveBlock(
-  campaignId: string,
+  committeeId: string,
   blockId: string,
   toIndex: number,
   toPageId?: string
 ): Promise<SvcResult> {
-  const block = await ownedBlock(campaignId, blockId)
+  const block = await ownedBlock(committeeId, blockId)
   if (!block) return { ok: false, error: "Block not found." }
 
   let targetPageId = block.pageId
   if (toPageId && toPageId !== block.pageId) {
-    const dest = await ownedPage(campaignId, toPageId)
+    const dest = await ownedPage(committeeId, toPageId)
     if (!dest) return { ok: false, error: "Destination page not found." }
     targetPageId = dest.id
   }
@@ -217,8 +217,8 @@ export async function svcMoveBlock(
   return { ok: true }
 }
 
-export async function svcDeleteBlock(campaignId: string, blockId: string): Promise<SvcResult> {
-  const block = await ownedBlock(campaignId, blockId)
+export async function svcDeleteBlock(committeeId: string, blockId: string): Promise<SvcResult> {
+  const block = await ownedBlock(committeeId, blockId)
   if (!block) return { ok: false, error: "Block not found." }
   await prisma.block.delete({ where: { id: block.id } })
   return { ok: true }
@@ -227,6 +227,8 @@ export async function svcDeleteBlock(campaignId: string, blockId: string): Promi
 // ─── Site settings ───────────────────────────────────────────────────────────
 
 export interface SiteSettingsInput {
+  siteTitle?: string
+  paidForBy?: string
   primaryColor?: string
   accentColor?: string
   fontTheme?: string
@@ -234,9 +236,15 @@ export interface SiteSettingsInput {
   contactEmail?: string
 }
 
-export async function svcUpdateSiteSettings(campaignId: string, input: SiteSettingsInput): Promise<SvcResult> {
+/** Trim + cap a short free-text field; empty → null. */
+function safeText(v: string | undefined, max = 120): string | null {
+  const t = (v ?? "").trim()
+  return t ? t.slice(0, max) : null
+}
+
+export async function svcUpdateSiteSettings(committeeId: string, input: SiteSettingsInput): Promise<SvcResult> {
   const site = await prisma.website.findUnique({
-    where: { campaignId },
+    where: { committeeId },
     select: { id: true, primaryColor: true, accentColor: true },
   })
   if (!site) return { ok: false, error: "No website found." }
@@ -244,6 +252,8 @@ export async function svcUpdateSiteSettings(campaignId: string, input: SiteSetti
   await prisma.website.update({
     where: { id: site.id },
     data: {
+      siteTitle: safeText(input.siteTitle),
+      paidForBy: safeText(input.paidForBy),
       primaryColor: safeColor(input.primaryColor, site.primaryColor),
       accentColor: safeColor(input.accentColor, site.accentColor),
       fontTheme: safeFont(input.fontTheme),
@@ -261,9 +271,9 @@ export async function svcUpdateSiteSettings(campaignId: string, input: SiteSetti
  * props), and theme/links — that the conversational builder feeds to the model so it
  * knows the exact ids to target and the current content.
  */
-export async function getSiteSnapshot(campaignId: string) {
+export async function getSiteSnapshot(committeeId: string) {
   const site = await prisma.website.findUnique({
-    where: { campaignId },
+    where: { committeeId },
     select: {
       slug: true,
       published: true,

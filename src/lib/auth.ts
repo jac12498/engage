@@ -8,9 +8,11 @@
  */
 
 import NextAuth, { type NextAuthConfig } from "next-auth"
+import Credentials from "next-auth/providers/credentials"
 import { PrismaAdapter } from "@auth/prisma-adapter"
 import { Resend } from "resend"
 import { prisma } from "@/lib/prisma"
+import { verifyCode } from "@/lib/otpStore"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 const FROM = process.env.EMAIL_FROM || "onboarding@resend.dev"
@@ -27,14 +29,18 @@ for (const v of ["RESEND_API_KEY", "EMAIL_FROM", "AUTH_SECRET"] as const) {
 async function resolveActiveContext(userId: string): Promise<{
   hasCommittee: boolean
   activeCommitteeId: string | null
+  activeCandidateId: string | null
   activeCampaignId: string | null
   role: string | null
   plan: string | null
+  isSystemAdmin: boolean
 }> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
+      isSystemAdmin: true,
       lastCommitteeId: true,
+      lastCandidateId: true,
       lastCampaignId: true,
       memberships: {
         select: { committeeId: true, role: true, committee: { select: { plan: true } } },
@@ -43,9 +49,10 @@ async function resolveActiveContext(userId: string): Promise<{
     },
   })
 
+  const isSystemAdmin = user?.isSystemAdmin ?? false
   const memberships = user?.memberships ?? []
   if (memberships.length === 0) {
-    return { hasCommittee: false, activeCommitteeId: null, activeCampaignId: null, role: null, plan: null }
+    return { hasCommittee: false, activeCommitteeId: null, activeCandidateId: null, activeCampaignId: null, role: null, plan: null, isSystemAdmin }
   }
 
   // Active committee = the persisted last one (if still a member), else the first.
@@ -53,31 +60,53 @@ async function resolveActiveContext(userId: string): Promise<{
     memberships.find((m) => m.committeeId === user?.lastCommitteeId) ?? memberships[0]
   const committeeId = active.committeeId
 
-  // Active campaign = the persisted last one (if it belongs to this committee),
-  // else the committee's first campaign, else null.
-  let campaignId: string | null = null
-  if (user?.lastCampaignId) {
-    const belongs = await prisma.campaign.findFirst({
-      where: { id: user.lastCampaignId, committeeId },
+  // Active candidate = the persisted last one (if in this committee), else the first.
+  let candidateId: string | null = null
+  if (user?.lastCandidateId) {
+    const belongs = await prisma.candidate.findFirst({
+      where: { id: user.lastCandidateId, committeeId },
       select: { id: true },
     })
-    campaignId = belongs?.id ?? null
+    candidateId = belongs?.id ?? null
   }
-  if (!campaignId) {
-    const first = await prisma.campaign.findFirst({
+  if (!candidateId) {
+    const first = await prisma.candidate.findFirst({
       where: { committeeId },
       orderBy: { createdAt: "asc" },
       select: { id: true },
     })
-    campaignId = first?.id ?? null
+    candidateId = first?.id ?? null
+  }
+
+  // Active campaign (a run under that candidate) = the persisted last one (if under
+  // this candidate), else the candidate's latest by cycle.
+  let campaignId: string | null = null
+  if (candidateId) {
+    if (user?.lastCampaignId) {
+      const belongs = await prisma.campaign.findFirst({
+        where: { id: user.lastCampaignId, candidateId },
+        select: { id: true },
+      })
+      campaignId = belongs?.id ?? null
+    }
+    if (!campaignId) {
+      const latest = await prisma.campaign.findFirst({
+        where: { candidateId },
+        orderBy: [{ cycle: "desc" }, { createdAt: "desc" }],
+        select: { id: true },
+      })
+      campaignId = latest?.id ?? null
+    }
   }
 
   return {
     hasCommittee: true,
     activeCommitteeId: committeeId,
+    activeCandidateId: candidateId,
     activeCampaignId: campaignId,
     role: active.role,
     plan: active.committee.plan,
+    isSystemAdmin,
   }
 }
 
@@ -85,6 +114,34 @@ export const authConfig = {
   adapter: PrismaAdapter(prisma),
 
   providers: [
+    // Passwordless sign-in by 6-digit email code. The code is sent by the
+    // `sendLoginCode` server action; this provider verifies it and signs the
+    // user in — in the same browser tab (no magic-link new tab / stranded tab).
+    // TTL + attempt-limiting live in lib/otpStore. The account is created on the
+    // first valid code, matching the magic-link adapter's auto-create.
+    Credentials({
+      id: "otp",
+      name: "Email code",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        code: { label: "Code", type: "text" },
+      },
+      async authorize(credentials) {
+        const email = String(credentials?.email ?? "").trim().toLowerCase()
+        const code = String(credentials?.code ?? "").trim()
+        if (!email || !/^\d{6}$/.test(code)) return null
+        if (!verifyCode(email, code)) return null // wrong / expired / too many attempts
+
+        const user =
+          (await prisma.user.findUnique({ where: { email }, select: { id: true, email: true } })) ??
+          (await prisma.user.create({
+            data: { email, emailVerified: new Date() },
+            select: { id: true, email: true },
+          }))
+
+        return { id: user.id, email: user.email }
+      },
+    }),
     {
       id: "email",
       type: "email" as const,
@@ -144,9 +201,17 @@ export const authConfig = {
   },
 
   callbacks: {
-    async jwt({ token, user, trigger }) {
+    async jwt({ token, user, trigger, session }) {
       // On initial sign-in, pin the user id.
       if (user) token.id = user.id
+
+      // Impersonation overlay is set/cleared via updateSession({ impersonate }).
+      // Only the payload's presence toggles it, so ordinary updates (committee
+      // switch) never disturb it. The start action gates on isSystemAdmin.
+      const payload = session as { impersonate?: { userId: string; committeeId: string } | null } | null
+      if (trigger === "update" && payload && "impersonate" in payload) {
+        token.impersonating = payload.impersonate ?? undefined
+      }
 
       // Resolve the active committee/campaign context onto the token: on sign-in,
       // on explicit update (after onboarding or a committee/campaign switch), and
@@ -157,9 +222,11 @@ export const authConfig = {
         const ctx = await resolveActiveContext(token.id as string)
         token.hasCommittee = ctx.hasCommittee
         token.activeCommitteeId = ctx.activeCommitteeId
+        token.activeCandidateId = ctx.activeCandidateId
         token.activeCampaignId = ctx.activeCampaignId
         token.role = ctx.role
         token.plan = ctx.plan
+        token.isSystemAdmin = ctx.isSystemAdmin
       }
 
       return token
@@ -170,16 +237,20 @@ export const authConfig = {
         session.user.id = token.id as string
         session.hasCommittee = !!token.hasCommittee
         session.activeCommitteeId = (token.activeCommitteeId as string | null) ?? null
+        session.activeCandidateId = (token.activeCandidateId as string | null) ?? null
         session.activeCampaignId = (token.activeCampaignId as string | null) ?? null
         session.role = (token.role as string | null) ?? null
         session.plan = (token.plan as string | null) ?? null
+        session.isSystemAdmin = Boolean(token.isSystemAdmin)
+        session.impersonating =
+          (token.impersonating as { userId: string; committeeId: string } | undefined) ?? null
       }
       return session
     },
 
     async signIn({ account }) {
-      // Only magic-link email sign-in is enabled.
-      return account?.provider === "email"
+      // Email-code (otp) and magic-link (email) sign-in are enabled.
+      return account?.provider === "otp" || account?.provider === "email"
     },
   },
 

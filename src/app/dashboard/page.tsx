@@ -1,113 +1,139 @@
-import { redirect } from "next/navigation"
 import Link from "next/link"
-import { ArrowRight, Check, Circle, Sparkles, Megaphone, UserPlus } from "lucide-react"
+import { ArrowRight, Lock, Megaphone, UserPlus, Wrench } from "lucide-react"
 import { AppShell } from "@/components/AppShell"
-import { requireCommittee, roleAtLeast } from "@/lib/context"
-import { computeHomeTasks, type HomeTask } from "@/lib/homeTasks"
+import { requireCommittee, campaignProfile } from "@/lib/context"
+import { computeModuleStatuses, type ModuleStatus } from "@/lib/moduleStatus"
+import { PLAN_LABELS, toPlanId } from "@/lib/entitlements"
 
 export const dynamic = "force-dynamic"
 
 export default async function HomePage() {
-  const { committee, campaign, role } = await requireCommittee()
+  const { committee, candidate, campaign, permissions } = await requireCommittee()
 
-  // A committee legitimately starts with no campaign. Show a "get started" empty
-  // state (add a campaign, invite members) instead of the campaign checklist.
-  if (!campaign) {
+  // A committee legitimately starts with no candidate — nothing to show statuses
+  // for yet, so keep the "add your first candidate" get-started home.
+  if (!candidate || !campaign) {
     return (
       <AppShell>
-        <NoCampaignHome committeeName={committee.name} canManage={roleAtLeast(role, "admin")} />
+        <NoCampaignHome committeeName={committee.name} canManage={permissions.has("campaigns:manage")} />
       </AppShell>
     )
   }
 
-  const data = await computeHomeTasks(campaign.id, committee.id)
-  if (!data) redirect("/campaigns/new")
+  const plan = toPlanId(committee.plan)
+  const modules = computeModuleStatuses(campaignProfile(candidate, campaign), plan, permissions)
 
-  const { candidateName, tasks, doneCount, total } = data
-  const pending = tasks.filter((t) => !t.done)
-  const done = tasks.filter((t) => t.done)
-  const allDone = doneCount >= total
-  const pct = Math.round((doneCount / total) * 100)
+  // Modules the plan includes (usable or needing setup) vs. those to unlock.
+  const available = modules.filter((m) => m.status !== "locked")
+  const locked = modules.filter((m) => m.status === "locked")
+
+  const activeCount = available.filter((m) => m.status === "active").length
+  const setupCount = available.filter((m) => m.status === "needs-setup").length
 
   return (
     <AppShell>
-      <div>
-        <h1 className="text-2xl font-bold text-[#1a1a2e]">
-          {candidateName ? `${candidateName}'s campaign` : "Your campaign"}
-        </h1>
-        <p className="mt-1 text-muted-foreground">
-          {allDone
-            ? "You're all set up. Here's where to jump back in."
-            : "A few steps to get your campaign fully up and running."}
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-[#1a1a2e]">
+            {candidate.candidateName ? `${candidate.candidateName}'s campaign` : committee.name}
+          </h1>
+          <p className="mt-1 text-muted-foreground">
+            Your workspace — open a module, or finish its setup to unlock it.
+          </p>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          <span className="font-semibold text-[#1e6b3a]">{activeCount} active</span>
+          {setupCount > 0 && (
+            <> · <span className="font-semibold text-[#c4910a]">{setupCount} need setup</span></>
+          )}
+          {locked.length > 0 && <> · {locked.length} to unlock</>}
         </p>
       </div>
 
-      {/* Progress */}
-      <div className="mt-6 rounded-2xl border border-border bg-white p-5">
-        <div className="flex items-center justify-between text-sm">
-          <span className="font-semibold text-[#1a1a2e]">Setup progress</span>
-          <span className="text-muted-foreground">
-            {doneCount} of {total} complete
-          </span>
-        </div>
-        <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-[#f4f6f9]">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-[#f0b429] to-[#c4910a] transition-all"
-            style={{ width: `${pct}%` }}
-          />
-        </div>
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {available.map((m) => (
+          <ModuleCard key={m.key} module={m} />
+        ))}
       </div>
 
-      {allDone ? (
-        <div className="mt-8 rounded-2xl border border-[#1e6b3a]/25 bg-[#1e6b3a]/[0.04] p-6 text-center">
-          <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-[#1e6b3a]/10 text-[#1e6b3a]">
-            <Sparkles className="h-5 w-5" />
-          </div>
-          <h2 className="mt-3 text-lg font-semibold text-[#1a1a2e]">You&rsquo;re all set up</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Everything&rsquo;s in place. Jump into a module to keep your campaign moving.
-          </p>
-          <div className="mt-4 flex flex-wrap justify-center gap-2">
-            <QuickLink href="/communications" label="Write a communication" />
-            <QuickLink href="/newsletters" label="Send a newsletter" />
-            <QuickLink href="/website" label="Edit your website" />
-          </div>
-        </div>
-      ) : (
-        <div className="mt-8">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-[#c4910a]">Next steps</h2>
-          <div className="mt-4 space-y-3">
-            {pending.map((task) => (
-              <TaskRow key={task.id} task={task} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {done.length > 0 && (
-        <div className="mt-8">
+      {locked.length > 0 && (
+        <>
+          <hr className="my-8 border-t border-border" />
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Completed ({done.length})
+            Upgrade to unlock
           </h2>
-          <div className="mt-3 space-y-2">
-            {done.map((task) => (
-              <div
-                key={task.id}
-                className="flex items-center gap-3 rounded-xl border border-border bg-white/60 px-4 py-3"
-              >
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#1e6b3a]/10 text-[#1e6b3a]">
-                  <Check className="h-3.5 w-3.5" />
-                </span>
-                <span className="text-sm text-muted-foreground line-through">{task.title}</span>
-                <Link href={task.href} className="ml-auto text-xs font-medium text-[#1b3a6b] hover:underline">
-                  Review
-                </Link>
-              </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Modules included on higher plans.
+          </p>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {locked.map((m) => (
+              <ModuleCard key={m.key} module={m} />
             ))}
           </div>
-        </div>
+        </>
       )}
     </AppShell>
+  )
+}
+
+function ModuleCard({ module: m }: { module: ModuleStatus }) {
+  const Icon = m.icon
+
+  if (m.status === "locked") {
+    const planLabel = m.unlockPlan ? PLAN_LABELS[m.unlockPlan] : "a paid"
+    return (
+      <Link
+        href={`/upgrade/${m.key}`}
+        className="group flex flex-col rounded-2xl border border-border bg-muted/40 p-5 transition-colors hover:border-[#1b3a6b]/40"
+      >
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+          <Icon className="h-5 w-5" />
+        </span>
+        <h3 className="mt-3 font-semibold text-[#1a1a2e]">{m.name}</h3>
+        <p className="mt-1 text-sm text-muted-foreground">Included in the {planLabel} plan.</p>
+        <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-[#1b3a6b]">
+          <Lock className="h-3.5 w-3.5" />
+          Upgrade to use
+          <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+        </span>
+      </Link>
+    )
+  }
+
+  if (m.status === "needs-setup") {
+    return (
+      <div className="flex flex-col rounded-2xl border border-[#c4910a]/30 bg-[#c4910a]/6 p-5">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#c4910a]/12 text-[#c4910a]">
+          <Icon className="h-5 w-5" />
+        </span>
+        <h3 className="mt-3 font-semibold text-[#1a1a2e]">{m.name}</h3>
+        <p className="mt-1 text-sm text-muted-foreground">{m.setupReason}</p>
+        <Link
+          href={m.setupHref ?? "/settings"}
+          className="mt-4 inline-flex items-center gap-1.5 self-start rounded-lg bg-[#1b3a6b] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#122850]"
+        >
+          <Wrench className="h-4 w-4" />
+          Set up
+        </Link>
+      </div>
+    )
+  }
+
+  // active
+  return (
+    <Link
+      href={m.href}
+      className="group flex flex-col rounded-2xl border border-[#1e6b3a]/25 bg-[#1e6b3a]/5 p-5 transition-colors hover:border-[#1e6b3a]/45"
+    >
+      <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#1e6b3a]/10 text-[#1e6b3a]">
+        <Icon className="h-5 w-5" />
+      </span>
+      <h3 className="mt-3 font-semibold text-[#1a1a2e]">{m.name}</h3>
+      <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-[#1b3a6b]">
+        Open
+        <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+      </span>
+    </Link>
   )
 }
 
@@ -117,7 +143,7 @@ function NoCampaignHome({ committeeName, canManage }: { committeeName: string; c
       <div>
         <h1 className="text-2xl font-bold text-[#1a1a2e]">{committeeName}</h1>
         <p className="mt-1 text-muted-foreground">
-          Your committee is set up. Add your first campaign to start using Communications, your
+          Your committee is set up. Add your first candidate to start using Communications, your
           website, and newsletters.
         </p>
       </div>
@@ -126,23 +152,23 @@ function NoCampaignHome({ committeeName, canManage }: { committeeName: string; c
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-[#1b3a6b]/8 text-[#1b3a6b]">
           <Megaphone className="h-6 w-6" />
         </div>
-        <h2 className="mt-4 text-lg font-semibold text-[#1a1a2e]">Add your first campaign</h2>
+        <h2 className="mt-4 text-lg font-semibold text-[#1a1a2e]">Add your first candidate</h2>
         <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-          A campaign is one candidate&rsquo;s race. Each gets its own Communications, website, and
-          newsletter — add one per race your committee runs.
+          A candidate is one person your committee runs. Each gets their own Communications, website,
+          and newsletter.
         </p>
         <div className="mt-5 flex flex-wrap justify-center gap-3">
           {canManage ? (
             <Link
-              href="/campaigns/new"
+              href="/candidates/new"
               className="inline-flex items-center gap-2 rounded-lg bg-[#1b3a6b] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#122850]"
             >
               <Megaphone className="h-4 w-4" />
-              Add a campaign
+              Add a candidate
             </Link>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Ask a committee owner or admin to add the first campaign.
+              Ask a committee owner or admin to add the first candidate.
             </p>
           )}
           {canManage && (
@@ -157,40 +183,5 @@ function NoCampaignHome({ committeeName, canManage }: { committeeName: string; c
         </div>
       </div>
     </div>
-  )
-}
-
-function TaskRow({ task }: { task: HomeTask }) {
-  return (
-    <div className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-border bg-white p-5 transition-colors hover:border-[#c4910a]/40">
-      <div className="flex min-w-0 items-start gap-3">
-        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground">
-          <Circle className="h-3 w-3" />
-        </span>
-        <div className="min-w-0">
-          <h3 className="font-semibold text-[#1a1a2e]">{task.title}</h3>
-          <p className="mt-1 text-sm text-muted-foreground">{task.detail}</p>
-        </div>
-      </div>
-      <Link
-        href={task.href}
-        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#1b3a6b] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#122850]"
-      >
-        {task.cta}
-        <ArrowRight className="h-4 w-4" />
-      </Link>
-    </div>
-  )
-}
-
-function QuickLink({ href, label }: { href: string; label: string }) {
-  return (
-    <Link
-      href={href}
-      className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium text-[#1a1a2e] transition-colors hover:border-[#1b3a6b]/40"
-    >
-      {label}
-      <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
-    </Link>
   )
 }

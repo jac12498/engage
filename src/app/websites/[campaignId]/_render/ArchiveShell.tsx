@@ -1,12 +1,10 @@
 import Link from "next/link"
 import type { CSSProperties } from "react"
-import { formatBallotLine } from "@/lib/party"
 import { FONT_STACK, type PublicSite } from "./site"
 
 // Themed header/footer chrome for the public newsletter archive pages (list + detail),
 // matching the site's theme. Keeps the two routes DRY.
 export function ArchiveShell({ site, children }: { site: PublicSite; children: React.ReactNode }) {
-  const { campaign } = site
   const font = FONT_STACK[site.fontTheme] ?? FONT_STACK.classic
   const themeVars = {
     "--site-primary": site.primaryColor,
@@ -19,11 +17,11 @@ export function ArchiveShell({ site, children }: { site: PublicSite; children: R
       <header className="sticky top-0 z-20 border-b border-black/5 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
           <Link
-            href={`/websites/${site.campaignId}`}
+            href={`/websites/${site.committeeId}`}
             className="text-lg font-bold"
             style={{ color: "var(--site-primary)" }}
           >
-            {campaign.candidateName}
+            {site.siteTitle}
           </Link>
           {site.donateUrl && (
             <a
@@ -43,16 +41,8 @@ export function ArchiveShell({ site, children }: { site: PublicSite; children: R
 
       <footer style={{ backgroundColor: "var(--site-primary)" }} className="text-white/80">
         <div className="mx-auto max-w-5xl px-6 py-10 text-sm">
-          <p className="font-semibold text-white">
-            {campaign.candidateName} for {campaign.office}
-          </p>
-          <p className="mt-4 text-xs text-white/50">
-            Paid for by {campaign.committeeName || `${campaign.candidateName} for ${campaign.office}`}
-            {formatBallotLine(campaign.party, campaign.additionalParties)
-              ? ` · ${formatBallotLine(campaign.party, campaign.additionalParties)}`
-              : ""}
-            .
-          </p>
+          <p className="font-semibold text-white">{site.siteTitle}</p>
+          <p className="mt-4 text-xs text-white/50">Paid for by {site.paidForBy}.</p>
         </div>
       </footer>
     </div>

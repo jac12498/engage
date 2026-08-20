@@ -27,14 +27,14 @@ const SUGGESTIONS = [
 ]
 
 export function WebsiteAgent({
-  campaignId,
+  committeeId,
   pages,
   editsUsed,
   editsLimit,
   defaultModel,
   published,
 }: {
-  campaignId: string
+  committeeId: string
   pages: PageRef[]
   editsUsed: number
   editsLimit: number | null
@@ -204,7 +204,7 @@ export function WebsiteAgent({
             </button>
             {published && (
               <a
-                href={`/websites/${campaignId}`}
+                href={`/websites/${committeeId}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-xs font-medium text-[#c4910a] hover:underline"

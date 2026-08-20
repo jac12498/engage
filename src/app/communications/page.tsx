@@ -15,39 +15,28 @@ import { computeKnowledge } from "@/lib/comms/interview"
 import { MEDIA, MEDIUM_LABELS } from "@/lib/comms/prompts"
 
 export default async function CommunicationsOverview() {
-  const { campaign: active } = await requireActiveCampaign()
+  const { candidate, campaign: activeCampaign } = await requireActiveCampaign()
 
-  const campaign = await prisma.campaign.findUnique({
-    where: { id: active.id },
-    select: {
-      id: true,
-      candidateName: true,
-      bio: true,
-      whyRunning: true,
-      experience: true,
-      education: true,
-      coreValues: true,
-      politicalLean: true,
-      voiceTone: true,
-      _count: { select: { topics: true, contextItems: true, generations: true } },
-    },
+  const campaignCounts = await prisma.campaign.findUnique({
+    where: { id: activeCampaign.id },
+    select: { _count: { select: { topics: true, contextItems: true, generations: true } } },
   })
-  if (!campaign) redirect("/onboarding")
+  if (!campaignCounts) redirect("/onboarding")
+  const counts = campaignCounts._count
 
-  const counts = campaign._count
   const [positionCount, referenceCount] = await Promise.all([
-    prisma.contextItem.count({ where: { campaignId: campaign.id, type: "position" } }),
-    prisma.contextItem.count({ where: { campaignId: campaign.id, type: "reference" } }),
+    prisma.contextItem.count({ where: { campaignId: activeCampaign.id, type: "position" } }),
+    prisma.contextItem.count({ where: { campaignId: activeCampaign.id, type: "reference" } }),
   ])
 
   const knowledge = computeKnowledge({
-    bio: campaign.bio,
-    whyRunning: campaign.whyRunning,
-    experience: campaign.experience,
-    education: campaign.education,
-    coreValues: campaign.coreValues,
-    politicalLean: campaign.politicalLean,
-    voiceTone: campaign.voiceTone,
+    bio: candidate.bio,
+    whyRunning: candidate.whyRunning,
+    experience: candidate.experience,
+    education: candidate.education,
+    coreValues: candidate.coreValues,
+    politicalLean: candidate.politicalLean,
+    voiceTone: candidate.voiceTone,
     issuesCount: positionCount,
     newsCount: referenceCount,
   })
@@ -96,11 +85,12 @@ export default async function CommunicationsOverview() {
       <div>
         <h1 className="text-2xl font-bold text-[#1a1a2e]">Communications</h1>
         <p className="mt-1 text-muted-foreground">
-          Draft speeches, letters, social posts, and print — in {campaign.candidateName}&apos;s voice.
+          Draft speeches, letters, social posts, and print — in {candidate.candidateName}&apos;s voice.
         </p>
       </div>
 
-      {/* Knowledge meter */}
+      {/* Knowledge meter — hidden once campaign knowledge is fully complete */}
+      {knowledge.score < 100 && (
       <div className="rounded-2xl border border-border bg-white p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -120,6 +110,7 @@ export default async function CommunicationsOverview() {
           />
         </div>
       </div>
+      )}
 
       {/* Set up */}
       <div>

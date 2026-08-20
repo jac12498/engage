@@ -5,17 +5,17 @@ import { getActiveContext } from "@/lib/context"
 const MAX_BYTES = 3 * 1024 * 1024 // 3 MB
 const ALLOWED = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"])
 
-/** The active campaign id, or null. */
-async function currentCampaignId(): Promise<string | null> {
+/** The active candidate id, or null. The headshot lives on the Candidate (the person). */
+async function currentCandidateId(): Promise<string | null> {
   const ctx = await getActiveContext()
-  return ctx?.campaign?.id ?? null
+  return ctx?.candidate?.id ?? null
 }
 
-// Upload / replace the candidate headshot for the signed-in user's campaign.
-// Headshot lives on Campaign (part of the profile), so no website is required.
+// Upload / replace the candidate headshot for the signed-in user's candidate.
+// Headshot lives on the Candidate (part of the profile), so no website is required.
 export async function POST(req: Request) {
-  const campaignId = await currentCampaignId()
-  if (!campaignId) return new Response("Unauthorized", { status: 401 })
+  const candidateId = await currentCandidateId()
+  if (!candidateId) return new Response("Unauthorized", { status: 401 })
 
   let file: File | null = null
   try {
@@ -34,29 +34,29 @@ export async function POST(req: Request) {
   }
 
   const data = Buffer.from(await file.arrayBuffer())
-  await prisma.campaign.update({
-    where: { id: campaignId },
+  await prisma.candidate.update({
+    where: { id: candidateId },
     data: { headshotData: data, headshotMime: file.type },
   })
 
   revalidatePath("/settings")
   revalidatePath("/website")
-  revalidatePath(`/websites/${campaignId}`)
+  revalidatePath(`/websites/${candidateId}`)
   return Response.json({ ok: true })
 }
 
 // Remove the headshot.
 export async function DELETE() {
-  const campaignId = await currentCampaignId()
-  if (!campaignId) return new Response("Unauthorized", { status: 401 })
+  const candidateId = await currentCandidateId()
+  if (!candidateId) return new Response("Unauthorized", { status: 401 })
 
-  await prisma.campaign.update({
-    where: { id: campaignId },
+  await prisma.candidate.update({
+    where: { id: candidateId },
     data: { headshotData: null, headshotMime: null },
   })
 
   revalidatePath("/settings")
   revalidatePath("/website")
-  revalidatePath(`/websites/${campaignId}`)
+  revalidatePath(`/websites/${candidateId}`)
   return Response.json({ ok: true })
 }

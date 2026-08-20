@@ -30,10 +30,15 @@ model User {
   // CommitteeMembership). Replaces the old 1:1 User↔Campaign relation.
   memberships   CommitteeMembership[]
 
-  // Persisted active context, so a committee/campaign switch survives across
-  // devices and re-logins. The JWT mirrors these; the switcher writes both.
+  // Persisted active context, so a committee/candidate/campaign switch survives
+  // across devices and re-logins. The JWT mirrors these; the switchers write them.
   lastCommitteeId String?
-  lastCampaignId  String?
+  lastCandidateId String? // active Candidate (the person)
+  lastCampaignId  String? // active Campaign (the run under that candidate)
+
+  // Overall System Administrator (global, cross-committee). Grants the /admin
+  // area and the ability to impersonate any member. Seeded, never self-granted.
+  isSystemAdmin Boolean @default(false)
 
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -91,19 +96,36 @@ model Committee {
   id   String @id @default(cuid())
   name String
 
-  // Registration profile. `state` (2-letter) drives which committee types are
-  // offered and future coverage; `committeeType` is a code from the state's list
-  // (see lib/committeeTypes.ts — e.g. "constituted", "authorized_single", "pac");
-  // `filerId` is the state's campaign-finance filer ID (NY BOE), optional — no
-  // auto-lookup yet. All nullable (legacy backfilled committees have none).
+  // Registration profile. `jurisdiction` ("state" | "federal") says which body a
+  // committee registers under — they're distinct regimes and a federal contribution
+  // never matches a state committee id (and vice-versa). `filerId` is the recipient
+  // id in that jurisdiction: a state BOE filer ID (state committees) or an FEC
+  // committee id "C00…" (federal). For state committees `state` (2-letter) drives
+  // which committee types are offered + coverage, and `committeeType` is a code from
+  // the state's list (see lib/committeeTypes.ts — e.g. "constituted", "pac"); federal
+  // committees leave `state`/`committeeType` null. All nullable (legacy backfilled
+  // committees have none); jurisdiction defaults to "state".
+  jurisdiction  String  @default("state")
   state         String?
   committeeType String?
   filerId       String?
 
+  // Registry sync (NYSBOE), set by the admin Data Import reconciliation. Lets us
+  // flag an in-use committee (one with a filerId) that became terminated or whose
+  // details (treasurer, address, name) changed. Informational only - never gates
+  // access. `registryAlert` drives a dismissible owner banner.
+  registryStatus   String? // ACTIVE | TERMINATED | SUSPENDED | MISSING | ...
+  registrySnapshot Json? //   { name, committeeType, treasurer, addressLine1, city, addressState, zip }
+  registrySyncedAt DateTime?
+  registryAlert    String? // "terminated" | "changed" | null
+
   members   CommitteeMembership[]
-  campaigns Campaign[]
+  candidates Candidate[]
   contacts  Contact[]
+  newsletterSubscribers NewsletterSubscriber[] // committee-wide newsletter list (2b-1)
+  site      Website? // one committee website (2b-2)
   tags      Tag[]
+  roleTypes RoleType[] // committee-scoped custom roles (module-based access)
 
   // Entitlement: which plan this account is on. Default free tier = Starter.
   plan String @default("starter") // starter | campaign | committee
@@ -133,47 +155,86 @@ model Committee {
 model CommitteeMembership {
   userId      String
   committeeId String
-  role        String // owner | admin | editor | viewer
+  // Legacy coarse role (owner|admin|editor|viewer) — kept during the RBAC
+  // transition as a fallback and dropped in a later contract migration.
+  role        String
+  // The assigned RoleType (privilege bundle). Backfilled from `role`. Nullable
+  // until the seed runs; permission resolution falls back to `role` meanwhile.
+  roleTypeId  String?
   createdAt   DateTime @default(now())
 
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   committee Committee @relation(fields: [committeeId], references: [id], onDelete: Cascade)
+  roleType  RoleType? @relation(fields: [roleTypeId], references: [id], onDelete: SetNull)
 
   @@id([userId, committeeId])
   @@index([committeeId])
+  @@index([roleTypeId])
+  @@schema("engagecampaign")
+}
+
+// ─── RBAC: privileges (per-module CRUD) → roles → memberships ─────────────────
+// See src/lib/permissions.ts for the privilege vocabulary these tables mirror.
+
+// A single privilege, e.g. key "contacts:update" (module "contacts", action "update").
+model Permission {
+  id     String @id @default(cuid())
+  key    String @unique
+  module String
+  action String
+
+  roles RolePermission[]
+
+  @@schema("engagecampaign")
+}
+
+// A named privilege bundle. Global built-ins (committeeId null): Committee
+// Administrator, Member, Viewer. Committee-scoped rows are custom module-based
+// roles an admin builds.
+model RoleType {
+  id          String  @id @default(cuid())
+  key         String
+  label       String
+  description String?
+  isBuiltIn   Boolean @default(false)
+  committeeId String? // null = global built-in; set = committee custom role
+
+  committee   Committee?            @relation(fields: [committeeId], references: [id], onDelete: Cascade)
+  permissions RolePermission[]
+  memberships CommitteeMembership[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([committeeId, key])
+  @@index([committeeId])
+  @@schema("engagecampaign")
+}
+
+model RolePermission {
+  roleTypeId   String
+  permissionId String
+
+  roleType   RoleType   @relation(fields: [roleTypeId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleTypeId, permissionId])
+  @@index([permissionId])
   @@schema("engagecampaign")
 }
 
 // ─── Campaign (candidate race profile) ───────────────────────────────────────
 
-model Campaign {
+model Candidate {
   id          String    @id @default(cuid())
   committeeId String
   committee   Committee @relation(fields: [committeeId], references: [id], onDelete: Cascade)
 
-  // Candidate / office profile (powers AI Communications + Candidate Website)
+  // The person — durable identity across runs (Campaigns).
   candidateName String
-  office        String
-  party         String? // primary ballot line (required in the UI); null only on legacy rows
-  additionalParties String[] @default([]) // fusion endorsements, e.g. ["Working Families"] alongside a Democratic primary line
-  committeeName String? // registered campaign committee, e.g. "Friends of Jane Candidate" — powers the legal "Paid for by" disclaimer (required in the UI)
 
-  // Physical postal address — required in every newsletter footer (CAN-SPAM). Stored as
-  // standard US components; `mailingAddress` is the deprecated free-text field (unused).
-  mailingAddress String?
-  mailingStreet  String?
-  mailingStreet2 String?
-  mailingCity    String?
-  mailingState   String?
-  mailingZip     String?
-
-  // Campaign-level newsletter template (shared header/footer/theme across all issues).
-  // Shape: { theme, header, footer } — see lib/newsletter/template.ts. Null = defaults.
-  newsletterTemplate Json?
-
-  // Candidate headshot — the candidate's photo, stored in-DB. Lives on Campaign (not
-  // Website) so it's part of the profile and available before any site exists. Served
-  // via /api/website/headshot/[campaignId].
+  // Candidate headshot — the person's photo, stored in-DB. Served via
+  // /api/website/headshot/[candidateId].
   headshotData Bytes?
   headshotMime String?
 
@@ -192,35 +253,68 @@ model Campaign {
   interview          Json? // raw structured interview answers (e.g. the lean questionnaire)
   interviewUpdatedAt DateTime?
 
-  // District link — the bridge to voter records. We reuse the shared district
-  // hierarchy that the existing app owns in `public.districts` (read-only). On
-  // onboarding we snapshot the chosen district so voter-universe queries never
-  // need a cross-schema join: `districtQueryString` is the URL-encoded
-  // field=value filter (| = OR) that selects this district's voters from the
-  // voter parquet via DuckDB, exactly as version10.3 does.
-  state              String? // 2-letter or full state name; drives coverage gating (see lib/coverage)
-  district           String? // human-readable district name (e.g. "Ulster County Legislature District 23")
-  districtId         String? // UUID of the public.districts row chosen at onboarding
-  districtQueryString String? // snapshot of districts.query_string → voter-file filter
-  districtVoterCount  Int? // snapshot of districts.voter_count at selection time
+  // Runs for office — one Campaign per cycle. Per-race content (communications, news,
+  // newsletter issues) and the run profile (office, ballot line, district, "Paid for
+  // by") live on the Campaign.
+  campaigns Campaign[]
 
-  // NOTE: subscription plan + all usage metering now live on Committee (the
-  // billing entity). A campaign inherits its committee's plan and shares its
-  // credit pool with the committee's other campaigns.
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  topics       Topic[]
-  generations  Generation[]
-  contextItems ContextItem[]
-  site         Website?
-  newsClips    NewsClip[]
-  newsletterSubscribers NewsletterSubscriber[]
-  newsletters  Newsletter[]
-  newsletterImages NewsletterImage[]
+  @@index([committeeId])
+  @@schema("engagecampaign")
+}
+
+// ─── Campaign (one run for office in a cycle) ────────────────────────────────
+// A candidate's run in a specific cycle (e.g. Jeff Collins 2026). Owns that race's
+// outputs — communications, news, newsletter issues — and the run-specific profile,
+// so a candidate can run for different offices/lines over time.
+model Campaign {
+  id          String    @id @default(cuid())
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  cycle Int // election year, e.g. 2026
+
+  // Run profile (powers AI Communications + the "Paid for by" disclaimer)
+  office            String
+  party             String? // primary ballot line (required in the UI)
+  additionalParties String[] @default([]) // fusion endorsements alongside the primary line
+  committeeName     String? // registered campaign committee — the legal "Paid for by"
+  filerId           String? // the candidate's own committee filer id (state BOE) — scopes donor import
+
+  // Physical postal address — required in every newsletter footer (CAN-SPAM).
+  mailingAddress String?
+  mailingStreet  String?
+  mailingStreet2 String?
+  mailingCity    String?
+  mailingState   String?
+  mailingZip     String?
+
+  // Per-run newsletter template (header/footer/theme across this run's issues).
+  newsletterTemplate Json?
+
+  // District link — the bridge to voter records (snapshot of public.districts; the
+  // queryString filters this run's voters from the voter parquet via DuckDB).
+  state               String?
+  district            String?
+  districtId          String?
+  districtQueryString String?
+  districtVoterCount  Int?
+
+  // Per-race outputs.
+  topics            Topic[]
+  generations       Generation[]
+  contextItems      ContextItem[]
+  newsClips         NewsClip[]
+  newsletters       Newsletter[]
+  newsletterImages  NewsletterImage[]
   newsletterPresets NewsletterPreset[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([candidateId])
   @@schema("engagecampaign")
 }
 
@@ -327,25 +421,30 @@ model ContextItem {
   @@schema("engagecampaign")
 }
 
-// ─── Candidate Website ───────────────────────────────────────────────────────
+// ─── Committee Website ───────────────────────────────────────────────────────
 
-// One published-or-draft website per campaign. Content is auto-drafted from the
-// campaign profile (bio, why-running, values, positions, topics) via Claude,
-// then editable. Served publicly at /c/<slug> when `published`.
+// One published-or-draft website per COMMITTEE (2b-2). A single-candidate committee's
+// site features that candidate; a party/multi committee's site is a party landing with
+// a candidates section + per-candidate profile pages. Content is auto-drafted via Claude,
+// then editable (Page/Block). Public route: /websites/<committeeId> (+ /candidate/<id>).
 model Website {
-  id         String   @id @default(cuid())
-  campaignId String   @unique
-  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  id          String    @id @default(cuid())
+  committeeId String    @unique
+  committee   Committee @relation(fields: [committeeId], references: [id], onDelete: Cascade)
 
-  slug      String  @unique // public path segment: /c/<slug>
+  // Committee-level site identity (default to the committee name).
+  siteTitle String? // shown in the header / browser title
+  paidForBy String? // the legal "Paid for by" line in the footer
+
+  slug      String  @unique // public path segment
   published Boolean @default(false)
 
   // Theme
   primaryColor String  @default("#1b3a6b")
   accentColor  String  @default("#c4910a")
   fontTheme    String  @default("classic") // named preset: classic | modern | serif
-  headshotData Bytes?  // uploaded candidate photo, stored in-DB (served via /api/website/headshot/[campaignId])
-  headshotMime String? // content-type of the uploaded photo, e.g. image/png — null = no headshot
+  headshotData Bytes?  // optional committee logo, stored in-DB (served via the headshot route)
+  headshotMime String? // content-type of the uploaded logo — null = none
 
   // Calls to action
   donateUrl    String? // external ActBlue / WinRed / Anedot link (no payment processing here)
@@ -466,9 +565,9 @@ model NewsClip {
 // compliance-bearing mailing list), though active subscribers may also be surfaced
 // as Contacts later.
 model NewsletterSubscriber {
-  id         String   @id @default(cuid())
-  campaignId String
-  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  id          String    @id @default(cuid())
+  committeeId String
+  committee   Committee @relation(fields: [committeeId], references: [id], onDelete: Cascade)
 
   email  String
   name   String?
@@ -482,8 +581,8 @@ model NewsletterSubscriber {
   confirmedAt    DateTime?
   unsubscribedAt DateTime?
 
-  @@unique([campaignId, email])
-  @@index([campaignId, status])
+  @@unique([committeeId, email])
+  @@index([committeeId, status])
   @@schema("engagecampaign")
 }
 
@@ -568,12 +667,20 @@ model Contact {
   types  String[] @default([])
   source String   @default("manual") // manual | volunteer_signup | import
 
+  // Linked voter record (set via the "Find voter record" flow on the contact).
+  // `stateVoterId` is the BOE statewide id (e.g. NY000000000009092569); `voterState`
+  // says which state's voter file it belongs to (e.g. "ny"). Read from the voter
+  // parquets — not a DB relation.
+  stateVoterId String?
+  voterState   String?
+
   emails      ContactEmail[]
   phones      ContactPhone[]
   addresses   ContactAddress[]
   contactNotes ContactNote[]
   contactTags ContactTag[]
   volunteerSignups VolunteerSignup[]
+  donations   ContactDonation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -584,6 +691,34 @@ model Contact {
 }
 
 // Multiple labeled emails per contact (label required, e.g. "Personal", "Work").
+// A confirmed campaign contribution matched to a contact (NY state disclosures or
+// federal FEC), added via the "Find donations" review flow. A SNAPSHOT of the record
+// — the source parquets have no stable per-row id for NY, so we store the details +
+// a dedup `refKey` (fec = cycle:tranId; ny = filer|date|last|first|amount).
+model ContactDonation {
+  id           String   @id @default(cuid())
+  contactId    String
+  committeeId  String
+  source       String // "ny" | "fec"
+  refKey       String
+  donorName    String?
+  recipient    String?
+  amount       Float?
+  donationDate String? // "YYYY-MM-DD"
+  cycle        Int? // FEC election cycle
+  city         String?
+  state        String?
+  employer     String?
+  occupation   String?
+  createdAt    DateTime @default(now())
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, source, refKey])
+  @@index([contactId])
+  @@schema("engagecampaign")
+}
+
 model ContactEmail {
   id        String  @id @default(cuid())
   contactId String

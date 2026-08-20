@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma"
-import { getActiveContext } from "@/lib/context"
+import { getActiveContext, campaignProfile } from "@/lib/context"
 import { anthropic } from "@/lib/comms/anthropic"
 import { buildSystemPrompt, buildUserPrompt, draftingThinking, isContentType, toContextBundle } from "@/lib/comms/prompts"
 import { toPlanId, resolveModel } from "@/lib/entitlements"
@@ -21,8 +21,9 @@ export async function POST(req: Request) {
     return new Response("Invalid content type", { status: 400 })
   }
 
-  const { committee, campaign } = ctx
-  if (!campaign) return new Response("No campaign found", { status: 404 })
+  const { committee, campaign, candidate } = ctx
+  if (!campaign || !candidate) return new Response("No campaign found", { status: 404 })
+  const profile = campaignProfile(candidate, campaign)
 
   const plan = toPlanId(committee.plan)
 
@@ -71,8 +72,8 @@ export async function POST(req: Request) {
     orderBy: [{ type: "asc" }, { order: "asc" }, { createdAt: "asc" }],
   })
 
-  const systemPrompt = buildSystemPrompt(campaign, toContextBundle(contextItems))
-  const userPrompt = buildUserPrompt(body.type, campaign.candidateName, issueTopic, additionalContext)
+  const systemPrompt = buildSystemPrompt(profile, toContextBundle(contextItems))
+  const userPrompt = buildUserPrompt(body.type, candidate.candidateName, issueTopic, additionalContext)
 
   const thinking = draftingThinking(usedModel)
   const stream = await anthropic.messages.create({

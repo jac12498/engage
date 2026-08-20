@@ -8,12 +8,12 @@ export const dynamic = "force-dynamic"
 export const metadata = { title: "Newsletter subscribers · Engage" }
 
 export default async function SubscribersPage() {
-  const { campaign, committee } = await requireActiveCampaign()
+  const { committee } = await requireActiveCampaign()
 
   const subscriberLimit = NEWSLETTER_SUBSCRIBER_LIMITS[toPlanId(committee.plan)]
 
   const subs = await prisma.newsletterSubscriber.findMany({
-    where: { campaignId: campaign.id },
+    where: { committeeId: committee.id },
     orderBy: { createdAt: "desc" },
     select: { id: true, email: true, name: true, status: true, source: true, createdAt: true, confirmedAt: true },
   })

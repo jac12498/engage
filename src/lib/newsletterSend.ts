@@ -50,29 +50,36 @@ export async function sendTestNewsletterNow(campaignId: string, newsletterId: st
     where: { id: campaignId },
     select: {
       id: true,
-      candidateName: true,
       committeeName: true,
       mailingStreet: true,
       mailingStreet2: true,
       mailingCity: true,
       mailingState: true,
       mailingZip: true,
-      headshotMime: true,
       newsletterTemplate: true,
-      site: { select: { published: true } },
-      committee: {
+      candidate: {
         select: {
-          members: {
-            where: { role: "owner" },
-            select: { user: { select: { email: true } } },
-            take: 1,
+          id: true,
+          candidateName: true,
+          headshotMime: true,
+          committee: {
+            select: {
+              id: true,
+              site: { select: { published: true } },
+              members: {
+                where: { role: "owner" },
+                select: { user: { select: { email: true } } },
+                take: 1,
+              },
+            },
           },
         },
       },
     },
   })
   if (!campaign) return { ok: false, error: "Campaign not found." }
-  const to = campaign.committee.members[0]?.user.email
+  const candidate = campaign.candidate
+  const to = candidate.committee.members[0]?.user.email
   if (!to) return { ok: false, error: "No account email to send the test to." }
 
   const blocks =
@@ -85,9 +92,9 @@ export async function sendTestNewsletterNow(campaignId: string, newsletterId: st
   const base = baseUrl()
   const html = renderNewsletterEmail(newsletter.template ?? campaign.newsletterTemplate, blocks, {
     subject: newsletter.subject,
-    candidateName: campaign.candidateName,
+    candidateName: candidate.candidateName,
     committeeName: campaign.committeeName,
-    campaignId: campaign.id,
+    campaignId: candidate.id, // headshot + public-site routes key on the candidate id
     mailing: {
       street: campaign.mailingStreet,
       street2: campaign.mailingStreet2,
@@ -96,12 +103,14 @@ export async function sendTestNewsletterNow(campaignId: string, newsletterId: st
       zip: campaign.mailingZip,
     },
     unsubscribeUrl: "#",
-    headshotUrl: campaign.headshotMime ? `${base}/api/website/headshot/${campaign.id}` : null,
-    subscribeUrl: campaign.site?.published ? `${base}/websites/${campaign.id}/newsletter#subscribe` : null,
+    headshotUrl: candidate.headshotMime ? `${base}/api/website/headshot/${candidate.id}` : null,
+    subscribeUrl: candidate.committee.site?.published
+      ? `${base}/websites/${candidate.committee.id}/newsletter#subscribe`
+      : null,
     baseUrl: base,
   })
 
-  const fromName = sanitizeName(campaign.committeeName || campaign.candidateName) || "Newsletter"
+  const fromName = sanitizeName(campaign.committeeName || candidate.candidateName) || "Newsletter"
   try {
     const { error } = await resend.emails.send({
       from: `${fromName} <${SEND_ADDRESS}>`,
@@ -139,37 +148,44 @@ export async function sendNewsletterNow(campaignId: string, newsletterId: string
     where: { id: campaignId },
     select: {
       id: true,
-      candidateName: true,
       committeeName: true,
       mailingStreet: true,
       mailingStreet2: true,
       mailingCity: true,
       mailingState: true,
       mailingZip: true,
-      headshotMime: true,
       newsletterTemplate: true,
-      site: { select: { published: true } },
-      committee: {
+      candidate: {
         select: {
           id: true,
-          plan: true,
-          creditsThisMonth: true,
-          revisionsThisMonth: true,
-          crawlsThisMonth: true,
-          websiteEditsThisMonth: true,
-          newsSearchesThisMonth: true,
-          newsletterEmailsThisMonth: true,
-          billingPeriodStart: true,
-          members: {
-            where: { role: "owner" },
-            select: { user: { select: { email: true } } },
-            take: 1,
+          candidateName: true,
+          headshotMime: true,
+          committee: {
+            select: {
+              id: true,
+              plan: true,
+              creditsThisMonth: true,
+              revisionsThisMonth: true,
+              crawlsThisMonth: true,
+              websiteEditsThisMonth: true,
+              newsSearchesThisMonth: true,
+              newsletterEmailsThisMonth: true,
+              billingPeriodStart: true,
+              site: { select: { published: true } },
+              members: {
+                where: { role: "owner" },
+                select: { user: { select: { email: true } } },
+                take: 1,
+              },
+            },
           },
         },
       },
     },
   })
   if (!campaign) return { ok: false, error: "Campaign not found." }
+  const candidate = campaign.candidate
+  const committee = candidate.committee
 
   const mailing = {
     street: campaign.mailingStreet,
@@ -191,16 +207,16 @@ export async function sendNewsletterNow(campaignId: string, newsletterId: string
         : []
 
   const subscribers = await prisma.newsletterSubscriber.findMany({
-    where: { campaignId, status: "active" },
+    where: { committeeId: committee.id, status: "active" },
     select: { id: true, email: true, unsubscribeToken: true },
   })
   if (subscribers.length === 0) return { ok: false, error: "You have no confirmed subscribers yet." }
 
   // Meter up front (all-or-nothing against the committee's monthly cap).
-  const plan = toPlanId(campaign.committee.plan)
-  const consumed = await consumeNewsletterEmails(plan, campaign.committee, subscribers.length)
+  const plan = toPlanId(committee.plan)
+  const consumed = await consumeNewsletterEmails(plan, committee, subscribers.length)
   if (!consumed.ok) {
-    const { remaining } = newsletterHeadroom(plan, campaign.committee)
+    const { remaining } = newsletterHeadroom(plan, committee)
     return {
       ok: false,
       limitHit: true,
@@ -208,19 +224,19 @@ export async function sendNewsletterNow(campaignId: string, newsletterId: string
     }
   }
 
-  const fromName = sanitizeName(campaign.committeeName || campaign.candidateName) || "Newsletter"
+  const fromName = sanitizeName(campaign.committeeName || candidate.candidateName) || "Newsletter"
   const from = `${fromName} <${SEND_ADDRESS}>`
-  const replyTo = campaign.committee.members[0]?.user.email || undefined
+  const replyTo = committee.members[0]?.user.email || undefined
   const base = baseUrl()
-  const headshotUrl = campaign.headshotMime ? `${base}/api/website/headshot/${campaign.id}` : null
-  const subscribeUrl = campaign.site?.published ? `${base}/websites/${campaign.id}/newsletter#subscribe` : null
+  const headshotUrl = candidate.headshotMime ? `${base}/api/website/headshot/${candidate.id}` : null
+  const subscribeUrl = committee.site?.published ? `${base}/websites/${committee.id}/newsletter#subscribe` : null
 
   function ctxFor(unsubscribeUrl: string): EmailRenderCtx {
     return {
       subject: newsletter!.subject,
-      candidateName: campaign!.candidateName,
+      candidateName: candidate!.candidateName,
       committeeName: campaign!.committeeName,
-      campaignId: campaign!.id,
+      campaignId: candidate!.id,
       mailing,
       unsubscribeUrl,
       headshotUrl,

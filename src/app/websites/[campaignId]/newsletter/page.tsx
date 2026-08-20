@@ -16,7 +16,7 @@ export async function generateMetadata({
   const { campaignId } = await params
   const site = await loadPublicSite(campaignId)
   if (!site || !site.published) return { title: "Not found" }
-  return { title: `Newsletter · ${site.campaign.candidateName}` }
+  return { title: `Newsletter · ${site.siteTitle}` }
 }
 
 export default async function NewsletterArchivePage({
@@ -29,7 +29,7 @@ export default async function NewsletterArchivePage({
   if (!site || !site.published) notFound()
 
   const items = await prisma.newsletter.findMany({
-    where: { campaignId, status: "published" },
+    where: { campaign: { candidate: { committeeId: campaignId } }, status: "published" },
     orderBy: [{ publishedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
     select: { id: true, subject: true, preview: true, publishedAt: true },
   })
@@ -72,11 +72,11 @@ export default async function NewsletterArchivePage({
             className="text-sm font-medium hover:underline"
             style={{ color: "var(--site-primary)" }}
           >
-            ← Back to {site.campaign.candidateName}
+            ← Back to {site.siteTitle}
           </Link>
         </div>
       </main>
-      <ArchiveSubscribe campaignId={campaignId} accent={site.accentColor} />
+      <ArchiveSubscribe committeeId={campaignId} accent={site.accentColor} />
     </ArchiveShell>
   )
 }

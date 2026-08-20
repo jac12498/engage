@@ -9,10 +9,14 @@ import { NewsletterBlocks } from "../../_render/NewsletterBlocks"
 
 export const dynamic = "force-dynamic"
 
-/** A published newsletter for this campaign — or null. */
-async function loadIssue(campaignId: string, newsletterId: string) {
+/** A published newsletter from any of the committee's campaigns — or null. */
+async function loadIssue(committeeId: string, newsletterId: string) {
   return prisma.newsletter.findFirst({
-    where: { id: newsletterId, campaignId, status: "published" },
+    where: {
+      id: newsletterId,
+      campaign: { candidate: { committeeId } },
+      status: "published",
+    },
     select: { id: true, subject: true, preview: true, body: true, blocks: true, publishedAt: true },
   })
 }
@@ -73,11 +77,11 @@ export default async function NewsletterIssuePage({
             className="text-sm font-medium hover:underline"
             style={{ color: "var(--site-primary)" }}
           >
-            Back to {site.campaign.candidateName}
+            Back to {site.siteTitle}
           </Link>
         </div>
       </article>
-      <ArchiveSubscribe campaignId={campaignId} accent={site.accentColor} />
+      <ArchiveSubscribe committeeId={campaignId} accent={site.accentColor} />
     </ArchiveShell>
   )
 }

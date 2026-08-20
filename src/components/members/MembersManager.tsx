@@ -3,63 +3,58 @@
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { UserPlus, Trash2 } from "lucide-react"
-import { inviteMember, changeMemberRole, removeMember } from "@/app/members/actions"
+import { inviteMember, assignRole, removeMember } from "@/app/members/actions"
 
 export interface MemberRow {
   userId: string
   name: string | null
   email: string
-  role: string
+  roleTypeId: string
+  roleLabel: string
   pending: boolean
   joinedAt: string
 }
 
-const ROLE_LABELS: Record<string, string> = {
-  owner: "Owner",
-  admin: "Admin",
-  editor: "Editor",
-  viewer: "Viewer",
-}
-const ROLE_HELP: Record<string, string> = {
-  owner: "Full control, incl. billing & members",
-  admin: "Manage members & all content",
-  editor: "Create & edit content",
-  viewer: "Read-only",
+export interface AssignableRole {
+  id: string
+  label: string
+  isBuiltIn: boolean
 }
 
 export function MembersManager({
   members,
+  roles,
+  defaultRoleId,
   currentUserId,
-  currentRole,
+  canManageRoles,
 }: {
   members: MemberRow[]
+  roles: AssignableRole[]
+  defaultRoleId: string
   currentUserId: string
-  currentRole: string
+  /** Whether the current user may change members' roles (roles:manage). */
+  canManageRoles: boolean
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [email, setEmail] = useState("")
-  const [inviteRole, setInviteRole] = useState("editor")
+  const [inviteRoleId, setInviteRoleId] = useState(defaultRoleId)
   const [error, setError] = useState<string | null>(null)
-
-  const isOwner = currentRole === "owner"
-  // Owners can assign any role; admins can assign everything except owner.
-  const assignable = isOwner ? ["owner", "admin", "editor", "viewer"] : ["admin", "editor", "viewer"]
 
   function invite() {
     setError(null)
     startTransition(async () => {
-      const res = await inviteMember(email, inviteRole)
+      const res = await inviteMember(email, inviteRoleId)
       if (!res.ok) return setError(res.error)
       setEmail("")
       router.refresh()
     })
   }
 
-  function updateRole(userId: string, role: string) {
+  function updateRole(userId: string, roleTypeId: string) {
     setError(null)
     startTransition(async () => {
-      const res = await changeMemberRole(userId, role)
+      const res = await assignRole(userId, roleTypeId)
       if (!res.ok) setError(res.error)
       router.refresh()
     })
@@ -99,32 +94,29 @@ export function MembersManager({
           <label>
             <span className="mb-1 block text-xs font-medium text-muted-foreground">Role</span>
             <select
-              value={inviteRole}
-              onChange={(e) => setInviteRole(e.target.value)}
+              value={inviteRoleId}
+              onChange={(e) => setInviteRoleId(e.target.value)}
               className="rounded-lg border border-border bg-white px-3 py-2 text-sm outline-none focus:border-[#1b3a6b]"
             >
-              {assignable.map((r) => (
-                <option key={r} value={r}>
-                  {ROLE_LABELS[r]}
+              {roles.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.label}
                 </option>
               ))}
             </select>
           </label>
           <button
             onClick={invite}
-            disabled={pending || !email.trim()}
+            disabled={pending || !email.trim() || !inviteRoleId}
             className="rounded-lg bg-[#1b3a6b] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#122850] disabled:opacity-50"
           >
             Send invite
           </button>
         </div>
-        <p className="mt-2 text-xs text-muted-foreground">{ROLE_HELP[inviteRole]}</p>
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">
-          {error}
-        </div>
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700">{error}</div>
       )}
 
       {/* Roster */}
@@ -140,8 +132,8 @@ export function MembersManager({
           <tbody>
             {members.map((m) => {
               const isSelf = m.userId === currentUserId
-              // Admins can't modify owners; only owners can. Nobody can demote themselves here.
-              const canEdit = (isOwner || m.role !== "owner") && !isSelf
+              // You can't change or remove yourself here (avoids locking yourself out).
+              const editable = canManageRoles && !isSelf
               return (
                 <tr key={m.userId} className="border-b border-border last:border-0">
                   <td className="px-5 py-3">
@@ -155,25 +147,25 @@ export function MembersManager({
                     </div>
                   </td>
                   <td className="px-5 py-3">
-                    {canEdit ? (
+                    {editable ? (
                       <select
-                        value={m.role}
+                        value={m.roleTypeId}
                         disabled={pending}
                         onChange={(e) => updateRole(m.userId, e.target.value)}
                         className="rounded-lg border border-border bg-white px-2.5 py-1.5 text-sm outline-none focus:border-[#1b3a6b]"
                       >
-                        {assignable.map((r) => (
-                          <option key={r} value={r}>
-                            {ROLE_LABELS[r]}
+                        {roles.map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.label}
                           </option>
                         ))}
                       </select>
                     ) : (
-                      <span className="text-[#1a1a2e]">{ROLE_LABELS[m.role] ?? m.role}</span>
+                      <span className="text-[#1a1a2e]">{m.roleLabel}</span>
                     )}
                   </td>
                   <td className="px-5 py-3 text-right">
-                    {canEdit && (
+                    {!isSelf && canManageRoles && (
                       <button
                         onClick={() => remove(m.userId)}
                         disabled={pending}

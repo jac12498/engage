@@ -12,14 +12,16 @@ import { WebsiteBuilder, type EditorSite } from "./WebsiteBuilder"
 type Mode = "assistant" | "advanced"
 
 export function WebsiteWorkspace({
-  campaignId,
+  committeeId,
+  multiCandidate,
   site,
   pendingSignups,
   editsUsed,
   editsLimit,
   defaultModel,
 }: {
-  campaignId: string
+  committeeId: string
+  multiCandidate: boolean
   site: EditorSite
   pendingSignups: number
   editsUsed: number
@@ -34,7 +36,7 @@ export function WebsiteWorkspace({
   const [copied, setCopied] = useState(false)
 
   useEffect(() => setOrigin(window.location.origin), [])
-  const publicUrl = `${origin}/websites/${campaignId}`
+  const publicUrl = `${origin}/websites/${committeeId}`
 
   function togglePublish() {
     const next = !site.published
@@ -58,7 +60,7 @@ export function WebsiteWorkspace({
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-[#1a1a2e]">Candidate Website</h1>
+          <h1 className="text-2xl font-bold text-[#1a1a2e]">{multiCandidate ? "Committee Website" : "Candidate Website"}</h1>
           <p className="mt-1 text-muted-foreground">Chat to build your site, or edit the blocks by hand.</p>
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
             <Link
@@ -138,7 +140,7 @@ export function WebsiteWorkspace({
 
       {mode === "assistant" ? (
         <WebsiteAgent
-          campaignId={campaignId}
+          committeeId={committeeId}
           pages={pageRefs}
           editsUsed={editsUsed}
           editsLimit={editsLimit}

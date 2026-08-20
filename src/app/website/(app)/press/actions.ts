@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
-import { getActiveContext, roleAtLeast } from "@/lib/context"
+import { getActiveContext, campaignProfile } from "@/lib/context"
 import { toPlanId } from "@/lib/entitlements"
 import { consumeNewsSearch } from "@/lib/comms/usage"
 import { searchCandidateNews, summarizeArticleUrl } from "@/lib/website/newsSearch"
@@ -18,8 +18,8 @@ export type FindResult =
  */
 async function requireContext() {
   const ctx = await getActiveContext()
-  if (!ctx?.campaign || !roleAtLeast(ctx.role, "editor")) return null
-  return { campaign: ctx.campaign, committee: ctx.committee }
+  if (!ctx?.campaign || !ctx.candidate || !ctx.permissions.has("candidate-websites:update")) return null
+  return { candidate: ctx.candidate, campaign: ctx.campaign, committee: ctx.committee }
 }
 
 function validHttpUrl(v: string): string | null {
@@ -45,7 +45,8 @@ function revalidatePress(campaignId: string) {
 export async function findPressCoverage(keywords?: string): Promise<FindResult> {
   const ctx = await requireContext()
   if (!ctx) return { ok: false, error: "You must be signed in." }
-  const { campaign, committee } = ctx
+  const { candidate, campaign, committee } = ctx
+  const profile = campaignProfile(candidate, campaign)
 
   const usage = await consumeNewsSearch(toPlanId(committee.plan), committee)
   if (!usage.ok) {
@@ -55,13 +56,13 @@ export async function findPressCoverage(keywords?: string): Promise<FindResult> 
   let found
   try {
     found = await searchCandidateNews({
-      candidateName: campaign.candidateName,
-      office: campaign.office,
-      district: campaign.district,
-      state: campaign.state,
-      party: campaign.party,
-      committeeName: campaign.committeeName,
-      context: campaign.tagline || campaign.bio?.slice(0, 400) || campaign.whyRunning?.slice(0, 400) || null,
+      candidateName: profile.candidateName,
+      office: profile.office,
+      district: profile.district,
+      state: profile.state,
+      party: profile.party,
+      committeeName: profile.committeeName,
+      context: profile.tagline || profile.bio?.slice(0, 400) || profile.whyRunning?.slice(0, 400) || null,
       keywords: typeof keywords === "string" ? keywords.trim().slice(0, 300) || null : null,
     })
   } catch {

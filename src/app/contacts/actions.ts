@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
-import { getActiveContext, roleAtLeast, type Role } from "@/lib/context"
+import { getActiveContext } from "@/lib/context"
+import type { PermissionKey } from "@/lib/permissions"
 import { CONTACT_TYPES } from "@/lib/contacts"
 
 export interface EmailInput {
@@ -48,12 +49,12 @@ export type ContactResult = { ok: true; id: string } | { ok: false; error: strin
 
 /**
  * Resolve the active committee id (the CRM is committee-scoped), or null when the
- * user isn't signed in or lacks the required role. Writes pass `"editor"`.
+ * user isn't signed in or lacks the required privilege.
  */
-async function requireCommitteeId(min: Role = "viewer"): Promise<string | null> {
+async function requireCommitteeIdFor(perm: PermissionKey): Promise<string | null> {
   const ctx = await getActiveContext()
   if (!ctx) return null
-  if (!roleAtLeast(ctx.role, min)) return null
+  if (!ctx.permissions.has(perm)) return null
   return ctx.committee.id
 }
 
@@ -159,8 +160,8 @@ async function resolveTagIds(committeeId: string, names: string[]): Promise<stri
 
 /** Create or update a contact (with its emails/phones/tags), scoped to the caller's campaign. */
 export async function saveContact(input: ContactInput): Promise<ContactResult> {
-  const committeeId = await requireCommitteeId("editor")
-  if (!committeeId) return { ok: false, error: "You must be signed in." }
+  const committeeId = await requireCommitteeIdFor(input.id ? "contacts:update" : "contacts:create")
+  if (!committeeId) return { ok: false, error: "You don't have permission to edit contacts." }
 
   const firstName = input.firstName?.trim()
   const lastName = input.lastName?.trim()
@@ -243,8 +244,8 @@ export async function addContactNote(
   contactId: string,
   body: string
 ): Promise<{ ok: boolean; error?: string }> {
-  const committeeId = await requireCommitteeId("editor")
-  if (!committeeId) return { ok: false, error: "You must be signed in." }
+  const committeeId = await requireCommitteeIdFor("contacts:update")
+  if (!committeeId) return { ok: false, error: "You don't have permission to edit contacts." }
   const text = body?.trim()
   if (!text) return { ok: false, error: "Note can't be empty." }
 
@@ -262,8 +263,8 @@ export async function addContactNote(
 
 /** Delete a single note (ownership checked via its contact's campaign). */
 export async function deleteContactNote(noteId: string): Promise<{ ok: boolean; error?: string }> {
-  const committeeId = await requireCommitteeId("editor")
-  if (!committeeId) return { ok: false, error: "You must be signed in." }
+  const committeeId = await requireCommitteeIdFor("contacts:update")
+  if (!committeeId) return { ok: false, error: "You don't have permission to edit contacts." }
 
   const note = await prisma.contactNote.findFirst({
     where: { id: noteId, contact: { committeeId } },
@@ -279,8 +280,8 @@ export async function deleteContactNote(noteId: string): Promise<{ ok: boolean; 
 
 /** Delete a contact owned by the caller's campaign. */
 export async function deleteContact(id: string): Promise<{ ok: boolean; error?: string }> {
-  const committeeId = await requireCommitteeId("editor")
-  if (!committeeId) return { ok: false, error: "You must be signed in." }
+  const committeeId = await requireCommitteeIdFor("contacts:delete")
+  if (!committeeId) return { ok: false, error: "You don't have permission to delete contacts." }
 
   const existing = await prisma.contact.findFirst({
     where: { id, committeeId },

@@ -5,25 +5,25 @@ import { SettingsForm } from "@/components/settings/SettingsForm"
 export const dynamic = "force-dynamic"
 
 export default async function SettingsPage() {
-  const { campaign } = await requireActiveCampaign()
+  const { candidate, campaign } = await requireActiveCampaign()
 
   return (
     <AppShell>
       <div className="mx-auto max-w-2xl">
         <div>
-          <h1 className="text-2xl font-bold text-[#1a1a2e]">Campaign settings</h1>
+          <h1 className="text-2xl font-bold text-[#1a1a2e]">Candidate settings</h1>
           <p className="mt-1 text-muted-foreground">
-            Update your candidate profile. These details appear across your workspace, generated
-            communications, and published website.
+            Update your candidate profile and current run. These details appear across your
+            workspace, generated communications, and published website.
           </p>
         </div>
 
         <div className="mt-8">
           <SettingsForm
-            campaignId={campaign.id}
-            hasHeadshot={!!campaign.headshotMime}
+            campaignId={candidate.id}
+            hasHeadshot={!!candidate.headshotMime}
             initial={{
-              candidateName: campaign.candidateName,
+              candidateName: candidate.candidateName,
               office: campaign.office,
               party: campaign.party ?? "",
               additionalParties: campaign.additionalParties,

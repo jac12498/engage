@@ -12,25 +12,27 @@ export interface WebsiteDraft {
   heroSubhead: string
   aboutHeading: string
   aboutBody: string
+  candidatesIntro: string
   issuesIntro: string
   issues: { title: string; body: string }[]
   volunteerIntro: string
 }
 
-export interface WebsiteProfile {
+/** One candidate on the committee, for the site draft. */
+export interface CandidateProfile {
   candidateName: string
   office: string
   party?: string | null
-  tagline?: string | null
   bio?: string | null
   whyRunning?: string | null
-  experience?: string | null
-  education?: string | null
   coreValues?: string | null
-  politicalLean?: string | null
-  voiceTone?: string | null
-  district?: string | null
+}
+
+/** The committee whose site we're drafting, plus its candidates. */
+export interface CommitteeSiteProfile {
+  committeeName: string
   state?: string | null
+  candidates: CandidateProfile[]
 }
 
 export interface IssueSource {
@@ -44,20 +46,22 @@ export interface TopicSource {
   talkingPoints?: string[]
 }
 
-function profileBlock(p: WebsiteProfile): string {
+function profileBlock(p: CommitteeSiteProfile): string {
+  const single = p.candidates.length === 1
   const lines: string[] = [
-    `Name: ${p.candidateName}`,
-    `Running for: ${p.office}${p.district ? ` (${p.district})` : ""}${p.state ? `, ${p.state}` : ""}`,
+    `Committee/organization: ${p.committeeName}${p.state ? ` (${p.state})` : ""}`,
+    single
+      ? `This is a single-candidate committee — the site should center on the candidate.`
+      : `This is a multi-candidate/party committee — the site should be a party landing that presents the slate of candidates.`,
+    `Candidates (${p.candidates.length}):`,
   ]
-  if (p.party) lines.push(`Party: ${p.party}`)
-  if (p.tagline) lines.push(`Tagline: ${p.tagline}`)
-  if (p.bio) lines.push(`Bio: ${p.bio}`)
-  if (p.whyRunning) lines.push(`Why running: ${p.whyRunning}`)
-  if (p.experience) lines.push(`Experience: ${p.experience}`)
-  if (p.education) lines.push(`Education: ${p.education}`)
-  if (p.coreValues) lines.push(`Core values: ${p.coreValues}`)
-  if (p.politicalLean) lines.push(`Positions/lean: ${p.politicalLean}`)
-  if (p.voiceTone) lines.push(`Preferred voice/tone: ${p.voiceTone}`)
+  for (const c of p.candidates) {
+    const bits = [`- ${c.candidateName} — running for ${c.office}${c.party ? ` (${c.party})` : ""}`]
+    if (c.bio) bits.push(`  Bio: ${c.bio}`)
+    if (c.whyRunning) bits.push(`  Why running: ${c.whyRunning}`)
+    if (c.coreValues) bits.push(`  Core values: ${c.coreValues}`)
+    lines.push(bits.join("\n"))
+  }
   return lines.join("\n")
 }
 
@@ -76,31 +80,34 @@ function materialBlock(positions: IssueSource[], topics: TopicSource[]): string 
 
 const SYSTEM =
   "You are an expert political web copywriter. You write warm, authentic, specific campaign-website " +
-  "copy grounded in the candidate's real profile — concrete over abstract, genuine over platitudes, " +
-  "and never inventing biographical facts or policy positions that aren't supported by the material. " +
-  "Write the About section as a warm third-person narrative; write hero and issue copy in the " +
-  "candidate's own confident voice. Return ONLY valid JSON — no markdown fences, no commentary."
+  "copy grounded in the committee and its candidates' real profiles — concrete over abstract, genuine " +
+  "over platitudes, and never inventing biographical facts or policy positions that aren't supported by " +
+  "the material. The site belongs to a committee: for a single-candidate committee it centers on that " +
+  "candidate; for a party/multi-candidate committee it's a party landing presenting the slate. Write the " +
+  "About section as a warm narrative. Return ONLY valid JSON — no markdown fences, no commentary."
 
 export async function generateWebsiteDraft(
-  profile: WebsiteProfile,
+  profile: CommitteeSiteProfile,
   positions: IssueSource[],
   topics: TopicSource[]
 ): Promise<WebsiteDraft> {
-  const user = `Write the website copy for this candidate. Return a single JSON object with EXACTLY these keys:
+  const single = profile.candidates.length === 1
+  const user = `Write the homepage copy for this committee's website. Return a single JSON object with EXACTLY these keys:
 
 {
   "heroHeadline": "punchy homepage headline, 8 words or fewer",
   "heroSubhead": "1-2 sentences under the headline",
   "aboutHeading": "short heading for the About section",
-  "aboutBody": "2-4 short paragraphs, warm third-person bio (separate paragraphs with \\n\\n)",
+  "aboutBody": "2-4 short paragraphs (separate paragraphs with \\n\\n)${single ? ", a warm third-person bio of the candidate" : ", about the committee and what it stands for"}",
+  "candidatesIntro": "${single ? "" : "1-2 sentence intro to the section listing the committee's candidates"}",
   "issuesIntro": "1-2 sentence intro to the issues section",
-  "issues": [ { "title": "issue name", "body": "1-2 short paragraphs in the candidate's voice" } ],
+  "issues": [ { "title": "issue name", "body": "1-2 short paragraphs" } ],
   "volunteerIntro": "1-2 sentences inviting people to get involved"
 }
 
-Produce 3 to 6 issues, drawn from the source material below (do not invent positions the material doesn't support).
+Produce 3 to 6 issues, drawn from the source material below (do not invent positions the material doesn't support).${single ? " Leave candidatesIntro as an empty string." : " candidatesIntro introduces the candidates section."}
 
-CANDIDATE PROFILE
+COMMITTEE PROFILE
 ${profileBlock(profile)}
 
 ISSUE SOURCE MATERIAL
@@ -153,6 +160,7 @@ function parseDraft(text: string): WebsiteDraft {
     heroSubhead: str(o.heroSubhead),
     aboutHeading: str(o.aboutHeading, "About"),
     aboutBody: str(o.aboutBody),
+    candidatesIntro: str(o.candidatesIntro),
     issuesIntro: str(o.issuesIntro),
     issues,
     volunteerIntro: str(o.volunteerIntro),

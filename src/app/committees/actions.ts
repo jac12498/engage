@@ -4,14 +4,8 @@ import { redirect } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import { auth, updateSession } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { isSupportedState, isValidCommitteeType } from "@/lib/committeeTypes"
-
-export interface CreateCommitteeInput {
-  name: string
-  state: string
-  committeeType: string
-  filerId?: string
-}
+import { buildCommitteeProfile, type CreateCommitteeInput } from "@/lib/committeeProfile"
+import { getActiveContext, roleAtLeast } from "@/lib/context"
 
 export type CommitteeResult = { ok: true } | { ok: false; error: string }
 
@@ -29,22 +23,14 @@ export async function createAdditionalCommittee(
   const userId = session.user.id
 
   const name = input.name.trim()
-  const state = input.state.trim().toUpperCase()
-  const committeeType = input.committeeType.trim()
-  const filerId = input.filerId?.trim() || null
-
   if (!name) return { ok: false, error: "Committee name is required." }
-  if (!isSupportedState(state)) return { ok: false, error: "Please choose a supported state." }
-  if (!isValidCommitteeType(state, committeeType)) {
-    return { ok: false, error: "Please choose a committee type." }
-  }
+  const profile = buildCommitteeProfile(input)
+  if (!profile.ok) return profile
 
   const committee = await prisma.committee.create({
     data: {
       name,
-      state,
-      committeeType,
-      filerId,
+      ...profile.data,
       plan: "starter",
       members: { create: { userId, role: "owner" } },
     },
@@ -57,6 +43,33 @@ export async function createAdditionalCommittee(
     data: { lastCommitteeId: committee.id, lastCampaignId: null },
   })
 
+  return { ok: true }
+}
+
+/**
+ * Update the ACTIVE committee's registration profile (name, jurisdiction, state,
+ * committee type, filer id). Committee-wide config — admin+ only. Returns to the
+ * caller (no redirect) so the settings form can show a saved state in place.
+ */
+export async function updateActiveCommittee(input: CreateCommitteeInput): Promise<CommitteeResult> {
+  const ctx = await getActiveContext()
+  if (!ctx) return { ok: false, error: "You must be signed in." }
+  if (!roleAtLeast(ctx.role, "admin")) {
+    return { ok: false, error: "Only committee admins can change committee settings." }
+  }
+
+  const name = input.name.trim()
+  if (!name) return { ok: false, error: "Committee name is required." }
+  const profile = buildCommitteeProfile(input)
+  if (!profile.ok) return profile
+
+  await prisma.committee.update({
+    where: { id: ctx.committee.id },
+    data: { name, ...profile.data },
+  })
+
+  revalidatePath("/", "layout") // committee name shows in the sidebar/switcher
+  revalidatePath("/committees")
   return { ok: true }
 }
 

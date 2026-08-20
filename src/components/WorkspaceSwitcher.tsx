@@ -2,59 +2,61 @@
 
 import { useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { ChevronsUpDown, Building2, Megaphone } from "lucide-react"
-import { setActiveCommittee, setActiveCampaign } from "@/app/actions/committee"
+import { ChevronsUpDown, Building2, UserRound, Megaphone } from "lucide-react"
+import { setActiveCommittee, setActiveCandidate, setActiveCampaign } from "@/app/actions/committee"
 
 export interface SwitcherCommittee {
   id: string
   name: string
 }
-export interface SwitcherCampaign {
+export interface SwitcherCandidate {
   id: string
   candidateName: string
-  committeeName: string | null
+}
+export interface SwitcherRun {
+  id: string
+  cycle: number
+  office: string
 }
 
 /**
- * Committee + campaign switchers for the sidebar. Committee-wide modules (CRM,
- * members, billing) act on the active committee; candidate-specific modules
- * (communications, website, newsletter) act on the active campaign. Switching
- * persists server-side and refreshes the session, then re-renders.
+ * Committee › Candidate › Campaign switchers for the sidebar. Committee-wide modules
+ * (CRM, members, billing) act on the active committee; the candidate scope owns durable
+ * profile + website; the campaign (run) scope owns communications, news, newsletters.
+ * Each dropdown renders only when there's more than one choice. Switching persists
+ * server-side and refreshes the session, then re-renders.
  */
 export function WorkspaceSwitcher({
   committees,
   activeCommitteeId,
+  candidates,
+  activeCandidateId,
   campaigns,
   activeCampaignId,
 }: {
   committees: SwitcherCommittee[]
   activeCommitteeId: string
-  campaigns: SwitcherCampaign[]
+  candidates: SwitcherCandidate[]
+  activeCandidateId: string | null
+  campaigns: SwitcherRun[]
   activeCampaignId: string | null
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
 
-  function onCommittee(id: string) {
-    if (id === activeCommitteeId) return
+  function pick(fn: (id: string) => Promise<{ ok: boolean }>, id: string, current: string | null) {
+    if (id === current) return
     startTransition(async () => {
-      await setActiveCommittee(id)
-      router.refresh()
-    })
-  }
-  function onCampaign(id: string) {
-    if (id === activeCampaignId) return
-    startTransition(async () => {
-      await setActiveCampaign(id)
+      await fn(id)
       router.refresh()
     })
   }
 
   const showCommittees = committees.length > 1
+  const showCandidates = candidates.length > 1
   const showCampaigns = campaigns.length > 1
 
-  // Nothing to switch between → render nothing (single committee, single campaign).
-  if (!showCommittees && !showCampaigns) return null
+  if (!showCommittees && !showCandidates && !showCampaigns) return null
 
   return (
     <div className={`space-y-2 ${pending ? "opacity-60" : ""}`}>
@@ -63,9 +65,19 @@ export function WorkspaceSwitcher({
           icon={<Building2 className="h-3.5 w-3.5" />}
           label="Committee"
           value={activeCommitteeId}
-          onChange={onCommittee}
           disabled={pending}
+          onChange={(v) => pick(setActiveCommittee, v, activeCommitteeId)}
           options={committees.map((c) => ({ value: c.id, label: c.name }))}
+        />
+      )}
+      {showCandidates && (
+        <SelectRow
+          icon={<UserRound className="h-3.5 w-3.5" />}
+          label="Candidate"
+          value={activeCandidateId ?? ""}
+          disabled={pending}
+          onChange={(v) => pick(setActiveCandidate, v, activeCandidateId)}
+          options={candidates.map((c) => ({ value: c.id, label: c.candidateName || "Untitled candidate" }))}
         />
       )}
       {showCampaigns && (
@@ -73,12 +85,9 @@ export function WorkspaceSwitcher({
           icon={<Megaphone className="h-3.5 w-3.5" />}
           label="Campaign"
           value={activeCampaignId ?? ""}
-          onChange={onCampaign}
           disabled={pending}
-          options={campaigns.map((c) => ({
-            value: c.id,
-            label: c.candidateName || c.committeeName || "Untitled campaign",
-          }))}
+          onChange={(v) => pick(setActiveCampaign, v, activeCampaignId)}
+          options={campaigns.map((c) => ({ value: c.id, label: `${c.cycle} · ${c.office}` }))}
         />
       )}
     </div>

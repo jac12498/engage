@@ -9,15 +9,13 @@ export const dynamic = "force-dynamic"
 export const metadata = { title: "Newsletter template · Engage" }
 
 export default async function NewsletterTemplatePage() {
-  const { campaign: active } = await requireActiveCampaign()
+  const { candidate, campaign: activeCampaign } = await requireActiveCampaign()
 
   const campaign = await prisma.campaign.findUnique({
-    where: { id: active.id },
+    where: { id: activeCampaign.id },
     select: {
       id: true,
-      candidateName: true,
       committeeName: true,
-      headshotMime: true,
       mailingStreet: true,
       mailingStreet2: true,
       mailingCity: true,
@@ -37,11 +35,11 @@ export default async function NewsletterTemplatePage() {
   return (
     <>
     <NewsletterTemplateEditor
-      campaignId={campaign.id}
+      campaignId={candidate.id}
       campaign={{
-        candidateName: campaign.candidateName,
+        candidateName: candidate.candidateName,
         committeeName: campaign.committeeName,
-        headshotMime: campaign.headshotMime,
+        headshotMime: candidate.headshotMime,
         mailing: {
           street: campaign.mailingStreet,
           street2: campaign.mailingStreet2,

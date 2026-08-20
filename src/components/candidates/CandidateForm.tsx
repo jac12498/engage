@@ -3,7 +3,8 @@
 import { useMemo, useState, useTransition } from "react"
 import { CheckCircle2, X, Loader2, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { fetchChildDistricts, submitCampaign } from "@/app/campaigns/actions"
+import { fetchChildDistricts, submitCandidate } from "@/app/candidates/actions"
+import { CommitteeRegistrySearch } from "@/components/committees/CommitteeRegistrySearch"
 import type { DistrictNode } from "@/lib/districts"
 
 /** One level of the hierarchy: the children available, and what's chosen here. */
@@ -31,10 +32,18 @@ const PARTY_NEEDS_CUSTOM = new Set<string>(["Independent", "Other"])
 // Endorsements are named party lines (fusion voting), so exclude the free-text options.
 const ENDORSEMENT_OPTIONS = PARTY_OPTIONS.filter((p) => !PARTY_NEEDS_CUSTOM.has(p))
 
-export function CampaignForm({ topDistricts }: { topDistricts: DistrictNode[] }) {
+export function CandidateForm({
+  topDistricts,
+  committeeState,
+}: {
+  topDistricts: DistrictNode[]
+  /** The parent committee's state — scopes the candidate-committee registry search. */
+  committeeState: string
+}) {
   const [candidateName, setCandidateName] = useState("")
   const [office, setOffice] = useState("")
   const [committeeName, setCommitteeName] = useState("")
+  const [filerId, setFilerId] = useState("")
   const [partyChoice, setPartyChoice] = useState("")
   const [partyCustom, setPartyCustom] = useState("")
   const [endorsements, setEndorsements] = useState<string[]>([])
@@ -143,12 +152,13 @@ export function CampaignForm({ topDistricts }: { topDistricts: DistrictNode[] })
     if (!committeeName.trim()) return setError("Please enter a committee name.")
 
     startTransition(async () => {
-      const result = await submitCampaign({
+      const result = await submitCandidate({
         candidateName,
         office,
         party: resolveParty(),
         additionalParties: endorsements,
         committeeName,
+        filerId: filerId.trim() || undefined,
         districtId: selected?.id,
       })
       if (result && !result.ok) setError(result.error)
@@ -209,19 +219,46 @@ export function CampaignForm({ topDistricts }: { topDistricts: DistrictNode[] })
             )}
           </div>
           <div className="sm:col-span-2">
-            <Field label="Committee name (for “Paid for by”)" required>
+            <span className="mb-1.5 block text-sm font-medium text-[#1a1a2e]">
+              Candidate&rsquo;s committee<span className="ml-0.5 text-red-500">*</span>
+            </span>
+            <p className="mb-2 text-xs text-muted-foreground">
+              Search for the candidate&rsquo;s registered committee by name — this fills the
+              &ldquo;Paid for by&rdquo; line and lets you import that committee&rsquo;s donors as
+              contacts later. Don&rsquo;t know it? Type the name manually below.
+            </p>
+            <CommitteeRegistrySearch
+              state={committeeState}
+              defaultQuery={committeeName}
+              placeholder="Search committee name (e.g. Friends of Jane)"
+              onSelect={(m) => {
+                setCommitteeName(m.name)
+                setFilerId(m.filerId)
+                setError(null)
+              }}
+            />
+            <div className="mt-2">
               <input
                 value={committeeName}
-                onChange={(e) => setCommitteeName(e.target.value)}
+                onChange={(e) => {
+                  setCommitteeName(e.target.value)
+                  setFilerId("") // manual edit breaks the registry link
+                }}
                 placeholder="Friends of Jane Candidate"
                 className={inputCls}
               />
-            </Field>
-            <p className="mt-1.5 text-xs text-muted-foreground">
-              Used for the &ldquo;Paid for by&rdquo; line on this campaign&rsquo;s website and
-              communications. This can be the candidate&rsquo;s own committee or your committee,
-              depending on who&rsquo;s funding the race.
-            </p>
+              {filerId ? (
+                <p className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-medium text-[#1e6b3a]">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Linked to committee filer {filerId} — you can import its donors as contacts.
+                </p>
+              ) : (
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  Used for the &ldquo;Paid for by&rdquo; line on this candidate&rsquo;s website and
+                  communications.
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Party endorsements */}
@@ -283,7 +320,7 @@ export function CampaignForm({ topDistricts }: { topDistricts: DistrictNode[] })
         </h2>
         <p className="mt-1.5 text-sm text-muted-foreground">
           Choose a district type, then the specific district. You can stop at any level, or keep
-          drilling down to a town, ward, or legislative district. This is how we match the campaign
+          drilling down to a town, ward, or legislative district. This is how we match the candidate
           to the right voters. Voter File, Voter Outreach, and Field Tools aren&rsquo;t available in
           every state yet — Communications and the website work nationwide, so you can skip this and
           add it later.
@@ -389,7 +426,7 @@ export function CampaignForm({ topDistricts }: { topDistricts: DistrictNode[] })
 
       <div className="flex items-center justify-end gap-3">
         <Button onClick={handleSubmit} disabled={isPending}>
-          {isPending ? "Adding campaign…" : "Add campaign"}
+          {isPending ? "Adding candidate…" : "Add candidate"}
         </Button>
       </div>
     </div>

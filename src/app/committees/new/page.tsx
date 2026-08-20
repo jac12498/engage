@@ -29,7 +29,7 @@ export default async function NewCommitteePage() {
         <h1 className="mt-4 text-2xl font-bold text-[#1a1a2e]">Create a new committee</h1>
         <p className="mt-1.5 text-muted-foreground">
           Set up another committee — you&rsquo;ll be its owner, and it becomes your active
-          workspace. Add campaigns to it once it&rsquo;s created.
+          workspace. Add candidates to it once it&rsquo;s created.
         </p>
 
         <CommitteeOnboardingForm submitAction={submitAdditionalCommittee} />

@@ -9,27 +9,22 @@ export const dynamic = "force-dynamic"
 export const metadata = { title: "Website settings · Engage" }
 
 export default async function WebsiteSettingsPage() {
-  const { campaign: active } = await requireActiveCampaign()
+  const { committee } = await requireActiveCampaign()
 
-  const campaign = await prisma.campaign.findUnique({
-    where: { id: active.id },
+  const s = await prisma.website.findUnique({
+    where: { committeeId: committee.id },
     select: {
-      site: {
-        select: {
-          primaryColor: true,
-          accentColor: true,
-          fontTheme: true,
-          donateUrl: true,
-          contactEmail: true,
-        },
-      },
+      siteTitle: true,
+      paidForBy: true,
+      primaryColor: true,
+      accentColor: true,
+      fontTheme: true,
+      donateUrl: true,
+      contactEmail: true,
     },
   })
-  if (!campaign) redirect("/onboarding")
   // No site yet → nothing to configure; send them to the builder to create one.
-  if (!campaign.site) redirect("/website")
-
-  const s = campaign.site
+  if (!s) redirect("/website")
 
   return (
     <div>
@@ -44,17 +39,15 @@ export default async function WebsiteSettingsPage() {
       <div className="mt-3">
         <h1 className="text-2xl font-bold text-[#1a1a2e]">Website settings</h1>
         <p className="mt-1 text-muted-foreground">
-          Your site&rsquo;s theme colors, font, and calls to action. Your headshot is managed in{" "}
-          <Link href="/settings" className="font-medium text-[#1b3a6b] hover:underline">
-            Campaign settings
-          </Link>
-          .
+          Your committee site&rsquo;s title, &ldquo;Paid for by&rdquo; line, theme, and calls to action.
         </p>
       </div>
 
       <div className="mt-6">
         <SiteSettingsForm
           initial={{
+            siteTitle: s.siteTitle ?? committee.name,
+            paidForBy: s.paidForBy ?? committee.name,
             primaryColor: s.primaryColor,
             accentColor: s.accentColor,
             fontTheme: s.fontTheme,

@@ -37,6 +37,10 @@ export interface IssuesGridProps {
   intro?: string
   items: { title: string; body: string }[]
 }
+export interface CandidatesProps {
+  heading?: string
+  intro?: string
+}
 export interface VolunteerFormProps {
   heading?: string
   intro?: string
@@ -220,6 +224,24 @@ export const BLOCK_SPECS = {
       return props
     },
   } satisfies BlockSpec<IssuesGridProps>,
+
+  candidates: {
+    type: "candidates",
+    label: "Candidates",
+    description:
+      "Dynamic — lists this committee's candidates (name, office, headshot), each linking to their own profile page. Stays current as candidates are added or removed.",
+    tier: "core",
+    defaultProps: (): CandidatesProps => ({ heading: "Our candidates" }),
+    validate: (raw: unknown): CandidatesProps => {
+      const r = record(raw)
+      const props: CandidatesProps = {}
+      const heading = optStr(r.heading, 200)
+      if (heading) props.heading = heading
+      const intro = optStr(r.intro, 800)
+      if (intro) props.intro = intro
+      return props
+    },
+  } satisfies BlockSpec<CandidatesProps>,
 
   volunteerForm: {
     type: "volunteerForm",
@@ -435,6 +457,7 @@ export type BlockType = keyof typeof BLOCK_SPECS
 export const BLOCK_ORDER: BlockType[] = [
   "hero",
   "richText",
+  "candidates",
   "issuesGrid",
   "volunteerForm",
   "newsletterSignup",

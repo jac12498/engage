@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic"
 export const metadata = { title: "Newsletters · Engage" }
 
 export default async function NewslettersPage() {
-  const { campaign } = await requireActiveCampaign()
+  const { campaign, committee } = await requireActiveCampaign()
 
   const [items, activeSubscribers, presets] = await Promise.all([
     prisma.newsletter.findMany({
@@ -15,7 +15,7 @@ export default async function NewslettersPage() {
       orderBy: { updatedAt: "desc" },
       select: { id: true, subject: true, status: true, updatedAt: true, publishedAt: true },
     }),
-    prisma.newsletterSubscriber.count({ where: { campaignId: campaign.id, status: "active" } }),
+    prisma.newsletterSubscriber.count({ where: { committeeId: committee.id, status: "active" } }),
     prisma.newsletterPreset.findMany({
       where: { campaignId: campaign.id },
       orderBy: { createdAt: "desc" },

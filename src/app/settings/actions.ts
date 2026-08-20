@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
-import { getActiveContext, roleAtLeast } from "@/lib/context"
+import { getActiveContext } from "@/lib/context"
 
 /** Core campaign identity fields editable after signup. */
 export interface CampaignBasicsInput {
@@ -29,8 +29,12 @@ export async function updateCampaignBasics(
   input: CampaignBasicsInput
 ): Promise<UpdateResult> {
   const ctx = await getActiveContext()
-  if (!ctx?.campaign) return { ok: false, error: "You must be signed in." }
-  if (!roleAtLeast(ctx.role, "editor")) return { ok: false, error: "You don't have permission to edit campaign settings." }
+  if (!ctx?.campaign || !ctx.candidate) return { ok: false, error: "You must be signed in." }
+  // Campaign settings (the candidate profile) feed both Communications and the
+  // Website, so update on either module is enough to edit them.
+  if (!ctx.permissions.has("ai-communications:update") && !ctx.permissions.has("candidate-websites:update")) {
+    return { ok: false, error: "You don't have permission to edit candidate settings." }
+  }
 
   const candidateName = input.candidateName.trim()
   const office = input.office.trim()
@@ -52,12 +56,14 @@ export async function updateCampaignBasics(
       return true
     })
 
-  const campaign = ctx.campaign
+  const { candidate, campaign } = ctx
 
+  // Person fields live on the Candidate; run fields (office, ballot line, "Paid for
+  // by", mailing) live on the active Campaign.
+  await prisma.candidate.update({ where: { id: candidate.id }, data: { candidateName } })
   await prisma.campaign.update({
     where: { id: campaign.id },
     data: {
-      candidateName,
       office,
       party,
       additionalParties,
@@ -73,6 +79,6 @@ export async function updateCampaignBasics(
   // Both the workspace header and any published website read these fields.
   revalidatePath("/dashboard")
   revalidatePath("/settings")
-  revalidatePath(`/websites/${campaign.id}`)
+  revalidatePath(`/websites/${candidate.id}`)
   return { ok: true }
 }

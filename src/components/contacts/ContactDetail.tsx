@@ -20,6 +20,9 @@ import {
   type ContactAddress,
 } from "@/components/contacts/ContactsManager"
 import { addContactNote, deleteContact, deleteContactNote } from "@/app/contacts/actions"
+import { VoterRecordCard } from "@/components/contacts/VoterRecordCard"
+import type { VoterRecord, VotingHistory } from "@/lib/voters"
+import { DonationsCard, type ContactDonationRow } from "@/components/contacts/DonationsCard"
 
 const TYPE_LABELS: Record<string, string> = {
   supporter: "Supporter",
@@ -64,9 +67,21 @@ function mapsUrl(a: ContactAddress) {
 export function ContactDetail({
   contact,
   allTags,
+  voter = null,
+  votingHistory = null,
+  voterAvailable = false,
+  canEditContacts = false,
+  donations = [],
+  donationsSearchable = false,
 }: {
   contact: ContactRow
   allTags: string[]
+  voter?: VoterRecord | null
+  votingHistory?: VotingHistory | null
+  voterAvailable?: boolean
+  canEditContacts?: boolean
+  donations?: ContactDonationRow[]
+  donationsSearchable?: boolean
 }) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
@@ -191,6 +206,29 @@ export function ContactDetail({
           {error}
         </p>
       )}
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <VoterRecordCard
+          contactId={contact.id}
+          defaultName={name}
+          defaultCity={contact.addresses[0]?.city ?? undefined}
+          defaultZip={contact.addresses[0]?.zip ?? undefined}
+          voter={voter}
+          history={votingHistory}
+          available={voterAvailable}
+          canEdit={canEditContacts}
+        />
+        <DonationsCard
+          contactId={contact.id}
+          donations={donations}
+          searchable={donationsSearchable}
+          canEdit={canEditContacts}
+          defaultName={name}
+          defaultCity={contact.addresses[0]?.city ?? undefined}
+          defaultState={contact.addresses[0]?.state ?? undefined}
+          defaultZip={contact.addresses[0]?.zip ?? undefined}
+        />
+      </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         {/* Left: methods + addresses */}

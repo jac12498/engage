@@ -3,14 +3,15 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, Settings, LogOut, Lock, Menu, X, Sparkles, Users, PlusCircle, Building2, type LucideIcon } from "lucide-react"
+import { LayoutDashboard, Settings, LogOut, Lock, Menu, X, Sparkles, Users, UserRound, Megaphone, PlusCircle, Building2, ShieldCheck, type LucideIcon } from "lucide-react"
 import { NAV_MODULES, navModuleUnlocked, navUnlockPlan, activeModuleKey } from "@/lib/nav"
 import { PLAN_LABELS, type PlanId } from "@/lib/entitlements"
 import { signOutAction } from "@/app/actions/auth"
 import {
   WorkspaceSwitcher,
   type SwitcherCommittee,
-  type SwitcherCampaign,
+  type SwitcherCandidate,
+  type SwitcherRun,
 } from "@/components/WorkspaceSwitcher"
 
 export interface SidebarCampaign {
@@ -24,26 +25,44 @@ export function AppSidebar({
   campaign,
   plan,
   role,
+  permissions,
+  isSystemAdmin,
   committees,
   activeCommitteeId,
   committeeName,
+  candidates,
+  activeCandidateId,
   campaigns,
   activeCampaignId,
+  canAddCandidate,
+  multiCandidate,
 }: {
   campaign: SidebarCampaign | null
   plan: PlanId
   role: string
+  /** Privilege keys held in the active committee (e.g. "contacts:update"). */
+  permissions: string[]
+  /** Shows the System Admin link (Overall System Administrator only). */
+  isSystemAdmin: boolean
   committees: SwitcherCommittee[]
   activeCommitteeId: string
   committeeName: string
-  campaigns: SwitcherCampaign[]
+  candidates: SwitcherCandidate[]
+  activeCandidateId: string | null
+  campaigns: SwitcherRun[]
   activeCampaignId: string | null
+  /** May the user add a candidate now (perm + cardinality room)? */
+  canAddCandidate: boolean
+  /** Whether this committee type allows multiple candidates (party/multi vs single). */
+  multiCandidate: boolean
 }) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const activeKey = activeModuleKey(pathname)
   const identity = campaign?.committeeName || campaign?.candidateName || committeeName
-  const canManageMembers = role === "owner" || role === "admin"
+  const perms = new Set(permissions)
+  const canManageMembers = perms.has("members:manage")
+  const canManageCommittee = role === "owner" || role === "admin"
   const close = () => setOpen(false)
 
   function isActive(href: string, exact?: boolean) {
@@ -96,6 +115,8 @@ export function AppSidebar({
             <WorkspaceSwitcher
               committees={committees}
               activeCommitteeId={activeCommitteeId}
+              candidates={candidates}
+              activeCandidateId={activeCandidateId}
               campaigns={campaigns}
               activeCampaignId={activeCampaignId}
             />
@@ -109,6 +130,14 @@ export function AppSidebar({
           <div className="pt-3" />
 
           {NAV_MODULES.map((m) => {
+            // Module-based access: hide a module entirely when the member's role
+            // grants no read privilege on it. Plan-locked-but-readable modules
+            // still show as an upsell below.
+            if (!perms.has(`${m.key}:read`)) return null
+            // The website is committee-owned; a party/multi-candidate committee sees
+            // it as the "Committee Website", a single-candidate committee as theirs.
+            const name =
+              m.key === "candidate-websites" && multiCandidate ? "Committee Website" : m.name
             const unlocked = navModuleUnlocked(m, plan)
             if (!unlocked) {
               return (
@@ -120,7 +149,7 @@ export function AppSidebar({
                   className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted-foreground/70 transition-colors hover:bg-muted"
                 >
                   <m.icon className="h-4 w-4 shrink-0 opacity-60" />
-                  <span className="flex-1 truncate">{m.name}</span>
+                  <span className="flex-1 truncate">{name}</span>
                   <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
                 </Link>
               )
@@ -128,7 +157,7 @@ export function AppSidebar({
             const moduleActive = activeKey === m.key
             return (
               <div key={m.key}>
-                <Row href={m.href} label={m.name} icon={m.icon} active={moduleActive && m.sections.length === 0} onClick={close} bold={moduleActive} />
+                <Row href={m.href} label={name} icon={m.icon} active={moduleActive && m.sections.length === 0} onClick={close} bold={moduleActive} />
                 {moduleActive && m.sections.length > 0 && (
                   <div className="mb-1 mt-0.5 space-y-0.5 border-l border-border pl-3 ml-4">
                     {m.sections.map((s) => (
@@ -144,14 +173,25 @@ export function AppSidebar({
         {/* Footer */}
         <div className="space-y-0.5 border-t border-border px-3 py-3">
           <Row href="/committees" label="Committees" icon={Building2} active={isActive("/committees")} onClick={close} />
-          {canManageMembers && (
-            <Row href="/campaigns/new" label="Add campaign" icon={PlusCircle} active={isActive("/campaigns/new")} onClick={close} />
+          {isSystemAdmin && (
+            <Row href="/admin" label="System Admin" icon={ShieldCheck} active={isActive("/admin")} onClick={close} />
           )}
+          {multiCandidate ? (
+            <Row href="/candidates" label="Candidates" icon={UserRound} active={isActive("/candidates")} onClick={close} />
+          ) : (
+            canAddCandidate && (
+              <Row href="/candidates/new" label="Add candidate" icon={PlusCircle} active={isActive("/candidates/new")} onClick={close} />
+            )
+          )}
+          <Row href="/campaigns" label="Campaigns" icon={Megaphone} active={isActive("/campaigns")} onClick={close} />
           {canManageMembers && (
             <Row href="/members" label="Members" icon={Users} active={isActive("/members")} onClick={close} />
           )}
           <Row href="/plans" label="Plans" icon={Sparkles} active={isActive("/plans")} onClick={close} />
-          <Row href="/settings" label="Campaign settings" icon={Settings} active={isActive("/settings")} onClick={close} />
+          {canManageCommittee && (
+            <Row href="/committees/settings" label="Committee settings" icon={Building2} active={isActive("/committees/settings")} onClick={close} />
+          )}
+          <Row href="/settings" label="Candidate settings" icon={Settings} active={isActive("/settings")} onClick={close} />
           <form action={signOutAction}>
             <button
               type="submit"

@@ -1,0 +1,53 @@
+{
+  "state": "NY",
+  "dataType": "campaign_finance_disclosures",
+  "description": "NY State Board of Elections campaign-finance disclosure transactions (headerless CSV, 54 columns). Combined into data.parquet by the admin Data Import tool. Contributions (money given) are schedule 'A'. Only mapped columns are documented; unlisted indices (0-53) are unused/unknown. Code source of truth: src/lib/campaignFinance.ts NY_DISCLOSURE_COLUMNS.",
+  "source": "NY State Board of Elections",
+  "hasHeaders": false,
+  "delimiter": ",",
+  "encoding": "utf-8",
+  "totalColumns": 54,
+  "primaryKeyNote": "No single primary key; a transaction is identified by filer_id + date + donor + amount.",
+  "columns": [
+    { "index": 0, "name": "filer_id", "app": "filerId", "description": "Committee/filer id — joins to the committee registry (committees.column00)." },
+    { "index": 2, "name": "cand_comm_name", "app": "committeeName", "description": "Recipient candidate/committee name." },
+    { "index": 3, "name": "election_year", "app": "electionYear", "description": "Election year of the filing period." },
+    { "index": 4, "name": "election_type", "app": "electionType", "description": "State/Local, Village, or County." },
+    { "index": 6, "name": "disclosure_period_abbrev", "app": "disclosurePeriod", "description": "Filing-period code A-M." },
+    { "index": 9, "name": "filing_category_desc", "app": "filingCategory", "description": "Itemized | No Activity." },
+    { "index": 10, "name": "filing_sched_abbrev", "app": "scheduleCode", "description": "Transaction schedule. 'A' = the contributions we match donors on." },
+    { "index": 11, "name": "filing_sched_desc", "app": "scheduleDesc", "description": "Human schedule description." },
+    { "index": 15, "name": "contribution_date", "app": "contributionDate", "description": "Transaction date (M/D/YYYY)." },
+    { "index": 17, "name": "contributor_type", "app": "contributorType", "description": "Individual | Political Committee | Candidate/Spouse | ..." },
+    { "index": 24, "name": "flng_ent_name", "app": "organizationName", "description": "Org contributor name; empty for individuals (use 25-27)." },
+    { "index": 25, "name": "flng_ent_first_name", "app": "donorFirstName", "description": "Individual contributor first name." },
+    { "index": 26, "name": "flng_ent_mid_init", "app": "donorMiddleName", "description": "Individual contributor middle initial." },
+    { "index": 27, "name": "flng_ent_last_name", "app": "donorLastName", "description": "Individual contributor last name." },
+    { "index": 28, "name": "flng_ent_add1", "app": "street", "description": "Contributor street address." },
+    { "index": 29, "name": "flng_ent_city", "app": "city", "description": "Contributor city." },
+    { "index": 30, "name": "flng_ent_state", "app": "state", "description": "Contributor state." },
+    { "index": 31, "name": "flng_ent_zip", "app": "zip", "description": "Contributor ZIP." },
+    { "index": 36, "name": "org_amt", "app": "amount", "description": "Transaction amount. Stored as text in the parquet — CAST AS DOUBLE to sum." },
+    { "index": 52, "name": "flng_ent_employer", "app": "employer", "description": "Contributor employer." },
+    { "index": 53, "name": "flng_ent_occupation", "app": "occupation", "description": "Contributor occupation." }
+  ],
+  "scheduleCodes": {
+    "A": "Monetary Contributions/Receipts (the donations matched to contacts)",
+    "B": "Loan Received",
+    "C": "In-Kind Contributions",
+    "D": "Expenditures/Payments",
+    "E": "Outstanding Liabilities",
+    "F": "Loan Repayments",
+    "G": "Transfers In",
+    "H": "Transfers Out",
+    "I": "Other Receipts",
+    "J": "Other Payments"
+  },
+  "notes": [
+    "Headerless — DuckDB names columns column00..column53 (zero-padded).",
+    "Import reads with an EXPLICIT 54-VARCHAR-column schema (no auto-sniff) — NYSBOE ships 0-byte period files that break the sniffer.",
+    "All record types are imported; filter scheduleCode='A' for contributions when matching donors to contacts.",
+    "data.parquet is ~450 MB and gitignored; on Railway it needs a mounted volume at data/campaign_finance/.",
+    "Full historical reference: version10.3 data/campaign_finance/ny/disclosures/schema.json."
+  ]
+}

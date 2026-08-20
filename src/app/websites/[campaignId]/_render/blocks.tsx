@@ -8,6 +8,7 @@ import {
   type HeroProps,
   type RichTextProps,
   type IssuesGridProps,
+  type CandidatesProps,
   type VolunteerFormProps,
   type NewsletterSignupProps,
   type CtaBandProps,
@@ -23,11 +24,22 @@ import { paragraphs } from "./site"
 // Context every block renderer receives. Theme colors are applied through CSS
 // variables (--site-primary / --site-accent) set on the page wrapper, so most blocks
 // read those directly; ctx carries the few concrete values a block still needs.
-export interface RenderCtx {
-  campaignId: string
-  accentColor: string
+/** One candidate for the committee site (candidates block + profile links). */
+export interface SiteCandidate {
+  id: string
+  name: string
+  office: string
+  party: string | null
   hasHeadshot: boolean
-  candidateName: string
+}
+
+export interface RenderCtx {
+  /** The committee id — the site's owner; scopes dynamic blocks + public links. */
+  committeeId: string
+  accentColor: string
+  siteTitle: string
+  /** The committee's candidates (for the candidates block). */
+  candidates: SiteCandidate[]
 }
 
 const primary = "var(--site-primary)"
@@ -43,42 +55,31 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
 
 // ─── Core blocks ─────────────────────────────────────────────────────────────
 
-function Hero({ props, ctx }: { props: HeroProps; ctx: RenderCtx }) {
-  const showHeadshot = props.showHeadshot && ctx.hasHeadshot
+function Hero({ props }: { props: HeroProps; ctx: RenderCtx }) {
   return (
     <section id="top" style={{ backgroundColor: primary }} className="text-white">
-      <div className="mx-auto grid max-w-5xl items-center gap-8 px-6 py-20 sm:grid-cols-[1fr_auto]">
-        <div>
-          <h1 className="text-4xl font-extrabold leading-tight sm:text-5xl">{props.headline}</h1>
-          {props.subhead && <p className="mt-4 max-w-xl text-lg text-white/85">{props.subhead}</p>}
-          <div className="mt-7 flex flex-wrap gap-3">
-            {props.primaryCta && (
-              <CtaAnchor
-                href={props.primaryCta.href}
-                className="rounded-full px-6 py-3 text-sm font-semibold text-white"
-                style={{ backgroundColor: accent }}
-              >
-                {props.primaryCta.label}
-              </CtaAnchor>
-            )}
-            {props.secondaryCta && (
-              <CtaAnchor
-                href={props.secondaryCta.href}
-                className="rounded-full border border-white/40 px-6 py-3 text-sm font-semibold text-white hover:bg-white/10"
-              >
-                {props.secondaryCta.label}
-              </CtaAnchor>
-            )}
-          </div>
+      <div className="mx-auto max-w-5xl px-6 py-20">
+        <h1 className="max-w-3xl text-4xl font-extrabold leading-tight sm:text-5xl">{props.headline}</h1>
+        {props.subhead && <p className="mt-4 max-w-xl text-lg text-white/85">{props.subhead}</p>}
+        <div className="mt-7 flex flex-wrap gap-3">
+          {props.primaryCta && (
+            <CtaAnchor
+              href={props.primaryCta.href}
+              className="rounded-full px-6 py-3 text-sm font-semibold text-white"
+              style={{ backgroundColor: accent }}
+            >
+              {props.primaryCta.label}
+            </CtaAnchor>
+          )}
+          {props.secondaryCta && (
+            <CtaAnchor
+              href={props.secondaryCta.href}
+              className="rounded-full border border-white/40 px-6 py-3 text-sm font-semibold text-white hover:bg-white/10"
+            >
+              {props.secondaryCta.label}
+            </CtaAnchor>
+          )}
         </div>
-        {showHeadshot && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={`/api/website/headshot/${ctx.campaignId}`}
-            alt={ctx.candidateName}
-            className="h-48 w-48 rounded-2xl object-cover shadow-lg ring-4 ring-white/20 sm:h-60 sm:w-60"
-          />
-        )}
       </div>
     </section>
   )
@@ -134,13 +135,54 @@ function IssuesGrid({ props }: { props: IssuesGridProps; ctx: RenderCtx }) {
   )
 }
 
+function Candidates({ props, ctx }: { props: CandidatesProps; ctx: RenderCtx }) {
+  if (ctx.candidates.length === 0) return null
+  return (
+    <section id="candidates" className="mx-auto max-w-5xl px-6 py-16">
+      {props.heading && <SectionHeading>{props.heading}</SectionHeading>}
+      {props.intro && <p className="mt-3 max-w-2xl text-lg text-[#555]">{props.intro}</p>}
+      <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        {ctx.candidates.map((c) => (
+          <Link
+            key={c.id}
+            href={`/websites/${ctx.committeeId}/candidate/${c.id}`}
+            className="flex items-center gap-4 rounded-2xl border border-black/5 bg-white p-5 shadow-sm transition hover:shadow-md"
+          >
+            {c.hasHeadshot ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={`/api/website/headshot/${c.id}`}
+                alt={c.name}
+                className="h-16 w-16 shrink-0 rounded-xl object-cover"
+              />
+            ) : (
+              <span
+                className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl text-xl font-bold text-white"
+                style={{ backgroundColor: accent }}
+              >
+                {c.name.charAt(0).toUpperCase()}
+              </span>
+            )}
+            <span className="min-w-0">
+              <span className="block truncate text-lg font-semibold" style={{ color: primary }}>
+                {c.name}
+              </span>
+              {c.office && <span className="block truncate text-sm text-[#666]">{c.office}</span>}
+            </span>
+          </Link>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 function VolunteerFormBlock({ props, ctx }: { props: VolunteerFormProps; ctx: RenderCtx }) {
   return (
     <section id="volunteer" className="mx-auto max-w-2xl px-6 py-16">
       <SectionHeading>{props.heading || "Get involved"}</SectionHeading>
       {props.intro && <p className="mt-3 text-lg text-[#555]">{props.intro}</p>}
       <div className="mt-6">
-        <VolunteerForm campaignId={ctx.campaignId} accent={ctx.accentColor} />
+        <VolunteerForm committeeId={ctx.committeeId} accent={ctx.accentColor} />
       </div>
     </section>
   )
@@ -154,7 +196,7 @@ function NewsletterSignup({ props, ctx }: { props: NewsletterSignupProps; ctx: R
       <SectionHeading>{props.heading || "Subscribe to our newsletter"}</SectionHeading>
       {props.intro && <p className="mt-3 text-lg text-[#555]">{props.intro}</p>}
       <div className="mt-6">
-        <NewsletterSignupForm campaignId={ctx.campaignId} accent={ctx.accentColor} buttonLabel={props.buttonLabel} />
+        <NewsletterSignupForm committeeId={ctx.committeeId} accent={ctx.accentColor} buttonLabel={props.buttonLabel} />
       </div>
     </section>
   )
@@ -203,7 +245,11 @@ function Endorsements({ props }: { props: EndorsementsProps; ctx: RenderCtx }) {
 
 async function NewsFeed({ props, ctx }: { props: NewsFeedProps; ctx: RenderCtx }) {
   const items = await prisma.generation.findMany({
-    where: { campaignId: ctx.campaignId, published: true, type: { in: props.types } },
+    where: {
+      campaign: { candidate: { committeeId: ctx.committeeId } },
+      published: true,
+      type: { in: props.types },
+    },
     orderBy: { createdAt: "desc" },
     take: props.limit,
     select: { id: true, title: true, type: true, content: true, createdAt: true },
@@ -220,7 +266,7 @@ async function NewsFeed({ props, ctx }: { props: NewsFeedProps; ctx: RenderCtx }
             return (
               <Link
                 key={g.id}
-                href={`/websites/${ctx.campaignId}/news/${g.id}`}
+                href={`/websites/${ctx.committeeId}/news/${g.id}`}
                 className="block rounded-2xl border border-black/5 bg-white p-6 shadow-sm transition hover:shadow-md"
               >
                 <p className="text-xs uppercase tracking-wider text-[#888]">
@@ -241,7 +287,7 @@ async function NewsFeed({ props, ctx }: { props: NewsFeedProps; ctx: RenderCtx }
 
 async function PressMentions({ props, ctx }: { props: PressMentionsProps; ctx: RenderCtx }) {
   const clips = await prisma.newsClip.findMany({
-    where: { campaignId: ctx.campaignId, status: "approved" },
+    where: { campaign: { candidate: { committeeId: ctx.committeeId } }, status: "approved" },
     orderBy: [{ publishedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
     take: props.limit,
     select: { id: true, headline: true, url: true, outlet: true, summary: true, publishedAt: true },
@@ -283,7 +329,7 @@ async function PressMentions({ props, ctx }: { props: PressMentionsProps; ctx: R
 
 async function NewsletterArchive({ props, ctx }: { props: NewsletterArchiveProps; ctx: RenderCtx }) {
   const items = await prisma.newsletter.findMany({
-    where: { campaignId: ctx.campaignId, status: "published" },
+    where: { campaign: { candidate: { committeeId: ctx.committeeId } }, status: "published" },
     orderBy: [{ publishedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
     take: props.limit,
     select: { id: true, subject: true, preview: true, publishedAt: true },
@@ -298,7 +344,7 @@ async function NewsletterArchive({ props, ctx }: { props: NewsletterArchiveProps
           {items.map((n) => (
             <Link
               key={n.id}
-              href={`/websites/${ctx.campaignId}/newsletter/${n.id}`}
+              href={`/websites/${ctx.committeeId}/newsletter/${n.id}`}
               className="block rounded-2xl border border-black/5 bg-white p-6 shadow-sm transition hover:shadow-md"
             >
               {n.publishedAt && (
@@ -315,7 +361,7 @@ async function NewsletterArchive({ props, ctx }: { props: NewsletterArchiveProps
         </div>
         <div className="mt-6">
           <Link
-            href={`/websites/${ctx.campaignId}/newsletter`}
+            href={`/websites/${ctx.committeeId}/newsletter`}
             className="text-sm font-semibold hover:underline"
             style={{ color: primary }}
           >
@@ -414,6 +460,7 @@ const BLOCK_RENDERERS: Record<string, BlockComponent> = {
   hero: Hero as BlockComponent,
   richText: RichText as BlockComponent,
   issuesGrid: IssuesGrid as BlockComponent,
+  candidates: Candidates as BlockComponent,
   volunteerForm: VolunteerFormBlock as BlockComponent,
   newsletterSignup: NewsletterSignup as BlockComponent,
   cta: CtaBand as BlockComponent,

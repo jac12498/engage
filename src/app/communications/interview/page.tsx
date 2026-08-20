@@ -3,7 +3,7 @@ import { InterviewView } from "@/components/communications/InterviewView"
 import type { InterviewData } from "@/lib/comms/interview"
 
 export default async function InterviewPage() {
-  const { campaign: c } = await requireActiveCampaign()
+  const { candidate: c } = await requireActiveCampaign()
 
   return (
     <InterviewView

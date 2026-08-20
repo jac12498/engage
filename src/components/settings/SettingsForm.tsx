@@ -273,7 +273,7 @@ export function SettingsForm({
           <p className="mt-3 text-sm text-muted-foreground">No district selected.</p>
         )}
         <p className="mt-2 text-xs text-muted-foreground">
-          Your district links your campaign to the voter file and can&rsquo;t be changed here yet.
+          Your district links your candidate to the voter file and can&rsquo;t be changed here yet.
           Contact support to move districts.
         </p>
       </section>

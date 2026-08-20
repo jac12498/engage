@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react"
 import Link from "next/link"
-import { Plus, Search, Pencil, Trash2, X, Users, Inbox, ArrowRight } from "lucide-react"
+import { Plus, Search, Pencil, Trash2, X, Users, Inbox, ArrowRight, HandCoins } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   saveContact,
@@ -111,10 +111,12 @@ export function ContactsManager({
   contacts,
   allTags,
   pendingSignups,
+  canImportDonors = false,
 }: {
   contacts: ContactRow[]
   allTags: string[]
   pendingSignups: number
+  canImportDonors?: boolean
 }) {
   const [query, setQuery] = useState("")
   const [typeFilter, setTypeFilter] = useState<string>("all")
@@ -158,10 +160,21 @@ export function ContactsManager({
               : `${contacts.length} ${contacts.length === 1 ? "contact" : "contacts"}`}
           </p>
         </div>
-        <Button onClick={() => setEditing("new")}>
-          <Plus className="mr-1.5 h-4 w-4" />
-          Add contact
-        </Button>
+        <div className="flex items-center gap-2">
+          {canImportDonors && (
+            <Link
+              href="/contacts/import-donors"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3.5 py-2 text-sm font-medium text-[#1b3a6b] transition-colors hover:bg-muted"
+            >
+              <HandCoins className="h-4 w-4" />
+              Import donors
+            </Link>
+          )}
+          <Button onClick={() => setEditing("new")}>
+            <Plus className="mr-1.5 h-4 w-4" />
+            Add contact
+          </Button>
+        </div>
       </div>
 
       {pendingSignups > 0 && (

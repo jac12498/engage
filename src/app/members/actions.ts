@@ -2,42 +2,57 @@
 
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
-import { getActiveContext, roleAtLeast, type Role } from "@/lib/context"
+import { getActiveContext } from "@/lib/context"
+import { legacyRoleForRoleKey } from "@/lib/permissions"
 
 export type MemberResult = { ok: true } | { ok: false; error: string }
 
-const ASSIGNABLE_ROLES: Role[] = ["owner", "admin", "editor", "viewer"]
-
-function isRole(v: string): v is Role {
-  return (ASSIGNABLE_ROLES as string[]).includes(v)
+/** Active committee id if the caller may add/remove members, else null. */
+async function requireMemberManager(): Promise<string | null> {
+  const ctx = await getActiveContext()
+  if (!ctx || !ctx.permissions.has("members:manage")) return null
+  return ctx.committee.id
 }
 
-/** Resolve the active committee + the caller's role, requiring at least `min`. */
-async function requireManage(min: Role) {
-  const ctx = await getActiveContext()
-  if (!ctx) return null
-  if (!roleAtLeast(ctx.role, min)) return null
-  return { committeeId: ctx.committee.id, userId: ctx.userId, role: ctx.role }
+/** A RoleType assignable in this committee: a global built-in or this committee's own custom role. */
+async function resolveAssignableRole(roleTypeId: string, committeeId: string) {
+  return prisma.roleType.findFirst({
+    where: { id: roleTypeId, OR: [{ committeeId: null, isBuiltIn: true }, { committeeId }] },
+    select: {
+      id: true,
+      key: true,
+      // present iff the role can manage members (used for the lockout guard)
+      permissions: { where: { permission: { key: "members:manage" } }, select: { permissionId: true } },
+    },
+  })
+}
+
+/** How many members of the committee hold a role that can manage members. */
+async function countManagers(committeeId: string, excludeUserId?: string): Promise<number> {
+  return prisma.committeeMembership.count({
+    where: {
+      committeeId,
+      ...(excludeUserId ? { NOT: { userId: excludeUserId } } : {}),
+      roleType: { permissions: { some: { permission: { key: "members:manage" } } } },
+    },
+  })
 }
 
 /**
- * Invite someone to the active committee by email. Admins+ may invite. If no user
- * with that email exists yet, a shell User row is created; they gain access on their
- * next magic-link sign-in. Only owners may grant the owner role.
+ * Invite someone to the active committee by email with a role. Members-managers may
+ * invite. If no user with that email exists yet, a shell User row is created; they
+ * gain access on their next sign-in.
  */
-export async function inviteMember(email: string, role: string): Promise<MemberResult> {
-  const ctx = await requireManage("admin")
-  if (!ctx) return { ok: false, error: "You don't have permission to manage members." }
+export async function inviteMember(email: string, roleTypeId: string): Promise<MemberResult> {
+  const committeeId = await requireMemberManager()
+  if (!committeeId) return { ok: false, error: "You don't have permission to manage members." }
 
   const clean = email.trim().toLowerCase()
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(clean)) return { ok: false, error: "Enter a valid email address." }
-  if (!isRole(role)) return { ok: false, error: "Invalid role." }
-  if (role === "owner" && ctx.role !== "owner") {
-    return { ok: false, error: "Only an owner can grant the owner role." }
-  }
 
-  // Find-or-create the user by email (a shell row is fine — NextAuth fills the
-  // rest on first sign-in, keyed by the unique email).
+  const role = await resolveAssignableRole(roleTypeId, committeeId)
+  if (!role) return { ok: false, error: "Pick a valid role." }
+
   const user = await prisma.user.upsert({
     where: { email: clean },
     create: { email: clean },
@@ -46,73 +61,66 @@ export async function inviteMember(email: string, role: string): Promise<MemberR
   })
 
   const existing = await prisma.committeeMembership.findUnique({
-    where: { userId_committeeId: { userId: user.id, committeeId: ctx.committeeId } },
+    where: { userId_committeeId: { userId: user.id, committeeId } },
     select: { userId: true },
   })
   if (existing) return { ok: false, error: "That person is already a member." }
 
   await prisma.committeeMembership.create({
-    data: { userId: user.id, committeeId: ctx.committeeId, role },
+    data: { userId: user.id, committeeId, role: legacyRoleForRoleKey(role.key), roleTypeId: role.id },
   })
-
   revalidatePath("/members")
   return { ok: true }
 }
 
-/** Change a member's role. Admins+ may; only owners may set or change an owner. */
-export async function changeMemberRole(userId: string, role: string): Promise<MemberResult> {
-  const ctx = await requireManage("admin")
-  if (!ctx) return { ok: false, error: "You don't have permission to manage members." }
-  if (!isRole(role)) return { ok: false, error: "Invalid role." }
+/** Assign a member a role. Requires the roles-manage privilege. */
+export async function assignRole(userId: string, roleTypeId: string): Promise<MemberResult> {
+  const ctx = await getActiveContext()
+  if (!ctx || !ctx.permissions.has("roles:manage")) {
+    return { ok: false, error: "You don't have permission to assign roles." }
+  }
+  const committeeId = ctx.committee.id
 
   const target = await prisma.committeeMembership.findUnique({
-    where: { userId_committeeId: { userId, committeeId: ctx.committeeId } },
-    select: { role: true },
+    where: { userId_committeeId: { userId, committeeId } },
+    select: { userId: true },
   })
   if (!target) return { ok: false, error: "Member not found." }
 
-  // Only owners may touch an owner membership or grant ownership.
-  if ((target.role === "owner" || role === "owner") && ctx.role !== "owner") {
-    return { ok: false, error: "Only an owner can change owner roles." }
-  }
+  const role = await resolveAssignableRole(roleTypeId, committeeId)
+  if (!role) return { ok: false, error: "Pick a valid role." }
 
-  // Don't allow removing the last owner (demotion of the sole owner).
-  if (target.role === "owner" && role !== "owner") {
-    const owners = await prisma.committeeMembership.count({
-      where: { committeeId: ctx.committeeId, role: "owner" },
-    })
-    if (owners <= 1) return { ok: false, error: "A committee must have at least one owner." }
+  // Never leave the committee with nobody who can manage members.
+  const newRoleManages = role.permissions.length > 0
+  if (!newRoleManages && (await countManagers(committeeId, userId)) < 1) {
+    return { ok: false, error: "At least one member must keep a role that can manage members." }
   }
 
   await prisma.committeeMembership.update({
-    where: { userId_committeeId: { userId, committeeId: ctx.committeeId } },
-    data: { role },
+    where: { userId_committeeId: { userId, committeeId } },
+    data: { role: legacyRoleForRoleKey(role.key), roleTypeId: role.id },
   })
   revalidatePath("/members")
   return { ok: true }
 }
 
-/** Remove a member. Admins+ may; only owners may remove an owner; never the last owner. */
+/** Remove a member. Members-managers may; never remove the last members-manager. */
 export async function removeMember(userId: string): Promise<MemberResult> {
-  const ctx = await requireManage("admin")
-  if (!ctx) return { ok: false, error: "You don't have permission to manage members." }
+  const committeeId = await requireMemberManager()
+  if (!committeeId) return { ok: false, error: "You don't have permission to manage members." }
 
   const target = await prisma.committeeMembership.findUnique({
-    where: { userId_committeeId: { userId, committeeId: ctx.committeeId } },
-    select: { role: true },
+    where: { userId_committeeId: { userId, committeeId } },
+    select: { userId: true },
   })
   if (!target) return { ok: false, error: "Member not found." }
 
-  if (target.role === "owner") {
-    if (ctx.role !== "owner") return { ok: false, error: "Only an owner can remove an owner." }
-    const owners = await prisma.committeeMembership.count({
-      where: { committeeId: ctx.committeeId, role: "owner" },
-    })
-    if (owners <= 1) return { ok: false, error: "A committee must have at least one owner." }
+  if ((await countManagers(committeeId, userId)) < 1) {
+    return { ok: false, error: "You can't remove the last member who can manage members." }
   }
 
   await prisma.committeeMembership.delete({
-    where: { userId_committeeId: { userId, committeeId: ctx.committeeId } },
+    where: { userId_committeeId: { userId, committeeId } },
   })
   revalidatePath("/members")
   return { ok: true }

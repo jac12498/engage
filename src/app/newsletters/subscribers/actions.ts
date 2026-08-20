@@ -2,24 +2,24 @@
 
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
-import { getActiveContext, roleAtLeast } from "@/lib/context"
+import { getActiveContext } from "@/lib/context"
 
 export type SubscriberResult = { ok: true } | { ok: false; error: string }
 
 /** Active campaign id, editor-gated (subscriber edits are mutations), or null. */
-async function requireCampaignId(): Promise<string | null> {
+async function requireCommitteeId(): Promise<string | null> {
   const ctx = await getActiveContext()
-  if (!ctx || !roleAtLeast(ctx.role, "editor")) return null
-  return ctx.campaign?.id ?? null
+  if (!ctx || !ctx.permissions.has("newsletter:update")) return null
+  return ctx.committee.id
 }
 
-/** Permanently delete a subscriber (e.g. spam or a bad address). */
+/** Permanently delete a subscriber (e.g. spam or a bad address). The list is committee-wide. */
 export async function deleteSubscriber(subscriberId: string): Promise<SubscriberResult> {
-  const campaignId = await requireCampaignId()
-  if (!campaignId) return { ok: false, error: "You must be signed in." }
+  const committeeId = await requireCommitteeId()
+  if (!committeeId) return { ok: false, error: "You must be signed in." }
 
   const sub = await prisma.newsletterSubscriber.findFirst({
-    where: { id: subscriberId, campaignId },
+    where: { id: subscriberId, committeeId },
     select: { id: true },
   })
   if (!sub) return { ok: false, error: "Subscriber not found." }

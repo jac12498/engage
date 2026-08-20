@@ -14,15 +14,18 @@ export interface BlockInput {
  * Phase 1 only produces the Home page; multi-page authoring is manual (the block CRUD
  * actions). Regeneration replaces only these Home blocks, preserving user-added pages.
  */
-export function draftToHomeBlocks(draft: WebsiteDraft, opts: { donateUrl?: string | null } = {}): BlockInput[] {
+export function draftToHomeBlocks(
+  draft: WebsiteDraft,
+  opts: { donateUrl?: string | null; multiCandidate?: boolean } = {}
+): BlockInput[] {
   const blocks: BlockInput[] = []
 
-  // hero — showHeadshot stays true; the renderer only shows the image when one exists,
-  // so uploading a headshot later "just works" without re-touching the block.
+  // hero — showHeadshot stays true; the renderer only shows the image (the committee
+  // logo) when one exists, so uploading a logo later "just works".
   const hero: Record<string, unknown> = {
     headline: draft.heroHeadline,
     showHeadshot: true,
-    primaryCta: { label: "Join the campaign", href: "#volunteer" },
+    primaryCta: { label: "Get involved", href: "#volunteer" },
   }
   if (draft.heroSubhead) hero.subhead = draft.heroSubhead
   if (opts.donateUrl) hero.secondaryCta = { label: "Donate", href: opts.donateUrl }
@@ -35,10 +38,18 @@ export function draftToHomeBlocks(draft: WebsiteDraft, opts: { donateUrl?: strin
     blocks.push({ type: "richText", props: BLOCK_SPECS.richText.validate(rt) })
   }
 
+  // candidates — the slate (multi-candidate committees). Dynamic: lists the committee's
+  // candidates, each linking to their profile page.
+  if (opts.multiCandidate) {
+    const cb: Record<string, unknown> = { heading: "Our candidates" }
+    if (draft.candidatesIntro) cb.intro = draft.candidatesIntro
+    blocks.push({ type: "candidates", props: BLOCK_SPECS.candidates.validate(cb) })
+  }
+
   // issuesGrid
   if (draft.issues.length > 0) {
     const ig: Record<string, unknown> = {
-      heading: "Where I stand",
+      heading: opts.multiCandidate ? "Our priorities" : "Where I stand",
       items: draft.issues.map((i) => ({ title: i.title, body: i.body })),
     }
     if (draft.issuesIntro) ig.intro = draft.issuesIntro

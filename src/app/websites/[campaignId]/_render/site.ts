@@ -11,28 +11,49 @@ export const FONT_STACK: Record<string, string> = {
  * ordered blocks) + the campaign identity used in the header/footer. Never pulls the
  * headshot bytes (served separately via /api/website/headshot/[campaignId]).
  */
-export async function loadPublicSite(campaignId: string) {
-  return prisma.website.findUnique({
-    where: { campaignId },
+export async function loadPublicSite(committeeId: string) {
+  // The route param is now the COMMITTEE id (the website is committee-owned in 2b-2).
+  const site = await prisma.website.findUnique({
+    where: { committeeId },
     omit: { headshotData: true },
     include: {
       pages: {
         orderBy: [{ navOrder: "asc" }, { createdAt: "asc" }],
         include: { blocks: { orderBy: { order: "asc" } } },
       },
-      campaign: {
+      committee: {
         select: {
-          candidateName: true,
-          office: true,
-          party: true,
-          additionalParties: true,
-          committeeName: true,
-          state: true,
-          headshotMime: true, // headshot lives on Campaign now
+          name: true,
+          candidates: {
+            orderBy: { createdAt: "asc" },
+            select: {
+              id: true,
+              candidateName: true,
+              headshotMime: true,
+              campaigns: { orderBy: [{ cycle: "desc" }], take: 1, select: { office: true, party: true } },
+            },
+          },
         },
       },
     },
   })
+  if (!site) return null
+
+  const { committee, ...rest } = site
+  return {
+    ...rest,
+    // Committee-level identity (default to the committee name).
+    siteTitle: site.siteTitle ?? committee.name,
+    paidForBy: site.paidForBy ?? committee.name,
+    committeeName: committee.name,
+    candidates: committee.candidates.map((c) => ({
+      id: c.id,
+      name: c.candidateName,
+      office: c.campaigns[0]?.office ?? "",
+      party: c.campaigns[0]?.party ?? null,
+      hasHeadshot: !!c.headshotMime,
+    })),
+  }
 }
 
 export type PublicSite = NonNullable<Awaited<ReturnType<typeof loadPublicSite>>>

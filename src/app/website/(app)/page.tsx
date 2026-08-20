@@ -1,48 +1,37 @@
 import { redirect } from "next/navigation"
 import { prisma } from "@/lib/prisma"
 import { requireActiveCampaign } from "@/lib/context"
+import { allowsMultipleCandidates } from "@/lib/committeeTypes"
 import { WEBSITE_EDIT_LIMITS, toPlanId, resolveModel } from "@/lib/entitlements"
 import { CreateSitePanel } from "@/components/website/CreateSitePanel"
 import { type EditorSite } from "@/components/website/WebsiteBuilder"
 import { WebsiteWorkspace } from "@/components/website/WebsiteWorkspace"
 
 export default async function WebsitePage() {
-  const { campaign: active, committee } = await requireActiveCampaign()
+  // The website is committee-owned (2b-2); no active candidate is required.
+  const { committee, candidate } = await requireActiveCampaign()
+  const multiCandidate = allowsMultipleCandidates(committee.committeeType)
 
-  const campaign = await prisma.campaign.findUnique({
-    where: { id: active.id },
-    select: {
-      id: true,
-      candidateName: true,
-      office: true,
-      bio: true,
-      whyRunning: true,
-      headshotMime: true, // headshot lives on Campaign now; presence tracked via mime
-      site: {
-        omit: { headshotData: true }, // legacy column; kept but unused
-        include: {
-          pages: {
-            orderBy: [{ navOrder: "asc" }, { createdAt: "asc" }],
-            include: { blocks: { orderBy: { order: "asc" } } },
-          },
-          _count: { select: { signups: { where: { status: "pending" } } } },
-        },
+  const website = await prisma.website.findUnique({
+    where: { committeeId: committee.id },
+    omit: { headshotData: true },
+    include: {
+      pages: {
+        orderBy: [{ navOrder: "asc" }, { createdAt: "asc" }],
+        include: { blocks: { orderBy: { order: "asc" } } },
       },
+      _count: { select: { signups: { where: { status: "pending" } } } },
     },
   })
-  if (!campaign) redirect("/onboarding")
 
-  if (!campaign.site) {
-    return (
-      <CreateSitePanel
-        candidateName={campaign.candidateName}
-        office={campaign.office}
-        thinProfile={!campaign.bio && !campaign.whyRunning}
-      />
-    )
+  if (!website) {
+    const person = candidate
+      ? await prisma.candidate.findUnique({ where: { id: candidate.id }, select: { bio: true, whyRunning: true } })
+      : null
+    return <CreateSitePanel committeeName={committee.name} thinProfile={!person?.bio && !person?.whyRunning} />
   }
 
-  const s = campaign.site
+  const s = website
   const site: EditorSite = {
     published: s.published,
     primaryColor: s.primaryColor,
@@ -76,7 +65,8 @@ export default async function WebsitePage() {
 
   return (
     <WebsiteWorkspace
-      campaignId={campaign.id}
+      committeeId={committee.id}
+      multiCandidate={multiCandidate}
       site={site}
       pendingSignups={s._count.signups}
       editsUsed={editsUsed}
