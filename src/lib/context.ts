@@ -157,14 +157,30 @@ export async function getActiveContext(): Promise<ActiveContext | null> {
     // Target membership no longer exists → fall through to the admin's own context.
   }
 
+  // Try the session's active committee first.
   const committeeId = session.activeCommitteeId
-  if (!committeeId) return null
-  const core = await buildMembershipContext(
-    realUserId,
-    committeeId,
-    session.activeCandidateId,
-    session.activeCampaignId,
-  )
+  if (committeeId) {
+    const core = await buildMembershipContext(
+      realUserId,
+      committeeId,
+      session.activeCandidateId,
+      session.activeCampaignId,
+    )
+    if (core) return { ...core, isSystemAdmin, impersonating: null }
+  }
+
+  // The token's active committee is missing/invalid — e.g. it was deleted, or the
+  // user's membership was removed, and the JWT hasn't been re-minted yet. Fall back to
+  // the user's first membership so an authenticated member is never bounced to
+  // /onboarding (which would just redirect back here → a redirect loop). Only a truly
+  // committee-less user returns null.
+  const fallback = await prisma.committeeMembership.findFirst({
+    where: { userId: realUserId },
+    orderBy: { createdAt: "asc" },
+    select: { committeeId: true },
+  })
+  if (!fallback) return null
+  const core = await buildMembershipContext(realUserId, fallback.committeeId)
   if (!core) return null
   return { ...core, isSystemAdmin, impersonating: null }
 }
