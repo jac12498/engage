@@ -23,6 +23,10 @@ async function loadCandidate(committeeId: string, candidateId: string) {
       bio: true,
       whyRunning: true,
       headshotMime: true,
+      logoMime: true,
+      tagline: true,
+      website: true,
+      actblueUrl: true,
       campaigns: {
         orderBy: { cycle: "desc" },
         take: 1,
@@ -96,18 +100,24 @@ export default async function CandidateProfilePage({
   } as CSSProperties
   const homeHref = `/websites/${site.committeeId}`
   const positions = campaign?.contextItems ?? []
+  // The candidate's own donate link wins; else the committee/site donate link.
+  const donateHref = candidate.actblueUrl || site.donateUrl
 
   return (
     <div style={{ ...themeVars, color: "#1a1a2e" }} className="min-h-screen bg-white">
       {/* Header */}
       <header className="sticky top-0 z-20 border-b border-black/5 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <Link href={homeHref} className="text-lg font-bold" style={{ color: "var(--site-primary)" }}>
-            {site.siteTitle}
+          <Link href={homeHref} className="flex items-center gap-2.5 text-lg font-bold" style={{ color: "var(--site-primary)" }}>
+            {site.logoUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={site.logoUrl} alt={`${site.siteTitle} logo`} className="h-9 w-auto max-w-40 object-contain" />
+            )}
+            <span>{site.siteTitle}</span>
           </Link>
-          {site.donateUrl && (
+          {donateHref && (
             <a
-              href={site.donateUrl}
+              href={donateHref}
               target="_blank"
               rel="noopener noreferrer"
               className="rounded-full px-4 py-2 text-sm font-semibold text-white"
@@ -137,6 +147,32 @@ export default async function CandidateProfilePage({
                 Candidate for {campaign.office}
                 {campaign.party ? ` · ${campaign.party}` : ""}
               </p>
+            )}
+            {candidate.tagline && <p className="mt-2 text-lg font-medium text-white/90">{candidate.tagline}</p>}
+            {(donateHref || candidate.website) && (
+              <div className="mt-6 flex flex-wrap gap-3">
+                {donateHref && (
+                  <a
+                    href={donateHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-full px-6 py-3 text-sm font-semibold text-white"
+                    style={{ backgroundColor: "var(--site-accent)" }}
+                  >
+                    Donate
+                  </a>
+                )}
+                {candidate.website && (
+                  <a
+                    href={candidate.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-full border border-white/40 px-6 py-3 text-sm font-semibold text-white hover:bg-white/10"
+                  >
+                    Visit website
+                  </a>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -231,6 +267,7 @@ export default async function CandidateProfilePage({
       <footer style={{ backgroundColor: "var(--site-primary)" }} className="text-white/80">
         <div className="mx-auto max-w-5xl px-6 py-10 text-sm">
           <p className="font-semibold text-white">{site.siteTitle}</p>
+          {site.mailingAddress && <p className="mt-1 text-white/70">{site.mailingAddress}</p>}
           <p className="mt-4 text-xs text-white/50">Paid for by {site.paidForBy}.</p>
         </div>
       </footer>

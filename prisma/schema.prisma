@@ -119,6 +119,20 @@ model Committee {
   registrySyncedAt DateTime?
   registryAlert    String? // "terminated" | "changed" | null
 
+  // Committee assets — reusable brand elements at the committee level (parallel to a
+  // candidate's assets). Logo stored in-DB, served via /api/committee/logo/[committeeId].
+  logoData   Bytes?
+  logoMime   String?
+  actblueUrl String? // committee ActBlue / donate link
+  websiteUrl String? // committee's external/website link
+
+  // Committee mailing address (postal). Used for disclaimers/newsletters at the org level.
+  mailingStreet  String?
+  mailingStreet2 String?
+  mailingCity    String?
+  mailingState   String?
+  mailingZip     String?
+
   members   CommitteeMembership[]
   candidates Candidate[]
   contacts  Contact[]
@@ -238,9 +252,15 @@ model Candidate {
   headshotData Bytes?
   headshotMime String?
 
+  // Candidate logo — an optional campaign logo image, stored in-DB. Served via
+  // /api/candidate/logo/[candidateId]. Part of the candidate's reusable assets.
+  logoData Bytes?
+  logoMime String?
+
   bio           String? @db.Text
-  tagline       String?
-  website       String?
+  tagline       String? // the campaign slogan (surfaced as "Slogan" in Candidate assets)
+  website       String? // the candidate's external/website link
+  actblueUrl    String? // the candidate's ActBlue / donate link
 
   // Candidate knowledge — gathered via the guided interview. The richer this is,
   // the better-grounded every generated communication (and, later, the website).

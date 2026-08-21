@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import { getActiveContext } from "@/lib/context"
 import { legacyRoleForRoleKey } from "@/lib/permissions"
+import { canonicalizeEmail } from "@/lib/emailNormalize"
 
 export type MemberResult = { ok: true } | { ok: false; error: string }
 
@@ -52,6 +53,25 @@ export async function inviteMember(email: string, roleTypeId: string): Promise<M
 
   const role = await resolveAssignableRole(roleTypeId, committeeId)
   if (!role) return { ok: false, error: "Pick a valid role." }
+
+  // Same-person guard: an existing member whose email is the same inbox (e.g. a Gmail
+  // dot/plus variant) means this would add a duplicate account for one person.
+  const canon = canonicalizeEmail(clean)
+  const members = await prisma.committeeMembership.findMany({
+    where: { committeeId },
+    select: { user: { select: { email: true } } },
+  })
+  const match = members.find((m) => m.user.email && canonicalizeEmail(m.user.email) === canon)
+  if (match) {
+    const shown = match.user.email
+    return {
+      ok: false,
+      error:
+        shown && shown !== clean
+          ? `${shown} is already a member — that's the same inbox as ${clean} (Gmail ignores dots and “+” tags).`
+          : "That person is already a member.",
+    }
+  }
 
   const user = await prisma.user.upsert({
     where: { email: clean },

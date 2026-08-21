@@ -23,7 +23,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
 
   // Switcher data: committees the user belongs to, candidates in the active committee,
   // and campaigns (runs) under the active candidate.
-  const [memberships, candidates, campaignRuns] = await Promise.all([
+  const [memberships, candidates, campaignRuns, volunteerBlock] = await Promise.all([
     prisma.committeeMembership.findMany({
       where: { userId },
       select: { role: true, committee: { select: { id: true, name: true } } },
@@ -41,7 +41,13 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
           orderBy: [{ cycle: "desc" }, { createdAt: "desc" }],
         })
       : Promise.resolve([]),
+    // "Volunteer signups" is only relevant once the committee site has a volunteer form.
+    prisma.block.findFirst({
+      where: { type: "volunteerForm", page: { website: { committeeId: committee.id } } },
+      select: { id: true },
+    }),
   ])
+  const hasVolunteerForm = !!volunteerBlock
 
   // When a system admin is impersonating, resolve the target's display name for
   // the banner (ctx.userId is the impersonated member; committee is theirs).
@@ -66,6 +72,15 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
 
   // Candidate cardinality: single-candidate committees cap at one; party/multi allow many.
   const multiCandidate = allowsMultipleCandidates(committee.committeeType)
+
+  // Sidebar avatar: committee logo → (single-candidate) candidate logo → candidate image.
+  const committeeAvatarUrl = committee.logoMime
+    ? `/api/committee/logo/${committee.id}`
+    : !multiCandidate && candidate?.logoMime
+      ? `/api/candidate/logo/${candidate.id}`
+      : !multiCandidate && candidate?.headshotMime
+        ? `/api/website/headshot/${candidate.id}`
+        : null
   const canAddCandidate =
     permissions.has("campaigns:manage") && (multiCandidate || candidates.length === 0)
 
@@ -80,12 +95,14 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         committees={memberships.map((m) => ({ id: m.committee.id, name: m.committee.name }))}
         activeCommitteeId={committee.id}
         committeeName={committee.name}
+        committeeAvatarUrl={committeeAvatarUrl}
         candidates={candidates.map((c) => ({ id: c.id, candidateName: c.candidateName }))}
         activeCandidateId={candidate?.id ?? null}
         campaigns={campaignRuns.map((c) => ({ id: c.id, cycle: c.cycle, office: c.office }))}
         activeCampaignId={campaign?.id ?? null}
         canAddCandidate={canAddCandidate}
         multiCandidate={multiCandidate}
+        sectionGates={{ volunteerSignups: hasVolunteerForm }}
       />
       <div className="md:pl-60">
         {impersonation && (

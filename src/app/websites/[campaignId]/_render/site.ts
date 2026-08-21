@@ -24,6 +24,14 @@ export async function loadPublicSite(committeeId: string) {
       committee: {
         select: {
           name: true,
+          logoMime: true,
+          actblueUrl: true,
+          websiteUrl: true,
+          mailingStreet: true,
+          mailingStreet2: true,
+          mailingCity: true,
+          mailingState: true,
+          mailingZip: true,
           candidates: {
             orderBy: { createdAt: "asc" },
             select: {
@@ -46,6 +54,12 @@ export async function loadPublicSite(committeeId: string) {
     siteTitle: site.siteTitle ?? committee.name,
     paidForBy: site.paidForBy ?? committee.name,
     committeeName: committee.name,
+    // Committee assets surfaced in the site chrome.
+    logoUrl: committee.logoMime ? `/api/committee/logo/${committeeId}` : null,
+    // The site's own donate link wins; else fall back to the committee's ActBlue asset.
+    donateUrl: site.donateUrl || committee.actblueUrl || null,
+    committeeWebsite: committee.websiteUrl ?? null,
+    mailingAddress: formatAddress(committee),
     candidates: committee.candidates.map((c) => ({
       id: c.id,
       name: c.candidateName,
@@ -54,6 +68,21 @@ export async function loadPublicSite(committeeId: string) {
       hasHeadshot: !!c.headshotMime,
     })),
   }
+}
+
+/** One-line postal address from the committee's mailing fields, or null if unset. */
+function formatAddress(c: {
+  mailingStreet: string | null
+  mailingStreet2: string | null
+  mailingCity: string | null
+  mailingState: string | null
+  mailingZip: string | null
+}): string | null {
+  const cityLine = [c.mailingCity, [c.mailingState, c.mailingZip].filter(Boolean).join(" ")]
+    .filter(Boolean)
+    .join(", ")
+  const parts = [c.mailingStreet, c.mailingStreet2, cityLine].map((p) => p?.trim()).filter(Boolean)
+  return parts.length ? parts.join(", ") : null
 }
 
 export type PublicSite = NonNullable<Awaited<ReturnType<typeof loadPublicSite>>>

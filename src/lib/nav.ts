@@ -33,6 +33,8 @@ export interface NavSubItem {
   icon: LucideIcon
   /** Match only the exact path (for a module's "Overview" root). */
   exact?: boolean
+  /** When set, the item only shows if the same-named gate is satisfied (see AppShell). */
+  gate?: string
 }
 
 export interface NavModule {
@@ -112,7 +114,7 @@ export const NAV_MODULES: NavModule[] = [
     minPlan: "starter", // core surface, always available
     sections: [
       { href: "/contacts", label: "All contacts", icon: Contact, exact: true },
-      { href: "/contacts/signups", label: "Volunteer signups", icon: Inbox },
+      { href: "/contacts/signups", label: "Volunteer signups", icon: Inbox, gate: "volunteerSignups" },
     ],
   },
   {

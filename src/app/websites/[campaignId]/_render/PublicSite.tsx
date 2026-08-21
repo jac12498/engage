@@ -30,8 +30,12 @@ export function PublicSite({ site, activePage }: { site: Site; activePage: Publi
       {/* Header */}
       <header className="sticky top-0 z-20 border-b border-black/5 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <Link href={homeHref} className="text-lg font-bold" style={{ color: "var(--site-primary)" }}>
-            {site.siteTitle}
+          <Link href={homeHref} className="flex items-center gap-2.5 text-lg font-bold" style={{ color: "var(--site-primary)" }}>
+            {site.logoUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={site.logoUrl} alt={`${site.siteTitle} logo`} className="h-9 w-auto max-w-40 object-contain" />
+            )}
+            <span>{site.siteTitle}</span>
           </Link>
           <nav className="flex items-center gap-5 text-sm font-medium">
             {navPages.map((p) => (
@@ -78,6 +82,14 @@ export function PublicSite({ site, activePage }: { site: Site; activePage: Publi
               </a>
             </p>
           )}
+          {site.committeeWebsite && (
+            <p className="mt-1">
+              <a href={site.committeeWebsite} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                {site.committeeWebsite.replace(/^https?:\/\//, "")}
+              </a>
+            </p>
+          )}
+          {site.mailingAddress && <p className="mt-1 text-white/70">{site.mailingAddress}</p>}
           <p className="mt-4 text-xs text-white/50">Paid for by {site.paidForBy}.</p>
         </div>
       </footer>

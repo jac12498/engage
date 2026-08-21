@@ -186,7 +186,7 @@ export async function removeCandidate(candidateId: string): Promise<CandidateRes
     await updateSession({})
   }
 
-  revalidatePath("/candidates")
+  revalidatePath("/settings")
   revalidatePath("/", "layout")
   return { ok: true }
 }
@@ -259,5 +259,38 @@ export async function removeCampaign(campaignId: string): Promise<CandidateResul
 
   revalidatePath("/campaigns")
   revalidatePath("/", "layout")
+  return { ok: true }
+}
+
+/**
+ * Update the ACTIVE campaign's fusion endorsements (the additional ballot lines beyond
+ * the primary party). These are per-run — a candidate may carry an endorsement one
+ * cycle and not the next — so they live on the Campaign, edited from Campaign settings.
+ */
+export async function updateCampaignEndorsements(additionalParties: string[]): Promise<CandidateResult> {
+  const ctx = await getActiveContext()
+  if (!ctx) return { ok: false, error: "You must be signed in." }
+  if (!ctx.campaign) return { ok: false, error: "Choose a campaign first." }
+  if (!ctx.permissions.has("ai-communications:update") && !ctx.permissions.has("candidate-websites:update")) {
+    return { ok: false, error: "You don't have permission to edit campaign settings." }
+  }
+
+  // Drop blanks, the primary party, and duplicates.
+  const primary = (ctx.campaign.party ?? "").trim().toLowerCase()
+  const seen = new Set<string>(primary ? [primary] : [])
+  const cleaned = (additionalParties ?? [])
+    .map((p) => p.trim())
+    .filter((p) => {
+      const k = p.toLowerCase()
+      if (!p || seen.has(k)) return false
+      seen.add(k)
+      return true
+    })
+
+  await prisma.campaign.update({ where: { id: ctx.campaign.id }, data: { additionalParties: cleaned } })
+
+  revalidatePath("/campaigns")
+  revalidatePath("/dashboard")
+  if (ctx.candidate) revalidatePath(`/websites/${ctx.candidate.id}`)
   return { ok: true }
 }

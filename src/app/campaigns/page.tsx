@@ -3,6 +3,7 @@ import { AppShell } from "@/components/AppShell"
 import { requireCommittee } from "@/lib/context"
 import { prisma } from "@/lib/prisma"
 import { CampaignsList, type CampaignCard } from "@/components/candidates/CampaignsList"
+import { CampaignSettingsForm } from "@/components/candidates/CampaignSettingsForm"
 
 export const dynamic = "force-dynamic"
 export const metadata = { title: "Campaigns · Engage" }
@@ -40,6 +41,18 @@ export default async function CampaignsPage() {
             canManage={ctx.permissions.has("campaigns:manage")}
           />
         </div>
+
+        {ctx.campaign && (
+          <div className="mt-8">
+            <CampaignSettingsForm
+              key={ctx.campaign.id}
+              cycle={ctx.campaign.cycle}
+              office={ctx.campaign.office}
+              party={ctx.campaign.party}
+              initialEndorsements={ctx.campaign.additionalParties}
+            />
+          </div>
+        )}
       </div>
     </AppShell>
   )

@@ -19,11 +19,11 @@ export default async function NewCommitteePage() {
     <AppShell>
       <div className="mx-auto max-w-2xl">
         <Link
-          href="/committees"
+          href="/committees/settings"
           className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-[#1a1a2e]"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to committees
+          Back to committee settings
         </Link>
 
         <h1 className="mt-4 text-2xl font-bold text-[#1a1a2e]">Create a new committee</h1>

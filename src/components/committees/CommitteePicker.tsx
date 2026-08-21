@@ -13,6 +13,8 @@ export interface PickerCommittee {
   typeLabel: string | null
   state: string | null
   campaignCount: number
+  /** Resolved logo URL (committee logo, or the candidate's for a single-candidate committee), or null. */
+  logoUrl: string | null
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -25,9 +27,16 @@ const ROLE_LABELS: Record<string, string> = {
 export function CommitteePicker({
   committees,
   activeCommitteeId,
+  afterHref = "/dashboard",
+  showManage = true,
 }: {
   committees: PickerCommittee[]
   activeCommitteeId: string
+  /** Where selecting a committee lands (default the dashboard; the settings hub keeps
+   *  you on settings). */
+  afterHref?: string
+  /** Show the per-card settings gear. Off when the picker is already on the settings page. */
+  showManage?: boolean
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -35,13 +44,13 @@ export function CommitteePicker({
 
   function enter(id: string) {
     if (id === activeCommitteeId) {
-      router.push("/dashboard")
+      router.push(afterHref)
       return
     }
     setBusyId(id)
     startTransition(async () => {
       await setActiveCommittee(id)
-      router.push("/dashboard")
+      router.push(afterHref)
       router.refresh()
     })
   }
@@ -65,7 +74,7 @@ export function CommitteePicker({
       {committees.map((c) => {
         const isActive = c.id === activeCommitteeId
         const busy = busyId === c.id && pending
-        const canManage = c.role === "owner" || c.role === "admin"
+        const canManage = showManage && (c.role === "owner" || c.role === "admin")
         return (
           <div
             key={c.id}
@@ -78,9 +87,18 @@ export function CommitteePicker({
               disabled={pending}
               className="flex min-w-0 flex-1 items-start gap-3 text-left"
             >
-              <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#1b3a6b]/8 text-[#1b3a6b]">
-                <Building2 className="h-5 w-5" />
-              </span>
+              {c.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={c.logoUrl}
+                  alt=""
+                  className="mt-0.5 h-10 w-10 shrink-0 rounded-xl border border-border bg-white object-contain"
+                />
+              ) : (
+                <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#1b3a6b]/8 text-[#1b3a6b]">
+                  <Building2 className="h-5 w-5" />
+                </span>
+              )}
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2">
                   <span className="truncate font-semibold text-[#1a1a2e]">{c.name}</span>

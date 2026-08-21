@@ -39,7 +39,8 @@ export interface CreateCommitteeInput extends CommitteeProfileInput {
 export function buildCommitteeProfile(
   input: CommitteeProfileInput,
 ): { ok: true; data: CommitteeProfileData } | { ok: false; error: string } {
-  const jurisdiction: Jurisdiction = input.jurisdiction === "federal" ? "federal" : "state"
+  const jurisdiction: Jurisdiction =
+    input.jurisdiction === "federal" ? "federal" : input.jurisdiction === "none" ? "none" : "state"
 
   if (jurisdiction === "federal") {
     const filerId = normalizeFecCommitteeId(input.filerId)
@@ -47,6 +48,16 @@ export function buildCommitteeProfile(
       return { ok: false, error: "Enter a valid FEC committee ID (the letter C followed by 8 digits)." }
     }
     return { ok: true, data: { jurisdiction, state: null, committeeType: null, filerId } }
+  }
+
+  // Not registered with any body yet: no filer id. State + type are optional context
+  // (they still drive coverage + candidate cardinality); keep a type only if it's a
+  // real one for the chosen state.
+  if (jurisdiction === "none") {
+    const state = input.state?.trim().toUpperCase() || null
+    const rawType = input.committeeType?.trim() || null
+    const committeeType = rawType && state && isValidCommitteeType(state, rawType) ? rawType : null
+    return { ok: true, data: { jurisdiction, state, committeeType, filerId: null } }
   }
 
   const state = input.state.trim().toUpperCase()

@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, Settings, LogOut, Lock, Menu, X, Sparkles, Users, UserRound, Megaphone, PlusCircle, Building2, ShieldCheck, type LucideIcon } from "lucide-react"
+import { LayoutDashboard, LogOut, Lock, Menu, X, Sparkles, Users, UserRound, Megaphone, Building2, ShieldCheck, type LucideIcon } from "lucide-react"
 import { NAV_MODULES, navModuleUnlocked, navUnlockPlan, activeModuleKey } from "@/lib/nav"
 import { PLAN_LABELS, type PlanId } from "@/lib/entitlements"
 import { signOutAction } from "@/app/actions/auth"
@@ -22,7 +22,6 @@ export interface SidebarCampaign {
 }
 
 export function AppSidebar({
-  campaign,
   plan,
   role,
   permissions,
@@ -30,12 +29,13 @@ export function AppSidebar({
   committees,
   activeCommitteeId,
   committeeName,
+  committeeAvatarUrl,
   candidates,
   activeCandidateId,
   campaigns,
   activeCampaignId,
-  canAddCandidate,
   multiCandidate,
+  sectionGates,
 }: {
   campaign: SidebarCampaign | null
   plan: PlanId
@@ -47,6 +47,8 @@ export function AppSidebar({
   committees: SwitcherCommittee[]
   activeCommitteeId: string
   committeeName: string
+  /** Resolved avatar for the identity block: committee logo → candidate logo → image, or null. */
+  committeeAvatarUrl: string | null
   candidates: SwitcherCandidate[]
   activeCandidateId: string | null
   campaigns: SwitcherRun[]
@@ -55,14 +57,20 @@ export function AppSidebar({
   canAddCandidate: boolean
   /** Whether this committee type allows multiple candidates (party/multi vs single). */
   multiCandidate: boolean
+  /** Satisfied nav gates (e.g. { volunteerSignups: true }) — gated sub-items show only when true. */
+  sectionGates: Record<string, boolean>
 }) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const activeKey = activeModuleKey(pathname)
-  const identity = campaign?.committeeName || campaign?.candidateName || committeeName
   const perms = new Set(permissions)
   const canManageMembers = perms.has("members:manage")
-  const canManageCommittee = role === "owner" || role === "admin"
+  // Committee administration is owner/admin-level; the other links gate on the
+  // privilege that makes their destination usable.
+  const isCommitteeAdmin = role === "owner" || role === "admin"
+  const canEditProfile = perms.has("ai-communications:update") || perms.has("candidate-websites:update")
+  const canManageCampaigns = perms.has("campaigns:manage")
+  const canManageBilling = perms.has("billing:manage")
   const close = () => setOpen(false)
 
   function isActive(href: string, exact?: boolean) {
@@ -96,16 +104,20 @@ export function AppSidebar({
             </button>
           </div>
           <div className="mt-3 flex items-center gap-2.5">
-            {campaign?.headshotMime ? (
+            {committeeAvatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={`/api/website/headshot/${campaign.id}`} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
+              <img
+                src={committeeAvatarUrl}
+                alt=""
+                className="h-9 w-9 shrink-0 rounded-lg border border-border bg-white object-contain"
+              />
             ) : (
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#1b3a6b]/8 text-sm font-semibold text-[#1b3a6b]">
-                {identity.slice(0, 1).toUpperCase()}
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#1b3a6b]/8 text-[#1b3a6b]">
+                <Building2 className="h-5 w-5" />
               </div>
             )}
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-[#1a1a2e]">{identity}</p>
+              <p className="truncate text-sm font-semibold text-[#1a1a2e]">{committeeName}</p>
               <p className="text-xs text-muted-foreground">{PLAN_LABELS[plan]} plan</p>
             </div>
           </div>
@@ -160,7 +172,9 @@ export function AppSidebar({
                 <Row href={m.href} label={name} icon={m.icon} active={moduleActive && m.sections.length === 0} onClick={close} bold={moduleActive} />
                 {moduleActive && m.sections.length > 0 && (
                   <div className="mb-1 mt-0.5 space-y-0.5 border-l border-border pl-3 ml-4">
-                    {m.sections.map((s) => (
+                    {m.sections
+                      .filter((s) => !s.gate || sectionGates[s.gate])
+                      .map((s) => (
                       <Row key={s.href} href={s.href} label={s.label} icon={s.icon} active={isActive(s.href, s.exact)} onClick={close} small />
                     ))}
                   </div>
@@ -172,26 +186,24 @@ export function AppSidebar({
 
         {/* Footer */}
         <div className="space-y-0.5 border-t border-border px-3 py-3">
-          <Row href="/committees" label="Committees" icon={Building2} active={isActive("/committees")} onClick={close} />
-          {isSystemAdmin && (
-            <Row href="/admin" label="System Admin" icon={ShieldCheck} active={isActive("/admin")} onClick={close} />
+          {isCommitteeAdmin && (
+            <Row href="/committees/settings" label="Committee Settings" icon={Building2} active={isActive("/committees/settings")} onClick={close} />
           )}
-          {multiCandidate ? (
-            <Row href="/candidates" label="Candidates" icon={UserRound} active={isActive("/candidates")} onClick={close} />
-          ) : (
-            canAddCandidate && (
-              <Row href="/candidates/new" label="Add candidate" icon={PlusCircle} active={isActive("/candidates/new")} onClick={close} />
-            )
+          {canEditProfile && (
+            <Row href="/settings" label="Candidate Settings" icon={UserRound} active={isActive("/settings")} onClick={close} />
           )}
-          <Row href="/campaigns" label="Campaigns" icon={Megaphone} active={isActive("/campaigns")} onClick={close} />
+          {activeCandidateId && canManageCampaigns && (
+            <Row href="/campaigns" label="Campaigns" icon={Megaphone} active={isActive("/campaigns")} onClick={close} />
+          )}
           {canManageMembers && (
             <Row href="/members" label="Members" icon={Users} active={isActive("/members")} onClick={close} />
           )}
-          <Row href="/plans" label="Plans" icon={Sparkles} active={isActive("/plans")} onClick={close} />
-          {canManageCommittee && (
-            <Row href="/committees/settings" label="Committee settings" icon={Building2} active={isActive("/committees/settings")} onClick={close} />
+          {canManageBilling && (
+            <Row href="/plans" label="Plans" icon={Sparkles} active={isActive("/plans")} onClick={close} />
           )}
-          <Row href="/settings" label="Candidate settings" icon={Settings} active={isActive("/settings")} onClick={close} />
+          {isSystemAdmin && (
+            <Row href="/admin" label="System Admin" icon={ShieldCheck} active={isActive("/admin")} onClick={close} />
+          )}
           <form action={signOutAction}>
             <button
               type="submit"

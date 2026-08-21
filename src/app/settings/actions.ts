@@ -9,8 +9,11 @@ export interface CampaignBasicsInput {
   candidateName: string
   office: string
   party: string
-  additionalParties: string[]
   committeeName: string
+  // Candidate assets (durable across runs).
+  slogan?: string
+  website?: string
+  actblueUrl?: string
   mailingStreet?: string
   mailingStreet2?: string
   mailingCity?: string
@@ -21,9 +24,10 @@ export interface CampaignBasicsInput {
 export type UpdateResult = { ok: true } | { ok: false; error: string }
 
 /**
- * Update the signed-in user's core campaign identity (name, office, party +
- * endorsements, committee, mailing address). District/voter-file link is
- * snapshotted at onboarding and edited separately — not touched here.
+ * Update the signed-in user's core campaign identity (name, office, primary party,
+ * committee, mailing address). Fusion endorsements are per-run and edited on Campaign
+ * settings; the district/voter-file link is snapshotted at onboarding — neither is
+ * touched here.
  */
 export async function updateCampaignBasics(
   input: CampaignBasicsInput
@@ -45,28 +49,25 @@ export async function updateCampaignBasics(
   if (!party) return { ok: false, error: "Party is required." }
   if (!committeeName) return { ok: false, error: "Committee name is required." }
 
-  // Clean endorsements: trim, drop blanks, drop the primary party, de-dupe.
-  const seen = new Set<string>([party.toLowerCase()])
-  const additionalParties = (input.additionalParties ?? [])
-    .map((p) => p.trim())
-    .filter((p) => {
-      const k = p.toLowerCase()
-      if (!p || seen.has(k)) return false
-      seen.add(k)
-      return true
-    })
-
   const { candidate, campaign } = ctx
 
-  // Person fields live on the Candidate; run fields (office, ballot line, "Paid for
-  // by", mailing) live on the active Campaign.
-  await prisma.candidate.update({ where: { id: candidate.id }, data: { candidateName } })
+  // Person fields + assets live on the Candidate; run fields (office, ballot line,
+  // "Paid for by", mailing) live on the active Campaign. Endorsements are managed
+  // separately. Slogan reuses `tagline`; website/actblue links are candidate assets.
+  await prisma.candidate.update({
+    where: { id: candidate.id },
+    data: {
+      candidateName,
+      tagline: input.slogan?.trim() || null,
+      website: input.website?.trim() || null,
+      actblueUrl: input.actblueUrl?.trim() || null,
+    },
+  })
   await prisma.campaign.update({
     where: { id: campaign.id },
     data: {
       office,
       party,
-      additionalParties,
       committeeName,
       mailingStreet: input.mailingStreet?.trim() || null,
       mailingStreet2: input.mailingStreet2?.trim() || null,

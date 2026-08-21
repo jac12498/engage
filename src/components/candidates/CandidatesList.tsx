@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { UserRound, Check, Plus, Loader2, Settings, Trash2, AlertTriangle, X } from "lucide-react"
+import { UserRound, Check, Plus, Loader2, Trash2, AlertTriangle, X } from "lucide-react"
 import { setActiveCandidate } from "@/app/actions/committee"
 import { removeCandidate } from "@/app/candidates/actions"
 
@@ -78,10 +78,6 @@ export function CandidatesList({
                   </span>
                   <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                     {[c.office, c.party].filter(Boolean).join(" · ") || "Candidate"}
-                  </span>
-                  <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[#1b3a6b]">
-                    <Settings className="h-3.5 w-3.5" />
-                    {isActive ? "Open settings" : "Open"}
                   </span>
                 </span>
               </button>

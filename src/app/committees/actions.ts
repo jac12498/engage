@@ -69,7 +69,42 @@ export async function updateActiveCommittee(input: CreateCommitteeInput): Promis
   })
 
   revalidatePath("/", "layout") // committee name shows in the sidebar/switcher
-  revalidatePath("/committees")
+  revalidatePath("/committees/settings")
+  return { ok: true }
+}
+
+/** Committee-level assets + mailing address (logo is uploaded separately). Admin+ only. */
+export interface CommitteeAssetsInput {
+  actblueUrl?: string
+  websiteUrl?: string
+  mailingStreet?: string
+  mailingStreet2?: string
+  mailingCity?: string
+  mailingState?: string
+  mailingZip?: string
+}
+
+export async function updateCommitteeAssets(input: CommitteeAssetsInput): Promise<CommitteeResult> {
+  const ctx = await getActiveContext()
+  if (!ctx) return { ok: false, error: "You must be signed in." }
+  if (!roleAtLeast(ctx.role, "admin")) {
+    return { ok: false, error: "Only committee admins can change committee settings." }
+  }
+
+  await prisma.committee.update({
+    where: { id: ctx.committee.id },
+    data: {
+      actblueUrl: input.actblueUrl?.trim() || null,
+      websiteUrl: input.websiteUrl?.trim() || null,
+      mailingStreet: input.mailingStreet?.trim() || null,
+      mailingStreet2: input.mailingStreet2?.trim() || null,
+      mailingCity: input.mailingCity?.trim() || null,
+      mailingState: input.mailingState?.trim() || null,
+      mailingZip: input.mailingZip?.trim() || null,
+    },
+  })
+
+  revalidatePath("/committees/settings")
   return { ok: true }
 }
 

@@ -28,7 +28,7 @@ export interface StateOption {
  * matches a state committee id, so donor imports read only the committee's own
  * jurisdiction's data, scoped to its recipient id (Committee.filerId).
  */
-export type Jurisdiction = "state" | "federal"
+export type Jurisdiction = "state" | "federal" | "none"
 
 export interface JurisdictionOption {
   code: Jurisdiction
@@ -49,10 +49,16 @@ export const JURISDICTIONS: JurisdictionOption[] = [
     description:
       "Registered with the Federal Election Commission (a U.S. House, Senate, presidential, or federal PAC committee).",
   },
+  {
+    code: "none",
+    label: "Not registered",
+    description:
+      "Not yet registered with a state Board of Elections or the FEC. Enter your details manually.",
+  },
 ]
 
 export function isJurisdiction(v: string | null | undefined): v is Jurisdiction {
-  return v === "state" || v === "federal"
+  return v === "state" || v === "federal" || v === "none"
 }
 
 /**
