@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma"
 import { getActiveContext } from "@/lib/context"
 import { toPlanId } from "@/lib/entitlements"
 import { allowsMultipleCandidates } from "@/lib/committeeTypes"
+import { isDevEnv } from "@/lib/appEnv"
+import { APP_VERSION } from "@/lib/releaseNotes"
 import { stopImpersonation } from "@/app/admin/actions"
 import { dismissRegistryAlert } from "@/app/actions/registry"
 import { AppSidebar } from "./AppSidebar"
@@ -23,7 +25,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
 
   // Switcher data: committees the user belongs to, candidates in the active committee,
   // and campaigns (runs) under the active candidate.
-  const [memberships, candidates, campaignRuns, volunteerBlock] = await Promise.all([
+  const [memberships, candidates, campaignRuns, volunteerBlock, userRow] = await Promise.all([
     prisma.committeeMembership.findMany({
       where: { userId },
       select: { role: true, committee: { select: { id: true, name: true } } },
@@ -46,8 +48,14 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
       where: { type: "volunteerForm", page: { website: { committeeId: committee.id } } },
       select: { id: true },
     }),
+    // For the "What's new" unseen-dot: the latest release the user has viewed.
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { lastSeenReleaseVersion: true },
+    }),
   ])
   const hasVolunteerForm = !!volunteerBlock
+  const hasUnseenRelease = (userRow?.lastSeenReleaseVersion ?? null) !== APP_VERSION
 
   // When a system admin is impersonating, resolve the target's display name for
   // the banner (ctx.userId is the impersonated member; committee is theirs).
@@ -87,6 +95,8 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-[#f4f6f9]">
       <AppSidebar
+        isDev={isDevEnv()}
+        hasUnseenRelease={hasUnseenRelease}
         campaign={sidebarCampaign}
         plan={toPlanId(committee.plan)}
         role={role}

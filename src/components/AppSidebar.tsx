@@ -3,8 +3,9 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, LogOut, Lock, Menu, X, Sparkles, Users, UserRound, Megaphone, Building2, ShieldCheck, type LucideIcon } from "lucide-react"
+import { LayoutDashboard, LogOut, Lock, Menu, X, Sparkles, Users, UserRound, Megaphone, Building2, ShieldCheck, History, type LucideIcon } from "lucide-react"
 import { NAV_MODULES, navModuleUnlocked, navUnlockPlan, activeModuleKey } from "@/lib/nav"
+import { APP_VERSION } from "@/lib/releaseNotes"
 import { PLAN_LABELS, type PlanId } from "@/lib/entitlements"
 import { signOutAction } from "@/app/actions/auth"
 import {
@@ -22,6 +23,8 @@ export interface SidebarCampaign {
 }
 
 export function AppSidebar({
+  isDev,
+  hasUnseenRelease,
   plan,
   role,
   permissions,
@@ -37,6 +40,10 @@ export function AppSidebar({
   multiCandidate,
   sectionGates,
 }: {
+  /** True when the app is connected to the DEV database — shows a DEV badge. */
+  isDev: boolean
+  /** True when there's a release the user hasn't viewed — shows a dot on "What's new". */
+  hasUnseenRelease: boolean
   campaign: SidebarCampaign | null
   plan: PlanId
   role: string
@@ -85,6 +92,7 @@ export function AppSidebar({
           <Menu className="h-5 w-5" />
         </button>
         <Brand />
+        {isDev && <DevBadge />}
       </div>
 
       {/* Backdrop (mobile) */}
@@ -98,7 +106,10 @@ export function AppSidebar({
         {/* Brand + identity */}
         <div className="border-b border-border px-4 py-4">
           <div className="flex items-center justify-between">
-            <Brand />
+            <div className="flex items-center gap-2">
+              <Brand />
+              {isDev && <DevBadge />}
+            </div>
             <button onClick={close} aria-label="Close menu" className="rounded-lg p-1 text-muted-foreground hover:bg-muted md:hidden">
               <X className="h-4 w-4" />
             </button>
@@ -204,6 +215,34 @@ export function AppSidebar({
           {isSystemAdmin && (
             <Row href="/admin" label="System Admin" icon={ShieldCheck} active={isActive("/admin")} onClick={close} />
           )}
+          {/* Release notes — visible to every user. */}
+          <Link
+            href="/release-notes"
+            onClick={close}
+            className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors ${
+              isActive("/release-notes")
+                ? "bg-[#1b3a6b] font-medium text-white"
+                : "text-[#1a1a2e] hover:bg-muted"
+            }`}
+          >
+            <History className={`h-4 w-4 shrink-0 ${isActive("/release-notes") ? "text-white" : "text-muted-foreground"}`} />
+            <span className="flex-1 truncate">What&rsquo;s new</span>
+            {hasUnseenRelease ? (
+              <span
+                title={`Version ${APP_VERSION} — new`}
+                aria-label={`Version ${APP_VERSION} is new`}
+                className="inline-flex items-center gap-1 text-xs font-semibold"
+                style={{ color: isActive("/release-notes") ? "#ffffff" : "#e8590c" }}
+              >
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: isActive("/release-notes") ? "#ffffff" : "#e8590c" }} />
+                New
+              </span>
+            ) : (
+              <span className={`text-xs ${isActive("/release-notes") ? "text-white/80" : "text-muted-foreground"}`}>
+                v{APP_VERSION}
+              </span>
+            )}
+          </Link>
           <form action={signOutAction}>
             <button
               type="submit"
@@ -227,6 +266,18 @@ function Brand() {
       </span>
       <span className="text-lg font-bold tracking-tight text-[#1a1a2e]">Engage</span>
     </Link>
+  )
+}
+
+function DevBadge() {
+  return (
+    <span
+      title="Connected to the development database"
+      style={{ backgroundColor: "#e8590c", color: "#ffffff" }}
+      className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+    >
+      Dev
+    </span>
   )
 }
 

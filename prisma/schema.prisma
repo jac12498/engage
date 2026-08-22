@@ -36,6 +36,10 @@ model User {
   lastCandidateId String? // active Candidate (the person)
   lastCampaignId  String? // active Campaign (the run under that candidate)
 
+  // Most recent release-notes version this user has viewed (drives the "What's
+  // new" unseen-dot in the sidebar). Null until they open Release notes once.
+  lastSeenReleaseVersion String?
+
   // Overall System Administrator (global, cross-committee). Grants the /admin
   // area and the ability to impersonate any member. Seeded, never self-granted.
   isSystemAdmin Boolean @default(false)
