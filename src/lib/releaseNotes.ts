@@ -10,7 +10,7 @@
  * capability, not the code.
  */
 
-export const APP_VERSION = "1.0"
+export const APP_VERSION = "1.1"
 
 export type ChangeKind = "New" | "Improved" | "Fixed"
 
@@ -31,6 +31,20 @@ export interface Release {
 }
 
 export const RELEASES: Release[] = [
+  {
+    version: "1.1",
+    date: "2026-08-22",
+    title: "What's New page",
+    summary: "You can now keep up with platform updates right inside Engage.",
+    sections: [
+      {
+        kind: "New",
+        items: [
+          "Release notes: a “What’s new” link in the sidebar opens this page, listing new features, improvements, and fixes as they ship. A badge on the link tells you when there’s something you haven’t read yet.",
+        ],
+      },
+    ],
+  },
   {
     version: "1.0",
     date: "2026-08-22",
