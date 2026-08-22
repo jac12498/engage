@@ -64,16 +64,44 @@ node scripts/dev/copy-public-districts.mjs
 The script is read-only on the source and guarded so it can only ever write to the
 known dev ref. Re-run it whenever you rebuild the dev db.
 
-## Migration discipline (important)
+## Migrations (Prisma Migrate)
 
-1. Apply every new migration to **dev first** — `prisma db push` for schema changes, or
-   `prisma db execute --file <sql>` for hand-written idempotent SQL.
-2. Verify on dev.
-3. Then apply the **same** change to prod (against Railway's DB).
+As of 2026-08-22 we use **Prisma's migration history** (`prisma/migrations/`),
+baselined at `0_init`. The pre-migration hand-written SQL is archived in
+`prisma/migrations-history/` — **reference only, never re-run**.
 
-**Never run migrations straight at production.** (Prisma 7 `db execute` reads its
-datasource from `prisma.config.ts`, i.e. the current `DATABASE_URL` — there is no
-`--url` / `--schema` flag.)
+- `_prisma_migrations` lives in the **`engagecampaign`** schema because `DIRECT_URL`
+  carries `?schema=engagecampaign` (both dev `.env` and Railway). The datasource is
+  scoped to that schema, so migrate never touches version10.3's `public`.
+- Supabase roles can't create the shadow database `prisma migrate dev` wants, so we
+  author migrations **shadow-free** with `migrate diff` + `migrate deploy`.
+
+**Authoring a new migration (dev first, then prod):**
+
+1. Edit `prisma/schema.prisma`.
+2. Make the folder and generate the delta SQL from the live DEV db:
+   ```bash
+   mkdir -p prisma/migrations/$(date +%Y%m%d%H%M%S)_<name>
+   npx prisma migrate diff --from-config-datasource \
+     --to-schema prisma/schema.prisma --script \
+     --output prisma/migrations/<that_folder>/migration.sql
+   ```
+   Review the SQL.
+3. Apply to DEV, regenerate client, verify:
+   ```bash
+   npx prisma migrate deploy && npx prisma generate && npx prisma migrate status
+   ```
+4. Apply to PROD by pointing `DIRECT_URL` at prod for a **single** command (don't
+   edit `.env` — override the env var so it can't be left pointing at prod):
+   ```powershell
+   $env:DIRECT_URL="<prod DIRECT_URL with ?schema=engagecampaign>"; npx prisma migrate deploy; Remove-Item Env:DIRECT_URL
+   ```
+5. Commit the migration folder. Railway auto-deploys the code.
+
+`migrate deploy` only applies **pending** migrations (`0_init` is already resolved on
+both DBs), so it never recreates existing tables.
+
+**Never** run `prisma db push` against prod, and never leave `.env` pointed at prod.
 
 Also: **deleting a committee can strand any live session** whose token points at it (the
 app falls back gracefully now, but the user may need to reload / re-sign-in). Prefer doing
