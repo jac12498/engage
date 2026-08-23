@@ -2,7 +2,17 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react"
 import Link from "next/link"
-import { Plus, Search, Pencil, Trash2, X, Users, Inbox, ArrowRight, HandCoins, ChevronLeft, ChevronRight } from "lucide-react"
+import { Plus, Search, Pencil, Trash2, X, Users, Inbox, ArrowRight, HandCoins, ChevronLeft, ChevronRight, Upload, SlidersHorizontal } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { ContactSearchBuilder } from "@/components/contacts/ContactSearchBuilder"
+import { matchContact, conditionCount, type SearchQuery } from "@/lib/contactsSearch"
+import { saveContactSearch, updateContactSearch, deleteContactSearch } from "@/app/contacts/searches/actions"
+
+export interface SavedSearch {
+  id: string
+  name: string
+  query: SearchQuery
+}
 import { Button } from "@/components/ui/button"
 import {
   saveContact,
@@ -12,7 +22,7 @@ import {
   type PhoneInput,
   type AddressInput,
 } from "@/app/contacts/actions"
-import { CONTACT_TYPES, formatPhone } from "@/lib/contacts"
+import { CONTACT_TYPES, formatPhone, EMAIL_LABELS, PHONE_LABELS, ADDRESS_LABELS } from "@/lib/contacts"
 import { AddressAutocomplete } from "@/components/contacts/AddressAutocomplete"
 import type { ParsedAddress } from "@/lib/googleMaps"
 
@@ -74,10 +84,6 @@ const TYPE_TONE: Record<string, string> = {
   other: "bg-[#1a1a2e]/6 text-muted-foreground",
 }
 
-const EMAIL_LABELS = ["Personal", "Work", "Campaign", "Other"]
-const PHONE_LABELS = ["Mobile", "Home", "Work", "Campaign", "Other"]
-const ADDRESS_LABELS = ["Home", "Mailing", "Business", "Other"]
-
 function fullName(c: ContactRow) {
   return [c.firstName, c.lastName].filter(Boolean).join(" ")
 }
@@ -116,10 +122,19 @@ export function ContactsManager({
   contacts,
   pendingSignups,
   canImportDonors = false,
+  canImport = false,
+  duplicateGroups = 0,
+  savedSearches = [],
 }: {
   contacts: ContactRow[]
   pendingSignups: number
   canImportDonors?: boolean
+  /** May the user bulk-load a list (contacts:create)? */
+  canImport?: boolean
+  /** Number of possible-duplicate groups detected (0 hides the banner). */
+  duplicateGroups?: number
+  /** Committee-shared saved advanced searches. */
+  savedSearches?: SavedSearch[]
 }) {
   const [query, setQuery] = useState("")
   // Multi-select tag filter: the set of selected tag codes (empty = show all).
@@ -140,11 +155,83 @@ export function ContactsManager({
   const [pageSize, setPageSize] = useState(50)
   const [page, setPage] = useState(1)
 
+  // Advanced search builder (groups OR'd, conditions AND'd).
+  const [advOpen, setAdvOpen] = useState(false)
+  const [advQuery, setAdvQuery] = useState<SearchQuery>([])
+  const advCount = conditionCount(advQuery)
+
+  // Saved (committee-shared) searches.
+  const router = useRouter()
+  const [activeSearchId, setActiveSearchId] = useState("")
+  const [naming, setNaming] = useState<null | "save" | "rename">(null)
+  const [nameDraft, setNameDraft] = useState("")
+  const [confirmDeleteSearch, setConfirmDeleteSearch] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
+  const [searchPending, startSearchTransition] = useTransition()
+  const activeSearch = savedSearches.find((s) => s.id === activeSearchId) ?? null
+
+  function loadSearch(id: string) {
+    setSearchError(null)
+    setNaming(null)
+    if (!id) return setActiveSearchId("")
+    const s = savedSearches.find((x) => x.id === id)
+    if (!s) return
+    setActiveSearchId(id)
+    setAdvQuery(JSON.parse(JSON.stringify(s.query)) as SearchQuery)
+    setAdvOpen(true)
+  }
+  function clearSearch() {
+    setAdvQuery([])
+    setActiveSearchId("")
+    setNaming(null)
+    setSearchError(null)
+  }
+  function startNaming(mode: "save" | "rename") {
+    setSearchError(null)
+    setNameDraft(mode === "rename" ? activeSearch?.name ?? "" : "")
+    setNaming(mode)
+  }
+  function commitName() {
+    const name = nameDraft.trim()
+    if (!name) return setSearchError("Please name the search.")
+    startSearchTransition(async () => {
+      const res =
+        naming === "rename" && activeSearchId
+          ? await updateContactSearch(activeSearchId, { name })
+          : await saveContactSearch(name, advQuery)
+      if (!res.ok) return setSearchError(res.error)
+      if ("id" in res) setActiveSearchId((res as { id: string }).id)
+      setNaming(null)
+      router.refresh()
+    })
+  }
+  function updateCurrent() {
+    if (!activeSearchId) return
+    setSearchError(null)
+    startSearchTransition(async () => {
+      const res = await updateContactSearch(activeSearchId, { query: advQuery })
+      if (!res.ok) return setSearchError(res.error)
+      router.refresh()
+    })
+  }
+  function deleteCurrent() {
+    if (!activeSearchId) return
+    startSearchTransition(async () => {
+      const res = await deleteContactSearch(activeSearchId)
+      setConfirmDeleteSearch(false)
+      if (!res.ok) return setSearchError(res.error)
+      clearSearch()
+      router.refresh()
+    })
+  }
+
   const searchTypeFiltered = useMemo(() => {
     const q = query.trim().toLowerCase()
     return contacts.filter((c) => {
       // Multi-select: match a contact that has ANY of the selected tags.
       if (typeFilter.size > 0 && !c.types.some((t) => typeFilter.has(t))) return false
+      // Advanced builder (no-op when there are no active conditions).
+      if (!matchContact(c, advQuery)) return false
       if (!q) return true
       const hay = [
         fullName(c),
@@ -157,7 +244,7 @@ export function ContactsManager({
         .toLowerCase()
       return hay.includes(q)
     })
-  }, [contacts, query, typeFilter])
+  }, [contacts, query, typeFilter, advQuery])
 
   // Distinct last-name initials present in the current search/type context, for the A–Z bar.
   const letters = useMemo(() => {
@@ -194,7 +281,7 @@ export function ContactsManager({
   // Reset to the first page whenever the result set or page size changes.
   useEffect(() => {
     setPage(1)
-  }, [query, typeFilter, letter, pageSize])
+  }, [query, typeFilter, letter, pageSize, advQuery])
 
   // Per-type counts for the filter chips.
   const counts = useMemo(() => {
@@ -216,6 +303,15 @@ export function ContactsManager({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {canImport && (
+            <Link
+              href="/contacts/import"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3.5 py-2 text-sm font-medium text-[#1b3a6b] transition-colors hover:bg-muted"
+            >
+              <Upload className="h-4 w-4" />
+              Load list
+            </Link>
+          )}
           {canImportDonors && (
             <Link
               href="/contacts/import-donors"
@@ -248,6 +344,22 @@ export function ContactsManager({
         </Link>
       )}
 
+      {duplicateGroups > 0 && (
+        <Link
+          href="/contacts/duplicates"
+          className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-[#1b3a6b]/25 bg-[#1b3a6b]/5 px-4 py-3 transition-colors hover:bg-[#1b3a6b]/10"
+        >
+          <span className="inline-flex items-center gap-2 text-sm font-medium text-[#1b3a6b]">
+            <Users className="h-4 w-4" />
+            {duplicateGroups} possible duplicate {duplicateGroups === 1 ? "group" : "groups"} found
+          </span>
+          <span className="inline-flex items-center gap-1 text-sm font-semibold text-[#1b3a6b]">
+            Review
+            <ArrowRight className="h-4 w-4" />
+          </span>
+        </Link>
+      )}
+
       {contacts.length === 0 ? (
         <EmptyState onAdd={() => setEditing("new")} />
       ) : (
@@ -263,7 +375,146 @@ export function ContactsManager({
                 className="w-full rounded-lg border border-border bg-white py-2.5 pl-9 pr-3 text-sm outline-none transition-colors focus:border-[#1b3a6b] focus:ring-2 focus:ring-[#1b3a6b]/15"
               />
             </div>
+            <button
+              onClick={() => setAdvOpen((o) => !o)}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-3.5 py-2.5 text-sm font-medium transition-colors ${
+                advOpen || advCount > 0
+                  ? "border-[#1b3a6b] bg-[#1b3a6b]/5 text-[#1b3a6b]"
+                  : "border-border text-[#1a1a2e] hover:bg-muted"
+              }`}
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              Advanced
+              {advCount > 0 && (
+                <span className="ml-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#1b3a6b] px-1.5 text-xs font-semibold text-white">
+                  {advCount}
+                </span>
+              )}
+            </button>
           </div>
+
+          {/* Advanced search builder */}
+          {advOpen && (
+            <div className="mt-3 rounded-2xl border border-border bg-muted/30 p-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-semibold text-[#1a1a2e]">Advanced search</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Contacts match if they satisfy any group; within a group, all conditions must match.
+                  </p>
+                </div>
+                {/* Saved-search toolbar */}
+                <div className="flex flex-wrap items-center gap-2">
+                  {savedSearches.length > 0 && (
+                    <select
+                      value={activeSearchId}
+                      onChange={(e) => loadSearch(e.target.value)}
+                      className="rounded-md border border-border bg-white px-2 py-1.5 text-sm text-[#1a1a2e] outline-none focus:border-[#1b3a6b]"
+                    >
+                      <option value="">Saved searches…</option>
+                      {savedSearches.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {activeSearch ? (
+                    <>
+                      <button
+                        onClick={updateCurrent}
+                        disabled={searchPending}
+                        className="rounded-lg border border-border bg-white px-3 py-1.5 text-sm font-medium text-[#1b3a6b] transition-colors hover:bg-muted disabled:opacity-50"
+                      >
+                        Update
+                      </button>
+                      <button
+                        onClick={() => startNaming("save")}
+                        className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-[#1a1a2e]"
+                      >
+                        Save as new
+                      </button>
+                      <button
+                        onClick={() => startNaming("rename")}
+                        className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-[#1a1a2e]"
+                      >
+                        Rename
+                      </button>
+                      <button
+                        onClick={() => setConfirmDeleteSearch(true)}
+                        className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-red-600"
+                      >
+                        Delete
+                      </button>
+                    </>
+                  ) : (
+                    advCount > 0 && (
+                      <button
+                        onClick={() => startNaming("save")}
+                        className="rounded-lg border border-border bg-white px-3 py-1.5 text-sm font-medium text-[#1b3a6b] transition-colors hover:bg-muted"
+                      >
+                        Save as…
+                      </button>
+                    )
+                  )}
+                  {advCount > 0 && (
+                    <button
+                      onClick={clearSearch}
+                      className="text-sm font-medium text-muted-foreground transition-colors hover:text-[#1a1a2e]"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {naming && (
+                <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-white p-3">
+                  <input
+                    autoFocus
+                    value={nameDraft}
+                    onChange={(e) => setNameDraft(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && commitName()}
+                    placeholder="Search name"
+                    className="min-w-[12rem] flex-1 rounded-md border border-border bg-white px-2 py-1.5 text-sm outline-none focus:border-[#1b3a6b]"
+                  />
+                  <Button onClick={commitName} disabled={searchPending}>
+                    {searchPending ? "Saving…" : naming === "rename" ? "Rename" : "Save"}
+                  </Button>
+                  <button
+                    onClick={() => setNaming(null)}
+                    className="rounded-lg px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-[#1a1a2e]"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+
+              {searchError && (
+                <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {searchError}
+                </p>
+              )}
+
+              <ContactSearchBuilder query={advQuery} onChange={setAdvQuery} />
+            </div>
+          )}
+
+          {confirmDeleteSearch && activeSearch && (
+            <ConfirmDialog
+              title="Delete saved search"
+              message={
+                <>
+                  Delete <strong className="font-medium text-[#1a1a2e]">{activeSearch.name}</strong>? This removes it
+                  for everyone in the committee.
+                </>
+              }
+              confirmLabel={searchPending ? "Deleting…" : "Delete"}
+              pending={searchPending}
+              onCancel={() => setConfirmDeleteSearch(false)}
+              onConfirm={deleteCurrent}
+            />
+          )}
 
           {/* Type filter chips */}
           <div className="mt-3 flex flex-wrap gap-2">
@@ -295,7 +546,6 @@ export function ContactsManager({
               <thead>
                 <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-muted-foreground">
                   <th className="px-4 py-3 font-semibold">Name</th>
-                  <th className="px-4 py-3 font-semibold">Tags</th>
                   <th className="px-4 py-3 font-semibold">Email</th>
                   <th className="px-4 py-3 font-semibold">Phone</th>
                   <th className="px-4 py-3 font-semibold">Address</th>
@@ -312,19 +562,18 @@ export function ContactsManager({
                       >
                         {nameLastFirst(c)}
                       </Link>
-                    </td>
-                    <td className="px-4 py-3 align-top">
-                      <div className="flex flex-wrap gap-1">
-                        {c.types.length === 0 && <span className="text-xs text-muted-foreground">—</span>}
-                        {c.types.map((t) => (
-                          <span
-                            key={t}
-                            className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${TYPE_TONE[t] ?? TYPE_TONE.other}`}
-                          >
-                            {TYPE_LABELS[t] ?? t}
-                          </span>
-                        ))}
-                      </div>
+                      {c.types.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {c.types.map((t) => (
+                            <span
+                              key={t}
+                              className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${TYPE_TONE[t] ?? TYPE_TONE.other}`}
+                            >
+                              {TYPE_LABELS[t] ?? t}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3 align-top text-muted-foreground">
                       <MethodCell
@@ -842,6 +1091,30 @@ export function ContactDialog({
   )
 }
 
+function LabelSelect({
+  value,
+  options,
+  onChange,
+  className,
+}: {
+  value: string
+  options: readonly string[]
+  onChange: (v: string) => void
+  className?: string
+}) {
+  // Preserve a legacy value not in the current vocabulary so it still displays.
+  const opts = !value || options.includes(value) ? options : [value, ...options]
+  return (
+    <select value={value || options[0]} onChange={(e) => onChange(e.target.value)} className={className}>
+      {opts.map((o) => (
+        <option key={o} value={o}>
+          {o}
+        </option>
+      ))}
+    </select>
+  )
+}
+
 function MethodEditor({
   title,
   rows,
@@ -855,13 +1128,12 @@ function MethodEditor({
   title: string
   rows: MethodRow[]
   setRows: React.Dispatch<React.SetStateAction<MethodRow[]>>
-  labelList: string[]
+  labelList: readonly string[]
   valuePlaceholder: string
   valueType: string
   addLabel: string
   defaultLabel: string
 }) {
-  const listId = `labels-${title.replace(/\s+/g, "-").toLowerCase()}`
   function update(key: string, patch: Partial<MethodRow>) {
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)))
   }
@@ -871,20 +1143,14 @@ function MethodEditor({
   return (
     <div>
       <span className="mb-1.5 block text-sm font-medium text-[#1a1a2e]">{title}</span>
-      <datalist id={listId}>
-        {labelList.map((l) => (
-          <option key={l} value={l} />
-        ))}
-      </datalist>
       <div className="space-y-2">
         {rows.map((r) => (
           <div key={r.key} className="flex gap-2">
-            <input
+            <LabelSelect
               value={r.label}
-              onChange={(e) => update(r.key, { label: e.target.value })}
-              list={listId}
-              placeholder="Label"
-              className={`${fieldBase} w-28 shrink-0`}
+              options={labelList}
+              onChange={(label) => update(r.key, { label })}
+              className={`${fieldBase} w-32 shrink-0`}
             />
             <input
               value={r.value}
@@ -945,21 +1211,15 @@ function AddressEditor({
   return (
     <div>
       <span className="mb-1.5 block text-sm font-medium text-[#1a1a2e]">Addresses</span>
-      <datalist id="address-labels">
-        {ADDRESS_LABELS.map((l) => (
-          <option key={l} value={l} />
-        ))}
-      </datalist>
 
       <div className="space-y-3">
         {rows.map((r) => (
           <div key={r.key} className="rounded-xl border border-border p-3">
             <div className="flex items-center gap-2">
-              <input
+              <LabelSelect
                 value={r.label}
-                onChange={(e) => update(r.key, { label: e.target.value })}
-                list="address-labels"
-                placeholder="Label"
+                options={ADDRESS_LABELS}
+                onChange={(label) => update(r.key, { label })}
                 className={`${fieldBase} w-32 shrink-0`}
               />
               <AddressAutocomplete

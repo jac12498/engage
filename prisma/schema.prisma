@@ -799,3 +799,34 @@ model ContactNote {
   @@schema("engagecampaign")
 }
 
+// A pair of contacts a user marked "not a duplicate" — suppressed from the
+// duplicates review. Stored with the lexicographically smaller id as aId so a
+// pair is a single row. aId/bId are plain scalars (no FK): a merged-away id just
+// stops matching, so stale rows are harmless.
+model ContactMergeDismissal {
+  committeeId String
+  aId         String
+  bId         String
+  createdAt   DateTime @default(now())
+
+  @@id([aId, bId])
+  @@index([committeeId])
+  @@schema("engagecampaign")
+}
+
+// A named, committee-shared advanced contact search. `query` is the serialized
+// SearchQuery (groups of conditions) from lib/contactsSearch. committeeId /
+// createdById are plain scalars (no FK) to keep this self-contained.
+model ContactSavedSearch {
+  id          String   @id @default(cuid())
+  committeeId String
+  name        String
+  query       Json
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([committeeId])
+  @@schema("engagecampaign")
+}
+

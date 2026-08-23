@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import { requirePrivilege } from "@/lib/context"
+import { detectDuplicateClusters } from "@/lib/contactsDuplicates"
+import type { SearchQuery } from "@/lib/contactsSearch"
 import { ContactsManager, type ContactRow } from "@/components/contacts/ContactsManager"
 
 export const dynamic = "force-dynamic"
@@ -59,11 +61,26 @@ export default async function ContactsPage() {
   const canImportDonors =
     permissions.has("contacts:create") && (!!committee.filerId || candidateFilers > 0)
 
+  // Possible-duplicate groups (only surface to members who can act on them).
+  const duplicateGroups = permissions.has("contacts:update")
+    ? (await detectDuplicateClusters(committee.id)).length
+    : 0
+
+  const savedSearchRows = await prisma.contactSavedSearch.findMany({
+    where: { committeeId: committee.id },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, query: true },
+  })
+  const savedSearches = savedSearchRows.map((s) => ({ id: s.id, name: s.name, query: s.query as unknown as SearchQuery }))
+
   return (
     <ContactsManager
       contacts={contacts}
       pendingSignups={pendingSignups}
       canImportDonors={canImportDonors}
+      canImport={permissions.has("contacts:create")}
+      duplicateGroups={duplicateGroups}
+      savedSearches={savedSearches}
     />
   )
 }

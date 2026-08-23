@@ -10,7 +10,7 @@
  * capability, not the code.
  */
 
-export const APP_VERSION = "1.2"
+export const APP_VERSION = "1.3"
 
 export type ChangeKind = "New" | "Improved" | "Fixed"
 
@@ -31,6 +31,30 @@ export interface Release {
 }
 
 export const RELEASES: Release[] = [
+  {
+    version: "1.3",
+    date: "2026-08-23",
+    title: "Import, search & clean up your contacts",
+    summary: "Big upgrades to Contacts: bring in a list, search it deeply, and tidy up duplicates.",
+    sections: [
+      {
+        kind: "New",
+        items: [
+          "Load a contact list: import from an Excel/CSV file or a Google Sheets link. Engage guesses what each column means and lets you confirm before importing — and re-importing fills in additional emails, phones, and addresses on people already on your list.",
+          "Advanced search: build detailed searches with multiple conditions and “OR” groups (name, tags, city, has email/phone, date added, and more), then save them to reuse. Saved searches are shared with your committee.",
+          "Review duplicates: Engage finds contacts that look like the same person and lets you merge them — keeping every email, phone, address, note, and donation — or mark them as not a duplicate.",
+        ],
+      },
+      {
+        kind: "Improved",
+        items: [
+          "Contacts can hold multiple emails, phones, and addresses, each with a type — email (Personal, Work, Governmental), phone (Mobile, Landline), and address (Home, Mailing).",
+          "Tags now appear under the contact’s name, giving the list more room.",
+          "Engage now has its own icon in the browser tab.",
+        ],
+      },
+    ],
+  },
   {
     version: "1.2",
     date: "2026-08-23",
