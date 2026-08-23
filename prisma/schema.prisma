@@ -142,7 +142,6 @@ model Committee {
   contacts  Contact[]
   newsletterSubscribers NewsletterSubscriber[] // committee-wide newsletter list (2b-1)
   site      Website? // one committee website (2b-2)
-  tags      Tag[]
   roleTypes RoleType[] // committee-scoped custom roles (module-based access)
 
   // Entitlement: which plan this account is on. Default free tier = Starter.
@@ -702,7 +701,6 @@ model Contact {
   phones      ContactPhone[]
   addresses   ContactAddress[]
   contactNotes ContactNote[]
-  contactTags ContactTag[]
   volunteerSignups VolunteerSignup[]
   donations   ContactDonation[]
 
@@ -801,29 +799,3 @@ model ContactNote {
   @@schema("engagecampaign")
 }
 
-// User-defined tags, scoped to a committee. Reused across contacts (m:n via ContactTag).
-model Tag {
-  id          String    @id @default(cuid())
-  committeeId String
-  committee   Committee @relation(fields: [committeeId], references: [id], onDelete: Cascade)
-  name        String
-  createdAt   DateTime  @default(now())
-
-  contactTags ContactTag[]
-
-  @@unique([committeeId, name])
-  @@index([committeeId])
-  @@schema("engagecampaign")
-}
-
-// Join table linking contacts to tags.
-model ContactTag {
-  contactId String
-  tagId     String
-  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
-
-  @@id([contactId, tagId])
-  @@index([tagId])
-  @@schema("engagecampaign")
-}

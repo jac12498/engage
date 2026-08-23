@@ -20,6 +20,7 @@ import {
   type ContactAddress,
 } from "@/components/contacts/ContactsManager"
 import { addContactNote, deleteContact, deleteContactNote } from "@/app/contacts/actions"
+import { formatPhone } from "@/lib/contacts"
 import { VoterRecordCard } from "@/components/contacts/VoterRecordCard"
 import type { VoterRecord, VotingHistory } from "@/lib/voters"
 import { DonationsCard, type ContactDonationRow } from "@/components/contacts/DonationsCard"
@@ -66,7 +67,6 @@ function mapsUrl(a: ContactAddress) {
 
 export function ContactDetail({
   contact,
-  allTags,
   voter = null,
   votingHistory = null,
   voterAvailable = false,
@@ -75,7 +75,6 @@ export function ContactDetail({
   donationsSearchable = false,
 }: {
   contact: ContactRow
-  allTags: string[]
   voter?: VoterRecord | null
   votingHistory?: VotingHistory | null
   voterAvailable?: boolean
@@ -148,18 +147,6 @@ export function ContactDetail({
                 {SOURCE_LABELS[contact.source] ?? contact.source} · {formatDate(contact.createdAt)}
               </span>
             </div>
-            {contact.tags.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {contact.tags.map((t) => (
-                  <span
-                    key={t}
-                    className="inline-flex rounded-full bg-[#1b3a6b]/8 px-2.5 py-0.5 text-xs font-medium text-[#1b3a6b]"
-                  >
-                    {t}
-                  </span>
-                ))}
-              </div>
-            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -260,7 +247,7 @@ export function ContactDetail({
                     <div className="min-w-0">
                       <div className="text-xs uppercase tracking-wider text-muted-foreground">{p.label}</div>
                       <a href={`tel:${p.phone}`} className="text-sm text-[#1a1a2e] hover:text-[#1b3a6b] hover:underline">
-                        {p.phone}
+                        {formatPhone(p.phone)}
                       </a>
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
@@ -360,7 +347,6 @@ export function ContactDetail({
       {editing && (
         <ContactDialog
           contact={contact}
-          allTags={allTags}
           onClose={() => {
             setEditing(false)
             router.refresh()

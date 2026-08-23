@@ -1,8 +1,8 @@
 "use client"
 
-import { useMemo, useState, useTransition } from "react"
+import { useEffect, useMemo, useState, useTransition } from "react"
 import Link from "next/link"
-import { Plus, Search, Pencil, Trash2, X, Users, Inbox, ArrowRight, HandCoins } from "lucide-react"
+import { Plus, Search, Pencil, Trash2, X, Users, Inbox, ArrowRight, HandCoins, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   saveContact,
@@ -12,7 +12,7 @@ import {
   type PhoneInput,
   type AddressInput,
 } from "@/app/contacts/actions"
-import { CONTACT_TYPES } from "@/lib/contacts"
+import { CONTACT_TYPES, formatPhone } from "@/lib/contacts"
 import { AddressAutocomplete } from "@/components/contacts/AddressAutocomplete"
 import type { ParsedAddress } from "@/lib/googleMaps"
 
@@ -53,7 +53,6 @@ export interface ContactRow {
   emails: ContactEmail[]
   phones: ContactPhone[]
   addresses: ContactAddress[]
-  tags: string[]
   notes: ContactNote[]
 }
 
@@ -75,12 +74,6 @@ const TYPE_TONE: Record<string, string> = {
   other: "bg-[#1a1a2e]/6 text-muted-foreground",
 }
 
-const SOURCE_LABELS: Record<string, string> = {
-  manual: "Manual",
-  volunteer_signup: "Website",
-  import: "Import",
-}
-
 const EMAIL_LABELS = ["Personal", "Work", "Campaign", "Other"]
 const PHONE_LABELS = ["Mobile", "Home", "Work", "Campaign", "Other"]
 const ADDRESS_LABELS = ["Home", "Mailing", "Business", "Other"]
@@ -88,11 +81,12 @@ const ADDRESS_LABELS = ["Home", "Mailing", "Business", "Other"]
 function fullName(c: ContactRow) {
   return [c.firstName, c.lastName].filter(Boolean).join(" ")
 }
-function location(c: ContactRow) {
-  const a = c.addresses[0]
-  if (!a) return ""
-  const cityState = [a.city, a.state].filter(Boolean).join(", ")
-  return [a.line1, cityState].filter(Boolean).join(" · ")
+/** Display form for the Name column: "Last, First" (falls back gracefully). */
+function nameLastFirst(c: ContactRow) {
+  const last = c.lastName?.trim()
+  const first = c.firstName?.trim()
+  if (last && first) return `${last}, ${first}`
+  return last || first || ""
 }
 function addressText(a: ContactAddress) {
   return [a.line1, a.line2, a.city, a.state, a.zip].filter(Boolean).join(" ")
@@ -107,30 +101,54 @@ function formatDate(iso: string) {
   })
 }
 
+/** Sort value for a contact: last name, then first name (lowercased). */
+function sortValue(c: ContactRow): string {
+  return [c.lastName, c.firstName].filter(Boolean).join(" ").toLowerCase()
+}
+
+/** A contact's last-name initial for the A–Z quick filter ("#" for non-letters/blank). */
+function lastInitial(c: ContactRow): string {
+  const ch = (c.lastName || "").trim().charAt(0).toUpperCase()
+  return /[A-Z]/.test(ch) ? ch : "#"
+}
+
 export function ContactsManager({
   contacts,
-  allTags,
   pendingSignups,
   canImportDonors = false,
 }: {
   contacts: ContactRow[]
-  allTags: string[]
   pendingSignups: number
   canImportDonors?: boolean
 }) {
   const [query, setQuery] = useState("")
-  const [typeFilter, setTypeFilter] = useState<string>("all")
+  // Multi-select tag filter: the set of selected tag codes (empty = show all).
+  const [typeFilter, setTypeFilter] = useState<Set<string>>(new Set())
   const [editing, setEditing] = useState<ContactRow | "new" | null>(null)
 
-  const filtered = useMemo(() => {
+  function toggleTypeFilter(t: string) {
+    setTypeFilter((prev) => {
+      const next = new Set(prev)
+      if (next.has(t)) next.delete(t)
+      else next.add(t)
+      return next
+    })
+  }
+
+  // Alphabetic (last-name initial) quick filter, and pagination.
+  const [letter, setLetter] = useState<string | null>(null)
+  const [pageSize, setPageSize] = useState(50)
+  const [page, setPage] = useState(1)
+
+  const searchTypeFiltered = useMemo(() => {
     const q = query.trim().toLowerCase()
     return contacts.filter((c) => {
-      if (typeFilter !== "all" && !c.types.includes(typeFilter)) return false
+      // Multi-select: match a contact that has ANY of the selected tags.
+      if (typeFilter.size > 0 && !c.types.some((t) => typeFilter.has(t))) return false
       if (!q) return true
       const hay = [
         fullName(c),
         c.addresses.map(addressText).join(" "),
-        c.tags.join(" "),
         c.emails.map((e) => e.email).join(" "),
         c.phones.map((p) => p.phone).join(" "),
       ]
@@ -140,6 +158,43 @@ export function ContactsManager({
       return hay.includes(q)
     })
   }, [contacts, query, typeFilter])
+
+  // Distinct last-name initials present in the current search/type context, for the A–Z bar.
+  const letters = useMemo(() => {
+    const set = new Set<string>()
+    for (const c of searchTypeFiltered) set.add(lastInitial(c))
+    return [...set].sort() // "#" sorts before letters
+  }, [searchTypeFiltered])
+
+  const filtered = useMemo(
+    () => (letter ? searchTypeFiltered.filter((c) => lastInitial(c) === letter) : searchTypeFiltered),
+    [searchTypeFiltered, letter],
+  )
+
+  // Always sorted by last name (then first). Blank names sort last.
+  const sorted = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      const av = sortValue(a)
+      const bv = sortValue(b)
+      if (!av && !bv) return 0
+      if (!av) return 1
+      if (!bv) return -1
+      return av.localeCompare(bv, undefined, { numeric: true, sensitivity: "base" })
+    })
+  }, [filtered])
+
+  // Pagination (clamp the page so filter changes never leave it out of range).
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize))
+  const currentPage = Math.min(page, totalPages)
+  const paged = useMemo(
+    () => sorted.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [sorted, currentPage, pageSize],
+  )
+
+  // Reset to the first page whenever the result set or page size changes.
+  useEffect(() => {
+    setPage(1)
+  }, [query, typeFilter, letter, pageSize])
 
   // Per-type counts for the filter chips.
   const counts = useMemo(() => {
@@ -204,7 +259,7 @@ export function ContactsManager({
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search name, email, phone, tag…"
+                placeholder="Search name, email, phone…"
                 className="w-full rounded-lg border border-border bg-white py-2.5 pl-9 pr-3 text-sm outline-none transition-colors focus:border-[#1b3a6b] focus:ring-2 focus:ring-[#1b3a6b]/15"
               />
             </div>
@@ -212,17 +267,27 @@ export function ContactsManager({
 
           {/* Type filter chips */}
           <div className="mt-3 flex flex-wrap gap-2">
-            <Chip label="All" count={contacts.length} active={typeFilter === "all"} onClick={() => setTypeFilter("all")} />
+            <Chip label="All" count={contacts.length} active={typeFilter.size === 0} onClick={() => setTypeFilter(new Set())} />
             {CONTACT_TYPES.filter((t) => counts[t]).map((t) => (
               <Chip
                 key={t}
                 label={TYPE_LABELS[t]}
                 count={counts[t]}
-                active={typeFilter === t}
-                onClick={() => setTypeFilter(t)}
+                active={typeFilter.has(t)}
+                onClick={() => toggleTypeFilter(t)}
               />
             ))}
           </div>
+
+          {/* Alphabetic quick filter (by last-name initial) */}
+          {letters.length > 1 && (
+            <div className="mt-3 flex flex-wrap gap-1">
+              <LetterChip label="All" active={letter === null} onClick={() => setLetter(null)} />
+              {letters.map((L) => (
+                <LetterChip key={L} label={L} active={letter === L} onClick={() => setLetter(L)} />
+              ))}
+            </div>
+          )}
 
           {/* Table */}
           <div className="mt-4 overflow-x-auto rounded-2xl border border-border bg-white">
@@ -230,33 +295,23 @@ export function ContactsManager({
               <thead>
                 <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-muted-foreground">
                   <th className="px-4 py-3 font-semibold">Name</th>
-                  <th className="px-4 py-3 font-semibold">Types</th>
+                  <th className="px-4 py-3 font-semibold">Tags</th>
                   <th className="px-4 py-3 font-semibold">Email</th>
                   <th className="px-4 py-3 font-semibold">Phone</th>
-                  <th className="px-4 py-3 font-semibold">Location</th>
-                  <th className="px-4 py-3 font-semibold">Source</th>
+                  <th className="px-4 py-3 font-semibold">Address</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((c) => (
+                {paged.map((c) => (
                   <tr key={c.id} className="border-b border-border/60 last:border-0 hover:bg-muted/40">
                     <td className="px-4 py-3 align-top">
                       <Link
                         href={`/contacts/${c.id}`}
-                        className="font-medium text-[#1a1a2e] hover:text-[#1b3a6b] hover:underline"
+                        className="font-medium text-[#1b3a6b] underline underline-offset-2 decoration-[#1b3a6b]/40 transition-colors hover:decoration-[#1b3a6b]"
                       >
-                        {fullName(c)}
+                        {nameLastFirst(c)}
                       </Link>
-                      {c.tags.length > 0 && (
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {c.tags.map((t) => (
-                            <span key={t} className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
-                              {t}
-                            </span>
-                          ))}
-                        </div>
-                      )}
                     </td>
                     <td className="px-4 py-3 align-top">
                       <div className="flex flex-wrap gap-1">
@@ -279,13 +334,12 @@ export function ContactsManager({
                     </td>
                     <td className="px-4 py-3 align-top text-muted-foreground">
                       <MethodCell
-                        primary={c.phones[0] ? { value: c.phones[0].phone, label: c.phones[0].label, href: `tel:${c.phones[0].phone}` } : null}
+                        primary={c.phones[0] ? { value: formatPhone(c.phones[0].phone), label: c.phones[0].label, href: `tel:${c.phones[0].phone}` } : null}
                         extra={c.phones.length - 1}
                       />
                     </td>
-                    <td className="px-4 py-3 align-top text-muted-foreground">{location(c) || "—"}</td>
-                    <td className="px-4 py-3 align-top text-xs text-muted-foreground">
-                      {SOURCE_LABELS[c.source] ?? c.source}
+                    <td className="px-4 py-3 align-top text-muted-foreground">
+                      <AddressCell address={c.addresses[0] ?? null} />
                     </td>
                     <td className="px-4 py-3 align-top">
                       <div className="flex items-center justify-end gap-1">
@@ -303,22 +357,81 @@ export function ContactsManager({
                 ))}
               </tbody>
             </table>
-            {filtered.length === 0 && (
+            {sorted.length === 0 && (
               <p className="px-4 py-10 text-center text-sm text-muted-foreground">
                 No contacts match your search.
               </p>
             )}
           </div>
+
+          {/* Pagination */}
+          {sorted.length > 0 && (
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+              <span>
+                Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, sorted.length)} of{" "}
+                {sorted.length}
+              </span>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-1.5">
+                  Per page
+                  <select
+                    value={pageSize}
+                    onChange={(e) => setPageSize(Number(e.target.value))}
+                    className="rounded-md border border-border bg-white px-2 py-1 text-sm text-[#1a1a2e] outline-none focus:border-[#1b3a6b]"
+                  >
+                    <option value={10}>10</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </label>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setPage(currentPage - 1)}
+                    disabled={currentPage <= 1}
+                    className="rounded-md border border-border p-1.5 transition-colors hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+                    aria-label="Previous page"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <span className="px-1 tabular-nums">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setPage(currentPage + 1)}
+                    disabled={currentPage >= totalPages}
+                    className="rounded-md border border-border p-1.5 transition-colors hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent"
+                    aria-label="Next page"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
 
       {editing && (
         <ContactDialog
           contact={editing === "new" ? null : editing}
-          allTags={allTags}
           onClose={() => setEditing(null)}
         />
       )}
+    </div>
+  )
+}
+
+function AddressCell({ address }: { address: ContactAddress | null }) {
+  if (!address) return <>—</>
+  const street = [address.line1, address.line2].filter(Boolean).join(", ")
+  const cityStateZip = [[address.city, address.state].filter(Boolean).join(", "), address.zip]
+    .filter(Boolean)
+    .join(" ")
+  if (!street && !cityStateZip) return <>—</>
+  return (
+    <div className="leading-snug">
+      {street && <div>{street}</div>}
+      {cityStateZip && <div>{cityStateZip}</div>}
     </div>
   )
 }
@@ -370,6 +483,29 @@ function Chip({
   )
 }
 
+function LetterChip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string
+  active: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`inline-flex h-7 min-w-7 items-center justify-center rounded-md border px-1.5 text-xs font-semibold transition-colors ${
+        active
+          ? "border-[#1b3a6b] bg-[#1b3a6b] text-white"
+          : "border-border bg-white text-muted-foreground hover:border-[#1b3a6b]/40 hover:text-[#1b3a6b]"
+      }`}
+    >
+      {label}
+    </button>
+  )
+}
+
 function EmptyState({ onAdd }: { onAdd: () => void }) {
   return (
     <div className="mt-6 flex flex-col items-center rounded-2xl border border-dashed border-border bg-white/60 px-6 py-16 text-center">
@@ -389,23 +525,93 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
   )
 }
 
+function ConfirmDialog({
+  title,
+  message,
+  confirmLabel,
+  pending,
+  onCancel,
+  onConfirm,
+}: {
+  title: string
+  message: React.ReactNode
+  confirmLabel: string
+  pending?: boolean
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onCancel}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl bg-white shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="px-6 pt-5">
+          <h2 className="text-lg font-semibold text-[#1a1a2e]">{title}</h2>
+          <p className="mt-2 text-sm text-muted-foreground">{message}</p>
+        </div>
+        <div className="mt-5 flex items-center justify-end gap-3 border-t border-border px-6 py-4">
+          <button
+            onClick={onCancel}
+            disabled={pending}
+            className="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground hover:text-[#1a1a2e] disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={pending}
+            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-60"
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function DeleteButton({ id, name }: { id: string; name: string }) {
+  const [confirming, setConfirming] = useState(false)
   const [isPending, startTransition] = useTransition()
+
   function handleDelete() {
-    if (!confirm(`Delete ${name || "this contact"}? This can't be undone.`)) return
     startTransition(async () => {
       await deleteContact(id)
+      setConfirming(false)
     })
   }
+
   return (
-    <button
-      onClick={handleDelete}
-      disabled={isPending}
-      className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-      aria-label="Delete"
-    >
-      <Trash2 className="h-4 w-4" />
-    </button>
+    <>
+      <button
+        onClick={() => setConfirming(true)}
+        className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-600"
+        aria-label="Delete"
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
+      {confirming && (
+        <ConfirmDialog
+          title="Delete contact"
+          message={
+            <>
+              Delete <strong className="font-medium text-[#1a1a2e]">{name || "this contact"}</strong>? This
+              can&rsquo;t be undone.
+            </>
+          }
+          confirmLabel={isPending ? "Deleting…" : "Delete"}
+          pending={isPending}
+          onCancel={() => setConfirming(false)}
+          onConfirm={handleDelete}
+        />
+      )}
+    </>
   )
 }
 
@@ -451,11 +657,9 @@ const newAddress = (label = "Home"): AddressRow => ({
 
 export function ContactDialog({
   contact,
-  allTags,
   onClose,
 }: {
   contact: ContactRow | null
-  allTags: string[]
   onClose: () => void
 }) {
   const [firstName, setFirstName] = useState(contact?.firstName ?? "")
@@ -483,7 +687,6 @@ export function ContactDialog({
         }))
       : []
   )
-  const [tags, setTags] = useState<string[]>(contact?.tags ?? [])
   const [notes, setNotes] = useState<ContactNote[]>(contact?.notes ?? [])
   const [newNote, setNewNote] = useState("")
 
@@ -522,7 +725,6 @@ export function ContactDialog({
         emails: emailInput,
         phones: phoneInput,
         addresses: addressInput,
-        tags,
         newNote,
       })
       if (!result.ok) {
@@ -563,9 +765,9 @@ export function ContactDialog({
             </Field>
           </div>
 
-          {/* Types */}
+          {/* Tags */}
           <div>
-            <span className="mb-1.5 block text-sm font-medium text-[#1a1a2e]">Types</span>
+            <span className="mb-1.5 block text-sm font-medium text-[#1a1a2e]">Tags</span>
             <div className="flex flex-wrap gap-2">
               {CONTACT_TYPES.map((t) => {
                 const active = types.includes(t)
@@ -613,9 +815,6 @@ export function ContactDialog({
 
           {/* Addresses */}
           <AddressEditor rows={addresses} setRows={setAddresses} />
-
-          {/* Tags */}
-          <TagEditor tags={tags} setTags={setTags} allTags={allTags} />
 
           {/* Notes */}
           <NotesSection notes={notes} setNotes={setNotes} newNote={newNote} setNewNote={setNewNote} />
@@ -817,70 +1016,6 @@ function AddressEditor({
         <Plus className="h-3.5 w-3.5" />
         Add address
       </button>
-    </div>
-  )
-}
-
-function TagEditor({
-  tags,
-  setTags,
-  allTags,
-}: {
-  tags: string[]
-  setTags: React.Dispatch<React.SetStateAction<string[]>>
-  allTags: string[]
-}) {
-  const [draft, setDraft] = useState("")
-
-  function add(name: string) {
-    const t = name.trim()
-    if (!t) return
-    setTags((prev) => (prev.some((x) => x.toLowerCase() === t.toLowerCase()) ? prev : [...prev, t]))
-    setDraft("")
-  }
-  function remove(name: string) {
-    setTags((prev) => prev.filter((x) => x !== name))
-  }
-
-  return (
-    <div>
-      <span className="mb-1.5 block text-sm font-medium text-[#1a1a2e]">Tags</span>
-      {tags.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-1.5">
-          {tags.map((t) => (
-            <span
-              key={t}
-              className="inline-flex items-center gap-1 rounded-full bg-[#1b3a6b]/8 px-2.5 py-1 text-xs font-medium text-[#1b3a6b]"
-            >
-              {t}
-              <button type="button" onClick={() => remove(t)} aria-label={`Remove ${t}`}>
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-      <input
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === ",") {
-            e.preventDefault()
-            add(draft)
-          } else if (e.key === "Backspace" && !draft && tags.length) {
-            remove(tags[tags.length - 1])
-          }
-        }}
-        onBlur={() => add(draft)}
-        list="all-tags"
-        placeholder="Type a tag and press Enter"
-        className={inputCls}
-      />
-      <datalist id="all-tags">
-        {allTags.map((t) => (
-          <option key={t} value={t} />
-        ))}
-      </datalist>
     </div>
   )
 }

@@ -17,12 +17,6 @@ export default async function ContactDetailPage({
   const { contactId } = await params
   const { committee, permissions } = await requirePrivilege("contacts:read")
 
-  const tags = await prisma.tag.findMany({
-    where: { committeeId: committee.id },
-    orderBy: { name: "asc" },
-    select: { name: true },
-  })
-
   const c = await prisma.contact.findFirst({
     where: { id: contactId, committeeId: committee.id },
     include: {
@@ -30,7 +24,6 @@ export default async function ContactDetailPage({
       phones: { orderBy: { order: "asc" } },
       addresses: { orderBy: { order: "asc" } },
       contactNotes: { orderBy: { createdAt: "desc" } },
-      contactTags: { include: { tag: true } },
       donations: { orderBy: { createdAt: "desc" } },
     },
   })
@@ -57,7 +50,6 @@ export default async function ContactDetailPage({
       lng: a.lng,
       placeId: a.placeId,
     })),
-    tags: c.contactTags.map((ct) => ct.tag.name),
     notes: c.contactNotes.map((n) => ({
       id: n.id,
       body: n.body,
@@ -90,7 +82,6 @@ export default async function ContactDetailPage({
   return (
     <ContactDetail
       contact={contact}
-      allTags={tags.map((t) => t.name)}
       voter={voter}
       votingHistory={votingHistory}
       voterAvailable={voterAvailable}

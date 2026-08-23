@@ -7,24 +7,16 @@ export const dynamic = "force-dynamic"
 export default async function ContactsPage() {
   const { committee, permissions } = await requirePrivilege("contacts:read")
 
-  const [tags, contactRows] = await Promise.all([
-    prisma.tag.findMany({
-      where: { committeeId: committee.id },
-      orderBy: { name: "asc" },
-      select: { name: true },
-    }),
-    prisma.contact.findMany({
-      where: { committeeId: committee.id },
-      orderBy: [{ createdAt: "desc" }],
-      include: {
-        emails: { orderBy: { order: "asc" } },
-        phones: { orderBy: { order: "asc" } },
-        addresses: { orderBy: { order: "asc" } },
-        contactNotes: { orderBy: { createdAt: "desc" } },
-        contactTags: { include: { tag: true } },
-      },
-    }),
-  ])
+  const contactRows = await prisma.contact.findMany({
+    where: { committeeId: committee.id },
+    orderBy: [{ createdAt: "desc" }],
+    include: {
+      emails: { orderBy: { order: "asc" } },
+      phones: { orderBy: { order: "asc" } },
+      addresses: { orderBy: { order: "asc" } },
+      contactNotes: { orderBy: { createdAt: "desc" } },
+    },
+  })
 
   const contacts: ContactRow[] = contactRows.map((c) => ({
     id: c.id,
@@ -47,15 +39,12 @@ export default async function ContactsPage() {
       lng: a.lng,
       placeId: a.placeId,
     })),
-    tags: c.contactTags.map((ct) => ct.tag.name),
     notes: c.contactNotes.map((n) => ({
       id: n.id,
       body: n.body,
       createdAt: n.createdAt.toISOString(),
     })),
   }))
-
-  const allTags = tags.map((t) => t.name)
 
   // Pending signups across every campaign website in the committee.
   const pendingSignups = await prisma.volunteerSignup.count({
@@ -73,7 +62,6 @@ export default async function ContactsPage() {
   return (
     <ContactsManager
       contacts={contacts}
-      allTags={allTags}
       pendingSignups={pendingSignups}
       canImportDonors={canImportDonors}
     />

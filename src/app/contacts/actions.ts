@@ -39,8 +39,6 @@ export interface ContactInput {
   phones?: PhoneInput[]
   /** Labeled addresses — label + line1 required for each. */
   addresses?: AddressInput[]
-  /** Tag names; created on the fly if new (scoped to the campaign). */
-  tags?: string[]
   /** Optional note to append to the history on this save. */
   newNote?: string
 }
@@ -130,35 +128,7 @@ function normalizeAddresses(
   return { ok: true, rows: out }
 }
 
-/**
- * Upsert tag names into the campaign's Tag list and return their ids.
- * De-dupes case-insensitively by trimmed name.
- */
-async function resolveTagIds(committeeId: string, names: string[]): Promise<string[]> {
-  const seen = new Set<string>()
-  const clean: string[] = []
-  for (const n of names) {
-    const name = n.trim()
-    if (!name) continue
-    const key = name.toLowerCase()
-    if (seen.has(key)) continue
-    seen.add(key)
-    clean.push(name)
-  }
-  const ids: string[] = []
-  for (const name of clean.slice(0, 50)) {
-    const tag = await prisma.tag.upsert({
-      where: { committeeId_name: { committeeId, name } },
-      create: { committeeId, name },
-      update: {},
-      select: { id: true },
-    })
-    ids.push(tag.id)
-  }
-  return ids
-}
-
-/** Create or update a contact (with its emails/phones/tags), scoped to the caller's campaign. */
+/** Create or update a contact (with its emails/phones/addresses), scoped to the caller's campaign. */
 export async function saveContact(input: ContactInput): Promise<ContactResult> {
   const committeeId = await requireCommitteeIdFor(input.id ? "contacts:update" : "contacts:create")
   if (!committeeId) return { ok: false, error: "You don't have permission to edit contacts." }
@@ -183,7 +153,6 @@ export async function saveContact(input: ContactInput): Promise<ContactResult> {
   const addrRes = normalizeAddresses(input.addresses ?? [])
   if (!addrRes.ok) return addrRes
 
-  const tagIds = await resolveTagIds(committeeId, input.tags ?? [])
   const newNote = clean(input.newNote)
 
   const scalar = { firstName, lastName, types }
@@ -205,7 +174,6 @@ export async function saveContact(input: ContactInput): Promise<ContactResult> {
       prisma.contactEmail.deleteMany({ where: { contactId: input.id } }),
       prisma.contactPhone.deleteMany({ where: { contactId: input.id } }),
       prisma.contactAddress.deleteMany({ where: { contactId: input.id } }),
-      prisma.contactTag.deleteMany({ where: { contactId: input.id } }),
       prisma.contact.update({
         where: { id: input.id },
         data: {
@@ -213,7 +181,6 @@ export async function saveContact(input: ContactInput): Promise<ContactResult> {
           emails: { create: emailCreate },
           phones: { create: phoneCreate },
           addresses: { create: addressCreate },
-          contactTags: { create: tagIds.map((tagId) => ({ tagId })) },
           ...(newNote ? { contactNotes: { create: { body: newNote } } } : {}),
         },
       }),
@@ -231,7 +198,6 @@ export async function saveContact(input: ContactInput): Promise<ContactResult> {
       emails: { create: emailCreate },
       phones: { create: phoneCreate },
       addresses: { create: addressCreate },
-      contactTags: { create: tagIds.map((tagId) => ({ tagId })) },
       ...(newNote ? { contactNotes: { create: { body: newNote } } } : {}),
     },
   })
