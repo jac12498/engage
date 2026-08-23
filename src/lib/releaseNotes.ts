@@ -10,7 +10,7 @@
  * capability, not the code.
  */
 
-export const APP_VERSION = "1.1"
+export const APP_VERSION = "1.2"
 
 export type ChangeKind = "New" | "Improved" | "Fixed"
 
@@ -31,6 +31,31 @@ export interface Release {
 }
 
 export const RELEASES: Release[] = [
+  {
+    version: "1.2",
+    date: "2026-08-23",
+    title: "A better Contacts list",
+    summary: "The Contacts list is easier to scan, search, and organize.",
+    sections: [
+      {
+        kind: "New",
+        items: [
+          "Jump to a letter: filter contacts by the first letter of their last name.",
+          "Page through your contacts 10, 50, or 100 at a time.",
+          "Filter by more than one tag at once.",
+        ],
+      },
+      {
+        kind: "Improved",
+        items: [
+          "Contacts are now sorted by last name and shown as “Last, First”, with clearer clickable names.",
+          "Addresses appear on two lines (street, then city/state/ZIP) and phone numbers are formatted as xxx-xxx-xxxx.",
+          "Contact “Types” are now called “Tags”.",
+          "Deleting a contact now asks you to confirm first.",
+        ],
+      },
+    ],
+  },
   {
     version: "1.1",
     date: "2026-08-22",
