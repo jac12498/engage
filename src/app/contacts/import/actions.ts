@@ -1,10 +1,12 @@
 "use server"
 
+import { randomUUID } from "node:crypto"
 import { revalidatePath } from "next/cache"
 import * as XLSX from "xlsx"
 import { prisma } from "@/lib/prisma"
 import { getActiveContext } from "@/lib/context"
 import { canonicalizeEmail } from "@/lib/emailNormalize"
+import { getCommitteeTags } from "@/lib/committeeTags"
 import {
   guessField,
   rowToContact,
@@ -143,6 +145,15 @@ export async function importContacts(payload: {
   const hasName = columns.some((c) => c.field === "firstName" || c.field === "lastName" || c.field === "fullName")
   if (!hasName) return { ok: false, error: "Map at least one column to a name before importing." }
 
+  // Map a raw tag token (from a "Tags" column) to a committee tag slug — matching
+  // either the slug or the label, case-insensitively. Unmatched tokens are dropped.
+  const committeeTags = await getCommitteeTags(committeeId)
+  const tagLookup = new Map<string, string>()
+  for (const t of committeeTags) {
+    tagLookup.set(t.slug.toLowerCase(), t.slug)
+    tagLookup.set(t.label.toLowerCase(), t.slug)
+  }
+
   // 1. Merge rows into one draft per person (union emails/phones/addresses/tags).
   const merged = new Map<string, MergedContact>()
   for (const row of rows) {
@@ -168,7 +179,10 @@ export async function importContacts(payload: {
       const ak = addrKey(a)
       if (!m.seenA.has(ak)) { m.seenA.add(ak); m.addresses.push(a) }
     }
-    for (const t of d.tags) if (!m.tags.includes(t)) m.tags.push(t)
+    for (const raw of d.tags) {
+      const slug = tagLookup.get(raw)
+      if (slug && !m.tags.includes(slug)) m.tags.push(slug)
+    }
   }
   const total = merged.size
   if (total === 0) return { ok: false, error: "No rows produced a contact — check the column mapping." }
@@ -204,16 +218,29 @@ export async function importContacts(payload: {
     })
   }
 
-  // 3. Create new people; append to existing when updating.
+  // 3. Plan all writes as FLAT rows so we can bulk-insert with createMany — a few
+  //    queries total, instead of one round-trip per contact (which timed out on
+  //    large re-imports).
   let created = 0
   let updated = 0
   let skipped = 0
-  const toCreate: MergedContact[] = []
+  const contactRows: { id: string; committeeId: string; source: string; firstName: string; lastName: string; types: string[] }[] = []
+  const emailRows: { contactId: string; label: string; email: string; order: number }[] = []
+  const phoneRows: { contactId: string; label: string; phone: string; order: number }[] = []
+  const addressRows: { contactId: string; label: string; line1: string; line2: string | null; city: string | null; state: string | null; zip: string | null; order: number }[] = []
+  const typeUpdates: { id: string; types: string[] }[] = []
+
+  const newId = () => "c" + randomUUID().replace(/-/g, "")
 
   for (const m of merged.values()) {
     const ex = index.get(nameKey(m.firstName, m.lastName))
     if (!ex) {
-      toCreate.push(m)
+      const id = newId()
+      contactRows.push({ id, committeeId, source: "import", firstName: m.firstName, lastName: m.lastName, types: m.tags })
+      m.emails.forEach((e, i) => emailRows.push({ contactId: id, label: e.label, email: e.value, order: i }))
+      m.phones.forEach((p, i) => phoneRows.push({ contactId: id, label: p.label, phone: p.value, order: i }))
+      m.addresses.forEach((a, i) => addressRows.push({ contactId: id, label: a.label, line1: a.line1, line2: a.line2 || null, city: a.city || null, state: a.state || null, zip: a.zip || null, order: i }))
+      created++
       continue
     }
     if (!updateExisting) {
@@ -228,42 +255,26 @@ export async function importContacts(payload: {
       skipped++
       continue
     }
-    await prisma.contact.update({
-      where: { id: ex.id },
-      data: {
-        emails: newEmails.length ? { create: newEmails.map((e, i) => ({ label: e.label, email: e.value, order: ex.emailCount + i })) } : undefined,
-        phones: newPhones.length ? { create: newPhones.map((p, i) => ({ label: p.label, phone: p.value, order: ex.phoneCount + i })) } : undefined,
-        addresses: newAddresses.length
-          ? { create: newAddresses.map((a, i) => ({ label: a.label, line1: a.line1, line2: a.line2 || null, city: a.city || null, state: a.state || null, zip: a.zip || null, order: i })) }
-          : undefined,
-        types: newTags.length ? [...ex.types, ...newTags] : undefined,
-      },
-    })
+    newEmails.forEach((e, i) => emailRows.push({ contactId: ex.id, label: e.label, email: e.value, order: ex.emailCount + i }))
+    newPhones.forEach((p, i) => phoneRows.push({ contactId: ex.id, label: p.label, phone: p.value, order: ex.phoneCount + i }))
+    newAddresses.forEach((a, i) => addressRows.push({ contactId: ex.id, label: a.label, line1: a.line1, line2: a.line2 || null, city: a.city || null, state: a.state || null, zip: a.zip || null, order: ex.addrs.size + i }))
+    if (newTags.length) typeUpdates.push({ id: ex.id, types: [...ex.types, ...newTags] })
     updated++
   }
 
-  const BATCH = 25
-  for (let i = 0; i < toCreate.length; i += BATCH) {
-    const slice = toCreate.slice(i, i + BATCH)
+  // Bulk insert in chunks (parents before children).
+  const CHUNK = 500
+  for (let i = 0; i < contactRows.length; i += CHUNK) await prisma.contact.createMany({ data: contactRows.slice(i, i + CHUNK) })
+  for (let i = 0; i < emailRows.length; i += CHUNK) await prisma.contactEmail.createMany({ data: emailRows.slice(i, i + CHUNK) })
+  for (let i = 0; i < phoneRows.length; i += CHUNK) await prisma.contactPhone.createMany({ data: phoneRows.slice(i, i + CHUNK) })
+  for (let i = 0; i < addressRows.length; i += CHUNK) await prisma.contactAddress.createMany({ data: addressRows.slice(i, i + CHUNK) })
+
+  // Type merges on existing contacts (usually few) — parallel in small batches.
+  const UBATCH = 25
+  for (let i = 0; i < typeUpdates.length; i += UBATCH) {
     await Promise.all(
-      slice.map((m) =>
-        prisma.contact.create({
-          data: {
-            committeeId,
-            source: "import",
-            firstName: m.firstName,
-            lastName: m.lastName,
-            types: m.tags,
-            emails: { create: m.emails.map((e, order) => ({ label: e.label, email: e.value, order })) },
-            phones: { create: m.phones.map((p, order) => ({ label: p.label, phone: p.value, order })) },
-            addresses: m.addresses.length
-              ? { create: m.addresses.map((a, order) => ({ label: a.label, line1: a.line1, line2: a.line2 || null, city: a.city || null, state: a.state || null, zip: a.zip || null, order })) }
-              : undefined,
-          },
-        }),
-      ),
+      typeUpdates.slice(i, i + UBATCH).map((u) => prisma.contact.update({ where: { id: u.id }, data: { types: u.types } })),
     )
-    created += slice.length
   }
 
   revalidatePath("/contacts")

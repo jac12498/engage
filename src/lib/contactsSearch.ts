@@ -3,8 +3,6 @@
 // Pure + serializable (no server-only), so the client builder, the client-side
 // matcher, and a future saved-search feature all share it.
 
-import { CONTACT_TYPES } from "@/lib/contacts"
-
 export type OpCategory = "text" | "multiSelect" | "boolean" | "date"
 
 export type Operator =
@@ -47,15 +45,6 @@ export interface FieldDef {
   options?: { value: string; label: string }[]
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  supporter: "Supporter",
-  volunteer: "Volunteer",
-  donor: "Donor",
-  voter: "Voter",
-  prospect: "Prospect",
-  other: "Other",
-}
-
 export const FIELDS: FieldDef[] = [
   { key: "firstName", label: "First name", group: "Name", category: "text" },
   { key: "lastName", label: "Last name", group: "Name", category: "text" },
@@ -64,13 +53,8 @@ export const FIELDS: FieldDef[] = [
   { key: "city", label: "City", group: "Address", category: "text" },
   { key: "state", label: "State", group: "Address", category: "text" },
   { key: "zip", label: "ZIP", group: "Address", category: "text" },
-  {
-    key: "tags",
-    label: "Tags",
-    group: "Classification",
-    category: "multiSelect",
-    options: CONTACT_TYPES.map((t) => ({ value: t, label: TYPE_LABELS[t] ?? t })),
-  },
+  // Tag options are injected at render (committee tags), not static here.
+  { key: "tags", label: "Tags", group: "Classification", category: "multiSelect" },
   {
     key: "source",
     label: "Source",

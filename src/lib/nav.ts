@@ -22,6 +22,7 @@ import {
   Settings,
   FileText,
   Inbox,
+  Tag,
   LayoutTemplate,
   type LucideIcon,
 } from "lucide-react"
@@ -115,6 +116,7 @@ export const NAV_MODULES: NavModule[] = [
     sections: [
       { href: "/contacts", label: "All contacts", icon: Contact, exact: true },
       { href: "/contacts/signups", label: "Volunteer signups", icon: Inbox, gate: "volunteerSignups" },
+      { href: "/contacts/tags", label: "Manage tags", icon: Tag, gate: "manageTags" },
     ],
   },
   {

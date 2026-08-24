@@ -21,26 +21,11 @@ import {
 } from "@/components/contacts/ContactsManager"
 import { addContactNote, deleteContact, deleteContactNote } from "@/app/contacts/actions"
 import { formatPhone } from "@/lib/contacts"
+import { buildTagMap, tagBadgeStyle, type TagDef } from "@/lib/tags"
 import { VoterRecordCard } from "@/components/contacts/VoterRecordCard"
 import type { VoterRecord, VotingHistory } from "@/lib/voters"
 import { DonationsCard, type ContactDonationRow } from "@/components/contacts/DonationsCard"
 
-const TYPE_LABELS: Record<string, string> = {
-  supporter: "Supporter",
-  volunteer: "Volunteer",
-  donor: "Donor",
-  voter: "Voter",
-  prospect: "Prospect",
-  other: "Other",
-}
-const TYPE_TONE: Record<string, string> = {
-  supporter: "bg-[#1b3a6b]/8 text-[#1b3a6b]",
-  volunteer: "bg-[#1e6b3a]/10 text-[#1e6b3a]",
-  donor: "bg-[#c4910a]/12 text-[#8a6608]",
-  voter: "bg-[#6b1b5a]/10 text-[#6b1b5a]",
-  prospect: "bg-[#1a1a2e]/8 text-[#1a1a2e]",
-  other: "bg-[#1a1a2e]/6 text-muted-foreground",
-}
 const SOURCE_LABELS: Record<string, string> = {
   manual: "Added manually",
   volunteer_signup: "From website signup",
@@ -67,6 +52,7 @@ function mapsUrl(a: ContactAddress) {
 
 export function ContactDetail({
   contact,
+  tags,
   voter = null,
   votingHistory = null,
   voterAvailable = false,
@@ -75,6 +61,7 @@ export function ContactDetail({
   donationsSearchable = false,
 }: {
   contact: ContactRow
+  tags: TagDef[]
   voter?: VoterRecord | null
   votingHistory?: VotingHistory | null
   voterAvailable?: boolean
@@ -83,6 +70,7 @@ export function ContactDetail({
   donationsSearchable?: boolean
 }) {
   const router = useRouter()
+  const tagMap = buildTagMap(tags)
   const [editing, setEditing] = useState(false)
   const [noteDraft, setNoteDraft] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -135,14 +123,18 @@ export function ContactDetail({
           <div>
             <h1 className="text-2xl font-bold text-[#1a1a2e]">{name}</h1>
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              {contact.types.map((t) => (
-                <span
-                  key={t}
-                  className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${TYPE_TONE[t] ?? TYPE_TONE.other}`}
-                >
-                  {TYPE_LABELS[t] ?? t}
-                </span>
-              ))}
+              {contact.types.map((t) => {
+                const def = tagMap.get(t)
+                return (
+                  <span
+                    key={t}
+                    className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium"
+                    style={tagBadgeStyle(def?.color ?? "#6b7280")}
+                  >
+                    {def?.label ?? t}
+                  </span>
+                )
+              })}
               <span className="text-xs text-muted-foreground">
                 {SOURCE_LABELS[contact.source] ?? contact.source} · {formatDate(contact.createdAt)}
               </span>
@@ -347,6 +339,7 @@ export function ContactDetail({
       {editing && (
         <ContactDialog
           contact={contact}
+          tags={tags}
           onClose={() => {
             setEditing(false)
             router.refresh()

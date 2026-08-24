@@ -5,6 +5,7 @@ import Link from "next/link"
 import { Plus, Search, Pencil, Trash2, X, Users, Inbox, ArrowRight, HandCoins, ChevronLeft, ChevronRight, Upload, SlidersHorizontal } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { ContactSearchBuilder } from "@/components/contacts/ContactSearchBuilder"
+import { ContactListActions } from "@/components/contacts/ContactListActions"
 import { matchContact, conditionCount, type SearchQuery } from "@/lib/contactsSearch"
 import { saveContactSearch, updateContactSearch, deleteContactSearch } from "@/app/contacts/searches/actions"
 
@@ -22,7 +23,8 @@ import {
   type PhoneInput,
   type AddressInput,
 } from "@/app/contacts/actions"
-import { CONTACT_TYPES, formatPhone, EMAIL_LABELS, PHONE_LABELS, ADDRESS_LABELS } from "@/lib/contacts"
+import { formatPhone, EMAIL_LABELS, PHONE_LABELS, ADDRESS_LABELS } from "@/lib/contacts"
+import { tagBadgeStyle, buildTagMap, type TagDef } from "@/lib/tags"
 import { AddressAutocomplete } from "@/components/contacts/AddressAutocomplete"
 import type { ParsedAddress } from "@/lib/googleMaps"
 
@@ -66,24 +68,6 @@ export interface ContactRow {
   notes: ContactNote[]
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  supporter: "Supporter",
-  volunteer: "Volunteer",
-  donor: "Donor",
-  voter: "Voter",
-  prospect: "Prospect",
-  other: "Other",
-}
-
-const TYPE_TONE: Record<string, string> = {
-  supporter: "bg-[#1b3a6b]/8 text-[#1b3a6b]",
-  volunteer: "bg-[#1e6b3a]/10 text-[#1e6b3a]",
-  donor: "bg-[#c4910a]/12 text-[#8a6608]",
-  voter: "bg-[#6b1b5a]/10 text-[#6b1b5a]",
-  prospect: "bg-[#1a1a2e]/8 text-[#1a1a2e]",
-  other: "bg-[#1a1a2e]/6 text-muted-foreground",
-}
-
 function fullName(c: ContactRow) {
   return [c.firstName, c.lastName].filter(Boolean).join(" ")
 }
@@ -120,17 +104,26 @@ function lastInitial(c: ContactRow): string {
 
 export function ContactsManager({
   contacts,
+  tags,
   pendingSignups,
   canImportDonors = false,
   canImport = false,
+  canDelete = false,
+  canTag = false,
   duplicateGroups = 0,
   savedSearches = [],
 }: {
   contacts: ContactRow[]
+  /** The committee's effective tag list (built-ins + custom). */
+  tags: TagDef[]
   pendingSignups: number
   canImportDonors?: boolean
   /** May the user bulk-load a list (contacts:create)? */
   canImport?: boolean
+  /** May the user delete contacts (contacts:delete)? Enables bulk delete. */
+  canDelete?: boolean
+  /** May the user edit contacts (contacts:update)? Enables bulk tagging. */
+  canTag?: boolean
   /** Number of possible-duplicate groups detected (0 hides the banner). */
   duplicateGroups?: number
   /** Committee-shared saved advanced searches. */
@@ -283,12 +276,14 @@ export function ContactsManager({
     setPage(1)
   }, [query, typeFilter, letter, pageSize, advQuery])
 
-  // Per-type counts for the filter chips.
+  // Per-tag counts for the filter chips.
   const counts = useMemo(() => {
     const m: Record<string, number> = {}
     for (const c of contacts) for (const t of c.types) m[t] = (m[t] ?? 0) + 1
     return m
   }, [contacts])
+
+  const tagMap = useMemo(() => buildTagMap(tags), [tags])
 
   return (
     <div>
@@ -391,6 +386,7 @@ export function ContactsManager({
                 </span>
               )}
             </button>
+            <ContactListActions contacts={sorted} tags={tags} canDelete={canDelete} canTag={canTag} />
           </div>
 
           {/* Advanced search builder */}
@@ -496,7 +492,11 @@ export function ContactsManager({
                 </p>
               )}
 
-              <ContactSearchBuilder query={advQuery} onChange={setAdvQuery} />
+              <ContactSearchBuilder
+                query={advQuery}
+                onChange={setAdvQuery}
+                tagOptions={tags.map((t) => ({ value: t.slug, label: t.label }))}
+              />
             </div>
           )}
 
@@ -516,18 +516,20 @@ export function ContactsManager({
             />
           )}
 
-          {/* Type filter chips */}
+          {/* Tag filter chips */}
           <div className="mt-3 flex flex-wrap gap-2">
             <Chip label="All" count={contacts.length} active={typeFilter.size === 0} onClick={() => setTypeFilter(new Set())} />
-            {CONTACT_TYPES.filter((t) => counts[t]).map((t) => (
-              <Chip
-                key={t}
-                label={TYPE_LABELS[t]}
-                count={counts[t]}
-                active={typeFilter.has(t)}
-                onClick={() => toggleTypeFilter(t)}
-              />
-            ))}
+            {tags
+              .filter((t) => counts[t.slug])
+              .map((t) => (
+                <Chip
+                  key={t.slug}
+                  label={t.label}
+                  count={counts[t.slug]}
+                  active={typeFilter.has(t.slug)}
+                  onClick={() => toggleTypeFilter(t.slug)}
+                />
+              ))}
           </div>
 
           {/* Alphabetic quick filter (by last-name initial) */}
@@ -564,14 +566,18 @@ export function ContactsManager({
                       </Link>
                       {c.types.length > 0 && (
                         <div className="mt-1 flex flex-wrap gap-1">
-                          {c.types.map((t) => (
-                            <span
-                              key={t}
-                              className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${TYPE_TONE[t] ?? TYPE_TONE.other}`}
-                            >
-                              {TYPE_LABELS[t] ?? t}
-                            </span>
-                          ))}
+                          {c.types.map((t) => {
+                            const def = tagMap.get(t)
+                            return (
+                              <span
+                                key={t}
+                                className="inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium"
+                                style={tagBadgeStyle(def?.color ?? "#6b7280")}
+                              >
+                                {def?.label ?? t}
+                              </span>
+                            )
+                          })}
                         </div>
                       )}
                     </td>
@@ -663,6 +669,7 @@ export function ContactsManager({
       {editing && (
         <ContactDialog
           contact={editing === "new" ? null : editing}
+          tags={tags}
           onClose={() => setEditing(null)}
         />
       )}
@@ -906,9 +913,11 @@ const newAddress = (label = "Home"): AddressRow => ({
 
 export function ContactDialog({
   contact,
+  tags,
   onClose,
 }: {
   contact: ContactRow | null
+  tags: TagDef[]
   onClose: () => void
 }) {
   const [firstName, setFirstName] = useState(contact?.firstName ?? "")
@@ -1016,22 +1025,26 @@ export function ContactDialog({
 
           {/* Tags */}
           <div>
-            <span className="mb-1.5 block text-sm font-medium text-[#1a1a2e]">Tags</span>
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-sm font-medium text-[#1a1a2e]">Tags</span>
+              <Link href="/contacts/tags" className="text-xs font-medium text-[#1b3a6b] hover:underline" onClick={onClose}>
+                Manage tags
+              </Link>
+            </div>
             <div className="flex flex-wrap gap-2">
-              {CONTACT_TYPES.map((t) => {
-                const active = types.includes(t)
+              {tags.map((t) => {
+                const active = types.includes(t.slug)
                 return (
                   <button
-                    key={t}
+                    key={t.slug}
                     type="button"
-                    onClick={() => toggleType(t)}
+                    onClick={() => toggleType(t.slug)}
                     className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                      active
-                        ? "border-[#1b3a6b] bg-[#1b3a6b] text-white"
-                        : "border-border bg-white text-muted-foreground hover:border-[#1b3a6b]/40"
+                      active ? "" : "border-border bg-white text-muted-foreground hover:border-[#1b3a6b]/40"
                     }`}
+                    style={active ? { backgroundColor: t.color, borderColor: t.color, color: "#fff" } : undefined}
                   >
-                    {TYPE_LABELS[t]}
+                    {t.label}
                   </button>
                 )
               })}

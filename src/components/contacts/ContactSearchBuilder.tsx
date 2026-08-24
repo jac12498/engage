@@ -22,9 +22,12 @@ const ctrl =
 export function ContactSearchBuilder({
   query,
   onChange,
+  tagOptions = [],
 }: {
   query: SearchQuery
   onChange: (q: SearchQuery) => void
+  /** Choices for the "tags" field (committee tags), injected at render. */
+  tagOptions?: { value: string; label: string }[]
 }) {
   // Field <select> options grouped by their section.
   const fieldGroups = useMemo(() => {
@@ -117,7 +120,11 @@ export function ContactSearchBuilder({
                       ))}
                     </select>
 
-                    <ValueInput cond={cond} onChange={(patch) => updateCondition(gi, ci, patch)} />
+                    <ValueInput
+                      cond={cond}
+                      tagOptions={tagOptions}
+                      onChange={(patch) => updateCondition(gi, ci, patch)}
+                    />
 
                     <button
                       onClick={() => removeCondition(gi, ci)}
@@ -153,7 +160,15 @@ export function ContactSearchBuilder({
   )
 }
 
-function ValueInput({ cond, onChange }: { cond: Condition; onChange: (patch: Partial<Condition>) => void }) {
+function ValueInput({
+  cond,
+  tagOptions,
+  onChange,
+}: {
+  cond: Condition
+  tagOptions: { value: string; label: string }[]
+  onChange: (patch: Partial<Condition>) => void
+}) {
   const def = FIELD_BY_KEY[cond.field]
   const opDef = OPERATORS[def.category].find((o) => o.value === cond.op)
   if (opDef?.valueless) return null
@@ -183,11 +198,12 @@ function ValueInput({ cond, onChange }: { cond: Condition; onChange: (patch: Par
 
   if (def.category === "multiSelect") {
     const selected = cond.values ?? []
+    const options = cond.field === "tags" ? tagOptions : def.options ?? []
     const toggle = (v: string) =>
       onChange({ values: selected.includes(v) ? selected.filter((x) => x !== v) : [...selected, v] })
     return (
       <div className="flex flex-wrap gap-1">
-        {def.options?.map((o) => {
+        {options.map((o) => {
           const active = selected.includes(o.value)
           return (
             <button

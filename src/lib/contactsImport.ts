@@ -2,7 +2,6 @@
 // from both the server actions (parsing/import) and the client wizard (mapping
 // UI + preview). No server-only imports here.
 
-import { CONTACT_TYPES } from "@/lib/contacts"
 
 /**
  * A target field a spreadsheet column can map to. Emails, phones, and addresses
@@ -21,9 +20,9 @@ export type FieldKey =
   | "phoneMobile"
   | "phoneLandline"
   | "phoneUnknown"
-  | "homeStreet" | "homeLine2" | "homeCity" | "homeState" | "homeZip"
-  | "mailingStreet" | "mailingLine2" | "mailingCity" | "mailingState" | "mailingZip"
-  | "unknownStreet" | "unknownLine2" | "unknownCity" | "unknownState" | "unknownZip"
+  | "homeStreet" | "homeLine2" | "homeCity" | "homeState" | "homeZip" | "homeCityStateZip"
+  | "mailingStreet" | "mailingLine2" | "mailingCity" | "mailingState" | "mailingZip" | "mailingCityStateZip"
+  | "unknownStreet" | "unknownLine2" | "unknownCity" | "unknownState" | "unknownZip" | "unknownCityStateZip"
   | "tags"
 
 // Labels are self-descriptive (e.g. "Street – Home") so the collapsed <select>
@@ -35,6 +34,7 @@ const addrGroup = (prefix: "home" | "mailing" | "unknown", group: string, type: 
     { key: `${prefix}City`, label: `City – ${type}`, group },
     { key: `${prefix}State`, label: `State – ${type}`, group },
     { key: `${prefix}Zip`, label: `ZIP – ${type}`, group },
+    { key: `${prefix}CityStateZip`, label: `City, State ZIP (one column) – ${type}`, group },
   ] as { key: FieldKey; label: string; group: string }[]
 
 export const FIELD_OPTIONS: { key: FieldKey; label: string; group: string }[] = [
@@ -132,12 +132,41 @@ export function guessField(header: string): FieldKey {
   const t = has("mail") ? "mailing" : has("home") ? "home" : "unknown"
   if (has("addressline2", "address2", "apt", "suite", "unit") || h === "line2") return `${t}Line2` as FieldKey
   if (has("address", "street") || h === "addr" || h === "line1") return `${t}Street` as FieldKey
+  // A single column holding city + state + zip together ("City, State ZIP" / "CSZ").
+  const cszCount = (has("city") ? 1 : 0) + (has("state") ? 1 : 0) + (has("zip", "postal", "postcode") ? 1 : 0)
+  if (has("csz") || cszCount >= 2) return `${t}CityStateZip` as FieldKey
   if (has("city", "town")) return `${t}City` as FieldKey
   if (h === "state" || h === "st" || has("province", "region")) return `${t}State` as FieldKey
   if (has("zip", "postal", "postcode")) return `${t}Zip` as FieldKey
   if (has("tag", "type", "category", "segment")) return "tags"
   if (has("fullname", "name", "contact")) return "fullName"
   return "ignore"
+}
+
+/** Parse a combined "City, State ZIP" value (also "City State ZIP") into parts. */
+export function parseCityStateZip(v: string): { city: string; state: string; zip: string } {
+  let s = v.trim()
+  let zip = ""
+  const zm = s.match(/(\d{5}(?:-\d{4})?)\s*$/)
+  if (zm) {
+    zip = zm[1]
+    s = s.slice(0, zm.index ?? s.length).replace(/[,\s]+$/, "").trim()
+  }
+  let city = s
+  let state = ""
+  const ci = s.lastIndexOf(",")
+  if (ci >= 0) {
+    city = s.slice(0, ci).trim()
+    state = s.slice(ci + 1).trim()
+  } else {
+    // No comma → peel a trailing 2-letter state ("Kingston NY").
+    const m = s.match(/^(.*\S)\s+([A-Za-z]{2})$/)
+    if (m) {
+      city = m[1].trim()
+      state = m[2].trim()
+    }
+  }
+  return { city, state, zip }
 }
 
 /** Split a full-name string into first/last. Handles "Last, First" and "First Last". */
@@ -152,8 +181,6 @@ export function splitFullName(full: string): { firstName: string; lastName: stri
   if (parts.length === 1) return { firstName: "", lastName: parts[0] }
   return { firstName: parts[0], lastName: parts.slice(1).join(" ") }
 }
-
-const VALID_TAGS = new Set<string>(CONTACT_TYPES as readonly string[])
 
 /** Assemble a contact draft (with 0+ typed addresses) from one row. Null when no name. */
 export function rowToContact(row: string[], columns: { index: number; field: FieldKey }[]): ImportContactDraft | null {
@@ -195,23 +222,28 @@ export function rowToContact(row: string[], columns: { index: number; field: Fie
   for (const { prefix, label } of ADDRESS_TYPES) {
     const line1 = firstOf(`${prefix}Street` as FieldKey)
     if (!line1) continue
-    addresses.push({
-      label,
-      line1,
-      line2: firstOf(`${prefix}Line2` as FieldKey),
-      city: firstOf(`${prefix}City` as FieldKey),
-      state: firstOf(`${prefix}State` as FieldKey),
-      zip: firstOf(`${prefix}Zip` as FieldKey),
-    })
+    let city = firstOf(`${prefix}City` as FieldKey)
+    let state = firstOf(`${prefix}State` as FieldKey)
+    let zip = firstOf(`${prefix}Zip` as FieldKey)
+    // A combined "City, State ZIP" column fills in whatever isn't given separately.
+    const combined = firstOf(`${prefix}CityStateZip` as FieldKey)
+    if (combined) {
+      const p = parseCityStateZip(combined)
+      city = city || p.city
+      state = state || p.state
+      zip = zip || p.zip
+    }
+    addresses.push({ label, line1, line2: firstOf(`${prefix}Line2` as FieldKey), city, state, zip })
   }
 
+  // Raw tag tokens (lowercased); the import action maps them to committee tags.
   const seenTags = new Set<string>()
   const tags: string[] = []
   for (const c of columns) {
     if (c.field !== "tags") continue
     for (const raw of cell(c.index).split(/[;,]/)) {
       const tg = raw.trim().toLowerCase()
-      if (VALID_TAGS.has(tg) && !seenTags.has(tg)) {
+      if (tg && !seenTags.has(tg)) {
         seenTags.add(tg)
         tags.push(tg)
       }

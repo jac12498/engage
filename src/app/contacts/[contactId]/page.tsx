@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation"
 import { prisma } from "@/lib/prisma"
 import { requirePrivilege } from "@/lib/context"
+import { getCommitteeTags } from "@/lib/committeeTags"
 import { ContactDetail } from "@/components/contacts/ContactDetail"
 import type { ContactRow } from "@/components/contacts/ContactsManager"
 import { getVoterById, getVotingHistory, voterFileAvailable, type VoterRecord, type VotingHistory } from "@/lib/voters"
@@ -16,6 +17,7 @@ export default async function ContactDetailPage({
 }) {
   const { contactId } = await params
   const { committee, permissions } = await requirePrivilege("contacts:read")
+  const tags = await getCommitteeTags(committee.id)
 
   const c = await prisma.contact.findFirst({
     where: { id: contactId, committeeId: committee.id },
@@ -82,6 +84,7 @@ export default async function ContactDetailPage({
   return (
     <ContactDetail
       contact={contact}
+      tags={tags}
       voter={voter}
       votingHistory={votingHistory}
       voterAvailable={voterAvailable}

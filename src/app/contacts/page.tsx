@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import { requirePrivilege } from "@/lib/context"
 import { detectDuplicateClusters } from "@/lib/contactsDuplicates"
+import { getCommitteeTags } from "@/lib/committeeTags"
 import type { SearchQuery } from "@/lib/contactsSearch"
 import { ContactsManager, type ContactRow } from "@/components/contacts/ContactsManager"
 
@@ -72,13 +73,17 @@ export default async function ContactsPage() {
     select: { id: true, name: true, query: true },
   })
   const savedSearches = savedSearchRows.map((s) => ({ id: s.id, name: s.name, query: s.query as unknown as SearchQuery }))
+  const tags = await getCommitteeTags(committee.id)
 
   return (
     <ContactsManager
       contacts={contacts}
+      tags={tags}
       pendingSignups={pendingSignups}
       canImportDonors={canImportDonors}
       canImport={permissions.has("contacts:create")}
+      canDelete={permissions.has("contacts:delete")}
+      canTag={permissions.has("contacts:update")}
       duplicateGroups={duplicateGroups}
       savedSearches={savedSearches}
     />

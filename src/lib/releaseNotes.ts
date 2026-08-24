@@ -10,7 +10,7 @@
  * capability, not the code.
  */
 
-export const APP_VERSION = "1.3"
+export const APP_VERSION = "1.4"
 
 export type ChangeKind = "New" | "Improved" | "Fixed"
 
@@ -31,6 +31,29 @@ export interface Release {
 }
 
 export const RELEASES: Release[] = [
+  {
+    version: "1.4",
+    date: "2026-08-24",
+    title: "Do more with a contact list",
+    summary: "Take action on a filtered list, and organize contacts with your own tags.",
+    sections: [
+      {
+        kind: "New",
+        items: [
+          "List actions: narrow your contacts (search, tags, or advanced search), then act on the whole list — export to CSV, copy an email list for BCC, print mailing labels (Avery 5160/5161/5162/5163) or a phone list, bulk add/remove tags, or bulk delete.",
+          "Your own tags: add custom contact tags with colors under Contacts → Manage tags. They work everywhere tags do — filtering, advanced search, the contact form, import, and export.",
+        ],
+      },
+      {
+        kind: "Improved",
+        items: [
+          "Imports are much faster and handle large lists without timing out.",
+          "The importer can read a combined “City, State ZIP” column and map separate Home and Mailing addresses.",
+          "CSV export now has a separate column for each email type, phone type, and for Home / Mailing addresses.",
+        ],
+      },
+    ],
+  },
   {
     version: "1.3",
     date: "2026-08-23",

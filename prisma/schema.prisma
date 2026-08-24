@@ -814,6 +814,23 @@ model ContactMergeDismissal {
   @@schema("engagecampaign")
 }
 
+// A committee-defined custom contact tag (on top of the fixed built-in tags in
+// lib/tags.ts). `slug` is what's stored in Contact.types; label + color drive the
+// UI. committeeId is a plain scalar (no FK), matching the other contact-aux tables.
+model CommitteeTag {
+  id          String   @id @default(cuid())
+  committeeId String
+  slug        String
+  label       String
+  color       String
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@unique([committeeId, slug])
+  @@index([committeeId])
+  @@schema("engagecampaign")
+}
+
 // A named, committee-shared advanced contact search. `query` is the serialized
 // SearchQuery (groups of conditions) from lib/contactsSearch. committeeId /
 // createdById are plain scalars (no FK) to keep this self-contained.

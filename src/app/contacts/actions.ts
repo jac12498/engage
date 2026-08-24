@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import { getActiveContext } from "@/lib/context"
 import type { PermissionKey } from "@/lib/permissions"
-import { CONTACT_TYPES } from "@/lib/contacts"
+import { validTagSlugs } from "@/lib/committeeTags"
 
 export interface EmailInput {
   label: string
@@ -138,7 +138,8 @@ export async function saveContact(input: ContactInput): Promise<ContactResult> {
   if (!firstName) return { ok: false, error: "First name is required." }
   if (!lastName) return { ok: false, error: "Last name is required." }
 
-  const types = (input.types ?? []).filter((t) => (CONTACT_TYPES as readonly string[]).includes(t))
+  const validSlugs = await validTagSlugs(committeeId)
+  const types = (input.types ?? []).filter((t) => validSlugs.has(t))
 
   const emailRes = normalizeMethods(
     (input.emails ?? []).map((e) => ({ label: e.label, value: e.email })),
@@ -258,4 +259,55 @@ export async function deleteContact(id: string): Promise<{ ok: boolean; error?: 
   await prisma.contact.delete({ where: { id } })
   revalidatePath("/contacts")
   return { ok: true }
+}
+
+/**
+ * Add and/or remove tags across many contacts at once. Computed in a single SQL
+ * statement (union the adds, drop the removes, de-dupe) so it scales without a
+ * per-row round-trip. Tags are validated against the committee's tag list.
+ */
+export async function bulkUpdateTags(
+  ids: string[],
+  add: string[],
+  remove: string[],
+): Promise<{ ok: boolean; updated?: number; error?: string }> {
+  const committeeId = await requireCommitteeIdFor("contacts:update")
+  if (!committeeId) return { ok: false, error: "You don't have permission to edit contacts." }
+
+  const valid = await validTagSlugs(committeeId)
+  const addT = [...new Set(add.filter((t) => valid.has(t)))]
+  const remT = [...new Set(remove.filter((t) => valid.has(t)))]
+  const uniqueIds = [...new Set(ids)].filter(Boolean)
+  if (uniqueIds.length === 0 || (addT.length === 0 && remT.length === 0)) return { ok: true, updated: 0 }
+
+  const updated = await prisma.$executeRawUnsafe(
+    `UPDATE engagecampaign."Contact"
+     SET types = COALESCE((
+       SELECT array_agg(DISTINCT t)
+       FROM unnest(types || $1::text[]) AS t
+       WHERE t <> ALL($2::text[])
+     ), ARRAY[]::text[]),
+     "updatedAt" = now()
+     WHERE id = ANY($3::text[]) AND "committeeId" = $4`,
+    addT,
+    remT,
+    uniqueIds,
+    committeeId,
+  )
+  revalidatePath("/contacts")
+  return { ok: true, updated: Number(updated) }
+}
+
+/** Delete many contacts at once (committee-scoped). Cascades their child rows. */
+export async function bulkDeleteContacts(ids: string[]): Promise<{ ok: boolean; deleted?: number; error?: string }> {
+  const committeeId = await requireCommitteeIdFor("contacts:delete")
+  if (!committeeId) return { ok: false, error: "You don't have permission to delete contacts." }
+
+  const unique = [...new Set(ids)].filter(Boolean)
+  if (unique.length === 0) return { ok: true, deleted: 0 }
+
+  // Hard-scope to the committee so only the caller's own contacts can be deleted.
+  const res = await prisma.contact.deleteMany({ where: { id: { in: unique }, committeeId } })
+  revalidatePath("/contacts")
+  return { ok: true, deleted: res.count }
 }
