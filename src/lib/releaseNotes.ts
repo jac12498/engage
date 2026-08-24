@@ -10,7 +10,7 @@
  * capability, not the code.
  */
 
-export const APP_VERSION = "1.4"
+export const APP_VERSION = "1.5"
 
 export type ChangeKind = "New" | "Improved" | "Fixed"
 
@@ -31,6 +31,30 @@ export interface Release {
 }
 
 export const RELEASES: Release[] = [
+  {
+    version: "1.5",
+    date: "2026-08-24",
+    title: "Custom contact fields",
+    summary: "Track the details that matter to your committee — your own fields on every contact.",
+    sections: [
+      {
+        kind: "New",
+        items: [
+          "Custom fields: define your own contact fields under Contacts → Manage fields — text, number, yes/no, date, link, or a list of choices (single or multi-select). Examples: “Municipal Committee”, “Election District”, “Precinct”.",
+          "Your custom fields appear on the contact form and detail page, and you can search them in advanced search.",
+        ],
+      },
+      {
+        kind: "Improved",
+        items: [
+          "CSV export includes a column for each of your custom fields that has data.",
+          "The list importer can map spreadsheet columns to your custom fields (auto-detected by column name), and re-importing fills in any that are still blank.",
+          "Find donations: an “Add all” button links every matching contribution at once — a big help for donors with a long history.",
+          "The contact page is reorganized for easier scanning: contact info and addresses together, then custom fields, notes, and the voter record and donations.",
+        ],
+      },
+    ],
+  },
   {
     version: "1.4",
     date: "2026-08-24",

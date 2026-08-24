@@ -17,21 +17,30 @@ import { parseUpload, parseGoogleSheet, importContacts, type ImportResult } from
 import {
   FIELD_OPTIONS,
   rowToContact,
+  guessCustomField,
   type FieldKey,
   type ParsedSheet,
 } from "@/lib/contactsImport"
 import { formatPhone } from "@/lib/contacts"
+import { type ContactFieldDef } from "@/lib/contactFields"
 
-// Mapping options grouped for the <select> (Name, Email, Phone, Home address, …).
-const FIELD_GROUPS: [string, typeof FIELD_OPTIONS][] = (() => {
-  const m = new Map<string, typeof FIELD_OPTIONS>()
-  for (const o of FIELD_OPTIONS) (m.get(o.group) ?? m.set(o.group, []).get(o.group)!).push(o)
-  return [...m.entries()]
-})()
+type FieldOption = { key: FieldKey; label: string; group: string }
 
 type Step = "source" | "map" | "done"
 
-export function ImportContacts() {
+export function ImportContacts({ customFields = [] }: { customFields?: ContactFieldDef[] }) {
+  // Mapping options for the <select>, grouped (Name, Email, …) with the committee's
+  // custom fields appended as their own group.
+  const fieldGroups = useMemo<[string, FieldOption[]][]>(() => {
+    const options: FieldOption[] = [
+      ...FIELD_OPTIONS,
+      ...customFields.map((f) => ({ key: `cf:${f.id}` as FieldKey, label: f.label, group: "Custom fields" })),
+    ]
+    const m = new Map<string, FieldOption[]>()
+    for (const o of options) (m.get(o.group) ?? m.set(o.group, []).get(o.group)!).push(o)
+    return [...m.entries()]
+  }, [customFields])
+  const cfLabel = useMemo(() => new Map(customFields.map((f) => [f.id, f.label])), [customFields])
   const [step, setStep] = useState<Step>("source")
   const [sheet, setSheet] = useState<ParsedSheet | null>(null)
   const [fields, setFields] = useState<FieldKey[]>([])
@@ -44,7 +53,8 @@ export function ImportContacts() {
   function onParsed(r: Awaited<ReturnType<typeof parseUpload>>) {
     if (!r.ok) return setError(r.error)
     setSheet(r.sheet)
-    setFields(r.sheet.columns.map((c) => c.field))
+    // Built-in guess first; fall back to matching a custom field by its name.
+    setFields(r.sheet.columns.map((c) => (c.field === "ignore" ? guessCustomField(c.header, customFields) ?? c.field : c.field)))
     setStep("map")
   }
 
@@ -193,7 +203,7 @@ export function ImportContacts() {
                           }
                           className="rounded-md border border-border bg-white px-2 py-1 text-sm text-[#1a1a2e] outline-none focus:border-[#1b3a6b]"
                         >
-                          {FIELD_GROUPS.map(([group, opts]) => (
+                          {fieldGroups.map(([group, opts]) => (
                             <optgroup key={group} label={group}>
                               {opts.map((o) => (
                                 <option key={o.key} value={o.key}>
@@ -239,6 +249,11 @@ export function ImportContacts() {
                         </span>
                       ))}
                       {d.tags.length > 0 && <span className="text-muted-foreground/80">{d.tags.join(", ")}</span>}
+                      {Object.entries(d.customFields).map(([id, v]) => (
+                        <span key={id} className="text-muted-foreground/80">
+                          {cfLabel.get(id) ?? "Field"}: {v}
+                        </span>
+                      ))}
                     </li>
                   ) : null,
                 )}

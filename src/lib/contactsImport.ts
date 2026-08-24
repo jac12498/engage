@@ -24,6 +24,18 @@ export type FieldKey =
   | "mailingStreet" | "mailingLine2" | "mailingCity" | "mailingState" | "mailingZip" | "mailingCityStateZip"
   | "unknownStreet" | "unknownLine2" | "unknownCity" | "unknownState" | "unknownZip" | "unknownCityStateZip"
   | "tags"
+  // A committee custom field, keyed by its ContactField id (`cf:<id>`). These are
+  // appended to the mapping options dynamically (the base union above is static).
+  | `cf:${string}`
+
+/** True for a custom-field mapping key (`cf:<fieldId>`). */
+export function isCustomFieldKey(field: FieldKey): field is `cf:${string}` {
+  return typeof field === "string" && field.startsWith("cf:")
+}
+/** The ContactField id inside a `cf:<id>` mapping key. */
+export function customFieldId(field: `cf:${string}`): string {
+  return field.slice(3)
+}
 
 // Labels are self-descriptive (e.g. "Street – Home") so the collapsed <select>
 // stays unambiguous, while `group` drives the <optgroup> headers in the open list.
@@ -106,6 +118,8 @@ export interface ImportContactDraft {
   phones: LabeledValue[]
   addresses: AddressDraft[]
   tags: string[]
+  /** Raw custom-field cell values keyed by ContactField id (coerced server-side). */
+  customFields: Record<string, string>
 }
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "")
@@ -141,6 +155,18 @@ export function guessField(header: string): FieldKey {
   if (has("tag", "type", "category", "segment")) return "tags"
   if (has("fullname", "name", "contact")) return "fullName"
   return "ignore"
+}
+
+/**
+ * Match a header to one of the committee's custom fields by name (built-in
+ * `guessField` can't know about them). Returns a `cf:<id>` key, or null. Only
+ * used as a fallback when the built-in guess is "ignore".
+ */
+export function guessCustomField(header: string, customFields: { id: string; label: string }[]): FieldKey | null {
+  const h = norm(header)
+  if (!h) return null
+  const f = customFields.find((cf) => norm(cf.label) === h)
+  return f ? (`cf:${f.id}` as FieldKey) : null
 }
 
 /** Parse a combined "City, State ZIP" value (also "City State ZIP") into parts. */
@@ -250,7 +276,17 @@ export function rowToContact(row: string[], columns: { index: number; field: Fie
     }
   }
 
-  return { firstName, lastName, emails, phones, addresses, tags }
+  // Custom fields — first non-empty cell per field id; coerced/validated server-side.
+  const customFields: Record<string, string> = {}
+  for (const c of columns) {
+    if (!isCustomFieldKey(c.field)) continue
+    const id = customFieldId(c.field)
+    if (id in customFields) continue
+    const v = cell(c.index)
+    if (v) customFields[id] = v
+  }
+
+  return { firstName, lastName, emails, phones, addresses, tags, customFields }
 }
 
 /** Normalized identity used to skip / match contacts (matches importDonors). */

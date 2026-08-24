@@ -22,6 +22,7 @@ import {
 import { addContactNote, deleteContact, deleteContactNote } from "@/app/contacts/actions"
 import { formatPhone } from "@/lib/contacts"
 import { buildTagMap, tagBadgeStyle, type TagDef } from "@/lib/tags"
+import { formatFieldValue, isEmptyValue, type ContactFieldDef } from "@/lib/contactFields"
 import { VoterRecordCard } from "@/components/contacts/VoterRecordCard"
 import type { VoterRecord, VotingHistory } from "@/lib/voters"
 import { DonationsCard, type ContactDonationRow } from "@/components/contacts/DonationsCard"
@@ -53,6 +54,7 @@ function mapsUrl(a: ContactAddress) {
 export function ContactDetail({
   contact,
   tags,
+  fields,
   voter = null,
   votingHistory = null,
   voterAvailable = false,
@@ -62,6 +64,7 @@ export function ContactDetail({
 }: {
   contact: ContactRow
   tags: TagDef[]
+  fields: ContactFieldDef[]
   voter?: VoterRecord | null
   votingHistory?: VotingHistory | null
   voterAvailable?: boolean
@@ -186,117 +189,122 @@ export function ContactDetail({
         </p>
       )}
 
+      {/* Contact info + Addresses */}
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <VoterRecordCard
-          contactId={contact.id}
-          defaultName={name}
-          defaultCity={contact.addresses[0]?.city ?? undefined}
-          defaultZip={contact.addresses[0]?.zip ?? undefined}
-          voter={voter}
-          history={votingHistory}
-          available={voterAvailable}
-          canEdit={canEditContacts}
-        />
-        <DonationsCard
-          contactId={contact.id}
-          donations={donations}
-          searchable={donationsSearchable}
-          canEdit={canEditContacts}
-          defaultName={name}
-          defaultCity={contact.addresses[0]?.city ?? undefined}
-          defaultState={contact.addresses[0]?.state ?? undefined}
-          defaultZip={contact.addresses[0]?.zip ?? undefined}
-        />
+        <Card title="Contact info">
+          {contact.emails.length === 0 && contact.phones.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No email or phone on file.</p>
+          ) : (
+            <ul className="space-y-3">
+              {contact.emails.map((e) => (
+                <li key={e.id} className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-xs uppercase tracking-wider text-muted-foreground">{e.label}</div>
+                    <a href={`mailto:${e.email}`} className="text-sm text-[#1a1a2e] hover:text-[#1b3a6b] hover:underline">
+                      {e.email}
+                    </a>
+                  </div>
+                  <a
+                    href={`mailto:${e.email}`}
+                    className="shrink-0 rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-[#1b3a6b]"
+                    aria-label={`Email ${e.email}`}
+                  >
+                    <Mail className="h-4 w-4" />
+                  </a>
+                </li>
+              ))}
+              {contact.phones.map((p) => (
+                <li key={p.id} className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-xs uppercase tracking-wider text-muted-foreground">{p.label}</div>
+                    <a href={`tel:${p.phone}`} className="text-sm text-[#1a1a2e] hover:text-[#1b3a6b] hover:underline">
+                      {formatPhone(p.phone)}
+                    </a>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <a
+                      href={`tel:${p.phone}`}
+                      className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-[#1b3a6b]"
+                      aria-label={`Call ${p.phone}`}
+                    >
+                      <Phone className="h-4 w-4" />
+                    </a>
+                    <a
+                      href={`sms:${p.phone}`}
+                      className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-[#1b3a6b]"
+                      aria-label={`Text ${p.phone}`}
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                    </a>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <Card title="Addresses">
+          {contact.addresses.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No addresses on file.</p>
+          ) : (
+            <ul className="space-y-3">
+              {contact.addresses.map((a) => (
+                <li key={a.id} className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-xs uppercase tracking-wider text-muted-foreground">{a.label}</div>
+                    <div className="text-sm text-[#1a1a2e]">
+                      <div>{a.line1}</div>
+                      {a.line2 && <div>{a.line2}</div>}
+                      <div>{[a.city, a.state, a.zip].filter(Boolean).join(", ")}</div>
+                    </div>
+                  </div>
+                  <a
+                    href={mapsUrl(a)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex shrink-0 items-center gap-1 rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-[#1b3a6b]"
+                    aria-label="Open in Google Maps"
+                  >
+                    <MapPin className="h-4 w-4" />
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        {/* Left: methods + addresses */}
-        <div className="space-y-4">
-          <Card title="Contact info">
-            {contact.emails.length === 0 && contact.phones.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No email or phone on file.</p>
-            ) : (
-              <ul className="space-y-3">
-                {contact.emails.map((e) => (
-                  <li key={e.id} className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-xs uppercase tracking-wider text-muted-foreground">{e.label}</div>
-                      <a href={`mailto:${e.email}`} className="text-sm text-[#1a1a2e] hover:text-[#1b3a6b] hover:underline">
-                        {e.email}
-                      </a>
-                    </div>
-                    <a
-                      href={`mailto:${e.email}`}
-                      className="shrink-0 rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-[#1b3a6b]"
-                      aria-label={`Email ${e.email}`}
-                    >
-                      <Mail className="h-4 w-4" />
-                    </a>
-                  </li>
-                ))}
-                {contact.phones.map((p) => (
-                  <li key={p.id} className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-xs uppercase tracking-wider text-muted-foreground">{p.label}</div>
-                      <a href={`tel:${p.phone}`} className="text-sm text-[#1a1a2e] hover:text-[#1b3a6b] hover:underline">
-                        {formatPhone(p.phone)}
-                      </a>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1">
-                      <a
-                        href={`tel:${p.phone}`}
-                        className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-[#1b3a6b]"
-                        aria-label={`Call ${p.phone}`}
-                      >
-                        <Phone className="h-4 w-4" />
-                      </a>
-                      <a
-                        href={`sms:${p.phone}`}
-                        className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-[#1b3a6b]"
-                        aria-label={`Text ${p.phone}`}
-                      >
-                        <MessageSquare className="h-4 w-4" />
-                      </a>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-
-          <Card title="Addresses">
-            {contact.addresses.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No addresses on file.</p>
-            ) : (
-              <ul className="space-y-3">
-                {contact.addresses.map((a) => (
-                  <li key={a.id} className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-xs uppercase tracking-wider text-muted-foreground">{a.label}</div>
-                      <div className="text-sm text-[#1a1a2e]">
-                        <div>{a.line1}</div>
-                        {a.line2 && <div>{a.line2}</div>}
-                        <div>{[a.city, a.state, a.zip].filter(Boolean).join(", ")}</div>
-                      </div>
-                    </div>
-                    <a
-                      href={mapsUrl(a)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex shrink-0 items-center gap-1 rounded-md p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-[#1b3a6b]"
-                      aria-label="Open in Google Maps"
-                    >
-                      <MapPin className="h-4 w-4" />
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
+      {/* Custom Fields */}
+      {fields.some((f) => !isEmptyValue(contact.customFields[f.id])) && (
+        <div className="mt-4 rounded-2xl border border-border bg-white p-6">
+          <h2 className="text-sm font-semibold text-[#1a1a2e]">Custom Fields</h2>
+          <dl className="mt-3 grid gap-x-6 gap-y-3 sm:grid-cols-2">
+            {fields
+              .filter((f) => !isEmptyValue(contact.customFields[f.id]))
+              .map((f) => {
+                const val = contact.customFields[f.id]
+                return (
+                  <div key={f.id}>
+                    <dt className="text-xs uppercase tracking-wider text-muted-foreground">{f.label}</dt>
+                    <dd className="text-sm text-[#1a1a2e]">
+                      {f.type === "url" ? (
+                        <a href={String(val)} target="_blank" rel="noopener noreferrer" className="text-[#1b3a6b] underline underline-offset-2 break-all">
+                          {formatFieldValue(f.type, val)}
+                        </a>
+                      ) : (
+                        formatFieldValue(f.type, val)
+                      )}
+                    </dd>
+                  </div>
+                )
+              })}
+          </dl>
         </div>
+      )}
 
-        {/* Right: notes */}
+      {/* Notes (full width) */}
+      <div className="mt-4">
         <Card title="Notes">
           <div className="flex gap-2">
             <textarea
@@ -336,10 +344,35 @@ export function ContactDetail({
         </Card>
       </div>
 
+      {/* Voter Record + Donations */}
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <VoterRecordCard
+          contactId={contact.id}
+          defaultName={name}
+          defaultCity={contact.addresses[0]?.city ?? undefined}
+          defaultZip={contact.addresses[0]?.zip ?? undefined}
+          voter={voter}
+          history={votingHistory}
+          available={voterAvailable}
+          canEdit={canEditContacts}
+        />
+        <DonationsCard
+          contactId={contact.id}
+          donations={donations}
+          searchable={donationsSearchable}
+          canEdit={canEditContacts}
+          defaultName={name}
+          defaultCity={contact.addresses[0]?.city ?? undefined}
+          defaultState={contact.addresses[0]?.state ?? undefined}
+          defaultZip={contact.addresses[0]?.zip ?? undefined}
+        />
+      </div>
+
       {editing && (
         <ContactDialog
           contact={contact}
           tags={tags}
+          fields={fields}
           onClose={() => {
             setEditing(false)
             router.refresh()

@@ -1,10 +1,13 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { Prisma } from "@/generated/prisma/client"
 import { prisma } from "@/lib/prisma"
 import { getActiveContext } from "@/lib/context"
 import type { PermissionKey } from "@/lib/permissions"
 import { validTagSlugs } from "@/lib/committeeTags"
+import { getContactFields } from "@/lib/committeeFields"
+import { coerceCustomFields } from "@/lib/contactFields"
 
 export interface EmailInput {
   label: string
@@ -39,6 +42,8 @@ export interface ContactInput {
   phones?: PhoneInput[]
   /** Labeled addresses — label + line1 required for each. */
   addresses?: AddressInput[]
+  /** Custom field values, keyed by ContactField id. */
+  customFields?: Record<string, unknown>
   /** Optional note to append to the history on this save. */
   newNote?: string
 }
@@ -141,6 +146,10 @@ export async function saveContact(input: ContactInput): Promise<ContactResult> {
   const validSlugs = await validTagSlugs(committeeId)
   const types = (input.types ?? []).filter((t) => validSlugs.has(t))
 
+  // Coerce + validate custom field values against the committee's field defs.
+  const fieldDefs = await getContactFields(committeeId)
+  const customFields = coerceCustomFields(fieldDefs, input.customFields ?? {})
+
   const emailRes = normalizeMethods(
     (input.emails ?? []).map((e) => ({ label: e.label, value: e.email })),
     "email"
@@ -156,7 +165,7 @@ export async function saveContact(input: ContactInput): Promise<ContactResult> {
 
   const newNote = clean(input.newNote)
 
-  const scalar = { firstName, lastName, types }
+  const scalar = { firstName, lastName, types, customFields: customFields as Prisma.InputJsonValue }
 
   const emailCreate = emailRes.rows.map((r) => ({ label: r.label, email: r.value, order: r.order }))
   const phoneCreate = phoneRes.rows.map((r) => ({ label: r.label, phone: r.value, order: r.order }))

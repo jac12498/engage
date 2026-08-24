@@ -3,6 +3,7 @@
 // the actual download / print window.
 
 import { formatPhone, normalizeLabel, EMAIL_LABELS, PHONE_LABELS, ADDRESS_LABELS } from "@/lib/contacts"
+import { formatFieldValue, isEmptyValue, type ContactFieldDef } from "@/lib/contactFields"
 
 export interface ExportAddress {
   label: string
@@ -23,6 +24,8 @@ export interface ExportContact {
   types: string[]
   source: string
   createdAt: string
+  /** Custom field values keyed by ContactField id. */
+  customFields: Record<string, unknown>
 }
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -58,7 +61,11 @@ function csvField(v: string): string {
 /** Display name for an address type in headers ("Unknown" reads as "Other"). */
 const addrPrefix = (t: string) => (t === "Unknown" ? "Other" : t)
 
-export function toCsv(contacts: ExportContact[], tagLabels: Record<string, string> = {}): string {
+export function toCsv(
+  contacts: ExportContact[],
+  tagLabels: Record<string, string> = {},
+  fields: ContactFieldDef[] = [],
+): string {
   const emailType = (label: string) => normalizeLabel(label, EMAIL_LABELS)
   const phoneType = (label: string) => normalizeLabel(label, PHONE_LABELS)
   const addrType = (label: string) => normalizeLabel(label, ADDRESS_LABELS)
@@ -67,6 +74,8 @@ export function toCsv(contacts: ExportContact[], tagLabels: Record<string, strin
   const emailTypes = EMAIL_LABELS.filter((t) => contacts.some((c) => c.emails.some((e) => emailType(e.label) === t)))
   const phoneTypes = PHONE_LABELS.filter((t) => contacts.some((c) => c.phones.some((p) => phoneType(p.label) === t)))
   const addrTypes = ADDRESS_LABELS.filter((t) => contacts.some((c) => c.addresses.some((a) => addrType(a.label) === t)))
+  // One column per custom field that has a value somewhere in this list.
+  const customFields = fields.filter((f) => contacts.some((c) => !isEmptyValue(c.customFields[f.id])))
 
   const header = [
     "First Name", "Last Name", "Tags",
@@ -76,6 +85,7 @@ export function toCsv(contacts: ExportContact[], tagLabels: Record<string, strin
       const p = addrPrefix(t)
       return [`${p} Street`, `${p} Line 2`, `${p} City`, `${p} State`, `${p} ZIP`]
     }),
+    ...customFields.map((f) => f.label),
     "Source", "Date Added",
   ]
 
@@ -93,6 +103,7 @@ export function toCsv(contacts: ExportContact[], tagLabels: Record<string, strin
         const a = c.addresses.find((x) => addrType(x.label) === t)
         return a ? [a.line1, a.line2 ?? "", a.city ?? "", a.state ?? "", a.zip ?? ""] : ["", "", "", "", ""]
       }),
+      ...customFields.map((f) => formatFieldValue(f.type, c.customFields[f.id])),
       SOURCE_LABELS[c.source] ?? c.source,
       c.createdAt.slice(0, 10),
     ]

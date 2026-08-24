@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { X, Loader2, Check, Plus } from "lucide-react"
-import { searchDonationsForContact, addDonation } from "@/app/contacts/donor-actions"
+import { searchDonationsForContact, addDonation, addDonations } from "@/app/contacts/donor-actions"
 import type { DonationCandidate } from "@/lib/donations"
 
 const inputCls =
@@ -46,7 +46,11 @@ export function FindDonationsModal({
   const [error, setError] = useState<string | null>(null)
   const [added, setAdded] = useState<Set<string>>(new Set(existingKeys))
   const [busyKey, setBusyKey] = useState<string | null>(null)
+  const [addingAll, setAddingAll] = useState(false)
   const [, start] = useTransition()
+
+  const donKey = (d: DonationCandidate) => `${d.source}:${d.refKey}`
+  const addable = results.filter((d) => !added.has(donKey(d)))
 
   useEffect(() => {
     if (name.trim().split(/\s+/).filter(Boolean).length < 1) {
@@ -69,13 +73,30 @@ export function FindDonationsModal({
   }, [name, city, state, zip, contactId])
 
   function add(d: DonationCandidate) {
-    const key = `${d.source}:${d.refKey}`
+    const key = donKey(d)
     setBusyKey(key)
     start(async () => {
       const res = await addDonation(contactId, d)
       setBusyKey(null)
       if (!res.ok) return setError(res.error)
       setAdded((prev) => new Set(prev).add(key))
+      router.refresh()
+    })
+  }
+
+  function addAll() {
+    if (addable.length === 0 || addingAll) return
+    const batch = addable
+    setAddingAll(true)
+    start(async () => {
+      const res = await addDonations(contactId, batch)
+      setAddingAll(false)
+      if (!res.ok) return setError(res.error)
+      setAdded((prev) => {
+        const next = new Set(prev)
+        for (const d of batch) next.add(donKey(d))
+        return next
+      })
       router.refresh()
     })
   }
@@ -116,6 +137,23 @@ export function FindDonationsModal({
 
         {error && <p className="mx-6 mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
+        {!searching && results.length > 0 && (
+          <div className="flex items-center justify-between gap-3 border-t border-border bg-muted/30 px-6 py-2.5">
+            <span className="text-xs text-muted-foreground">
+              {results.length} {results.length === 1 ? "contribution" : "contributions"}
+              {addable.length < results.length ? ` · ${results.length - addable.length} added` : ""}
+            </span>
+            <button
+              onClick={addAll}
+              disabled={addable.length === 0 || addingAll}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-[#1b3a6b] px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-[#122850] disabled:opacity-50"
+            >
+              {addingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+              {addable.length === 0 ? "All added" : `Add all ${addable.length}`}
+            </button>
+          </div>
+        )}
+
         <div className="max-h-[45vh] overflow-y-auto border-t border-border">
           {searching && (
             <p className="flex items-center gap-2 px-6 py-4 text-sm text-muted-foreground">
@@ -154,10 +192,10 @@ export function FindDonationsModal({
                   ) : (
                     <button
                       onClick={() => add(d)}
-                      disabled={busyKey === key}
+                      disabled={busyKey === key || addingAll}
                       className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-[#1b3a6b] transition-colors hover:bg-muted disabled:opacity-50"
                     >
-                      {busyKey === key ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                      {busyKey === key || addingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
                       Add
                     </button>
                   )}

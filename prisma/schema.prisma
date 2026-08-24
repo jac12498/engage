@@ -697,6 +697,9 @@ model Contact {
   stateVoterId String?
   voterState   String?
 
+  // Committee-defined custom field values, keyed by ContactField id.
+  customFields Json?
+
   emails      ContactEmail[]
   phones      ContactPhone[]
   addresses   ContactAddress[]
@@ -810,6 +813,22 @@ model ContactMergeDismissal {
   createdAt   DateTime @default(now())
 
   @@id([aId, bId])
+  @@index([committeeId])
+  @@schema("engagecampaign")
+}
+
+// A committee-defined custom contact field. `type` is a ContactFieldType code
+// (see lib/contactFields.ts); `options` holds the choice list for select/
+// multiselect. Values live in Contact.customFields JSON, keyed by this id.
+model ContactField {
+  id          String   @id @default(cuid())
+  committeeId String
+  label       String
+  type        String
+  options     Json?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+
   @@index([committeeId])
   @@schema("engagecampaign")
 }

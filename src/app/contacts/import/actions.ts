@@ -3,10 +3,13 @@
 import { randomUUID } from "node:crypto"
 import { revalidatePath } from "next/cache"
 import * as XLSX from "xlsx"
+import { Prisma } from "@/generated/prisma/client"
 import { prisma } from "@/lib/prisma"
 import { getActiveContext } from "@/lib/context"
 import { canonicalizeEmail } from "@/lib/emailNormalize"
 import { getCommitteeTags } from "@/lib/committeeTags"
+import { getContactFields } from "@/lib/committeeFields"
+import { coerceCustomFields, isEmptyValue } from "@/lib/contactFields"
 import {
   guessField,
   rowToContact,
@@ -106,6 +109,8 @@ interface MergedContact {
   phones: { label: string; value: string }[]
   addresses: AddressDraft[]
   tags: string[]
+  /** Raw custom-field cell values keyed by field id (first non-empty wins). */
+  customFields: Record<string, string>
   seenE: Set<string>
   seenP: Set<string>
   seenA: Set<string>
@@ -153,6 +158,7 @@ export async function importContacts(payload: {
     tagLookup.set(t.slug.toLowerCase(), t.slug)
     tagLookup.set(t.label.toLowerCase(), t.slug)
   }
+  const fieldDefs = await getContactFields(committeeId)
 
   // 1. Merge rows into one draft per person (union emails/phones/addresses/tags).
   const merged = new Map<string, MergedContact>()
@@ -162,7 +168,7 @@ export async function importContacts(payload: {
     const key = nameKey(d.firstName, d.lastName)
     let m = merged.get(key)
     if (!m) {
-      m = { firstName: d.firstName, lastName: d.lastName, emails: [], phones: [], addresses: [], tags: [], seenE: new Set(), seenP: new Set(), seenA: new Set() }
+      m = { firstName: d.firstName, lastName: d.lastName, emails: [], phones: [], addresses: [], tags: [], customFields: {}, seenE: new Set(), seenP: new Set(), seenA: new Set() }
       merged.set(key, m)
     }
     if (!m.firstName && d.firstName) m.firstName = d.firstName
@@ -183,6 +189,9 @@ export async function importContacts(payload: {
       const slug = tagLookup.get(raw)
       if (slug && !m.tags.includes(slug)) m.tags.push(slug)
     }
+    for (const [id, v] of Object.entries(d.customFields)) {
+      if (!(id in m.customFields)) m.customFields[id] = v
+    }
   }
   const total = merged.size
   if (total === 0) return { ok: false, error: "No rows produced a contact — check the column mapping." }
@@ -195,6 +204,7 @@ export async function importContacts(payload: {
       firstName: true,
       lastName: true,
       types: true,
+      customFields: true,
       emails: { select: { email: true } },
       phones: { select: { phone: true } },
       addresses: { select: { line1: true, zip: true, city: true } },
@@ -202,7 +212,7 @@ export async function importContacts(payload: {
   })
   const index = new Map<
     string,
-    { id: string; emails: Set<string>; phones: Set<string>; addrs: Set<string>; types: Set<string>; emailCount: number; phoneCount: number }
+    { id: string; emails: Set<string>; phones: Set<string>; addrs: Set<string>; types: Set<string>; customFields: Record<string, unknown>; emailCount: number; phoneCount: number }
   >()
   for (const c of dbRows) {
     const key = nameKey(c.firstName, c.lastName)
@@ -213,6 +223,7 @@ export async function importContacts(payload: {
       phones: new Set(c.phones.map((p) => digits10(p.phone)).filter(Boolean)),
       addrs: new Set(c.addresses.map((a) => addrKey({ line1: a.line1, zip: a.zip ?? "", city: a.city ?? "" }))),
       types: new Set(c.types),
+      customFields: (c.customFields as Record<string, unknown> | null) ?? {},
       emailCount: c.emails.length,
       phoneCount: c.phones.length,
     })
@@ -224,19 +235,24 @@ export async function importContacts(payload: {
   let created = 0
   let updated = 0
   let skipped = 0
-  const contactRows: { id: string; committeeId: string; source: string; firstName: string; lastName: string; types: string[] }[] = []
+  const contactRows: Prisma.ContactCreateManyInput[] = []
   const emailRows: { contactId: string; label: string; email: string; order: number }[] = []
   const phoneRows: { contactId: string; label: string; phone: string; order: number }[] = []
   const addressRows: { contactId: string; label: string; line1: string; line2: string | null; city: string | null; state: string | null; zip: string | null; order: number }[] = []
-  const typeUpdates: { id: string; types: string[] }[] = []
+  // Scalar merges on existing contacts — new tags and/or filled-in custom fields.
+  const scalarUpdates: { id: string; types?: string[]; customFields?: Prisma.InputJsonValue }[] = []
 
   const newId = () => "c" + randomUUID().replace(/-/g, "")
 
   for (const m of merged.values()) {
+    // Coerce + validate this person's custom-field cells against the committee defs.
+    const custom = coerceCustomFields(fieldDefs, m.customFields)
     const ex = index.get(nameKey(m.firstName, m.lastName))
     if (!ex) {
       const id = newId()
-      contactRows.push({ id, committeeId, source: "import", firstName: m.firstName, lastName: m.lastName, types: m.tags })
+      const row: Prisma.ContactCreateManyInput = { id, committeeId, source: "import", firstName: m.firstName, lastName: m.lastName, types: m.tags }
+      if (Object.keys(custom).length) row.customFields = custom as Prisma.InputJsonValue
+      contactRows.push(row)
       m.emails.forEach((e, i) => emailRows.push({ contactId: id, label: e.label, email: e.value, order: i }))
       m.phones.forEach((p, i) => phoneRows.push({ contactId: id, label: p.label, phone: p.value, order: i }))
       m.addresses.forEach((a, i) => addressRows.push({ contactId: id, label: a.label, line1: a.line1, line2: a.line2 || null, city: a.city || null, state: a.state || null, zip: a.zip || null, order: i }))
@@ -251,14 +267,25 @@ export async function importContacts(payload: {
     const newPhones = m.phones.filter((p) => { const k = digits10(p.value); return !!k && !ex.phones.has(k) })
     const newAddresses = m.addresses.filter((a) => !ex.addrs.has(addrKey(a)))
     const newTags = m.tags.filter((t) => !ex.types.has(t))
-    if (newEmails.length === 0 && newPhones.length === 0 && newAddresses.length === 0 && newTags.length === 0) {
+    // Fill-if-empty: only set custom fields the existing contact doesn't already have.
+    const filledCustom: Record<string, unknown> = {}
+    for (const [id, v] of Object.entries(custom)) {
+      if (isEmptyValue(ex.customFields[id])) filledCustom[id] = v
+    }
+    const customKeys = Object.keys(filledCustom)
+    if (newEmails.length === 0 && newPhones.length === 0 && newAddresses.length === 0 && newTags.length === 0 && customKeys.length === 0) {
       skipped++
       continue
     }
     newEmails.forEach((e, i) => emailRows.push({ contactId: ex.id, label: e.label, email: e.value, order: ex.emailCount + i }))
     newPhones.forEach((p, i) => phoneRows.push({ contactId: ex.id, label: p.label, phone: p.value, order: ex.phoneCount + i }))
     newAddresses.forEach((a, i) => addressRows.push({ contactId: ex.id, label: a.label, line1: a.line1, line2: a.line2 || null, city: a.city || null, state: a.state || null, zip: a.zip || null, order: ex.addrs.size + i }))
-    if (newTags.length) typeUpdates.push({ id: ex.id, types: [...ex.types, ...newTags] })
+    if (newTags.length || customKeys.length) {
+      const upd: { id: string; types?: string[]; customFields?: Prisma.InputJsonValue } = { id: ex.id }
+      if (newTags.length) upd.types = [...ex.types, ...newTags]
+      if (customKeys.length) upd.customFields = { ...ex.customFields, ...filledCustom } as Prisma.InputJsonValue
+      scalarUpdates.push(upd)
+    }
     updated++
   }
 
@@ -269,11 +296,16 @@ export async function importContacts(payload: {
   for (let i = 0; i < phoneRows.length; i += CHUNK) await prisma.contactPhone.createMany({ data: phoneRows.slice(i, i + CHUNK) })
   for (let i = 0; i < addressRows.length; i += CHUNK) await prisma.contactAddress.createMany({ data: addressRows.slice(i, i + CHUNK) })
 
-  // Type merges on existing contacts (usually few) — parallel in small batches.
+  // Scalar merges on existing contacts (usually few) — parallel in small batches.
   const UBATCH = 25
-  for (let i = 0; i < typeUpdates.length; i += UBATCH) {
+  for (let i = 0; i < scalarUpdates.length; i += UBATCH) {
     await Promise.all(
-      typeUpdates.slice(i, i + UBATCH).map((u) => prisma.contact.update({ where: { id: u.id }, data: { types: u.types } })),
+      scalarUpdates.slice(i, i + UBATCH).map((u) => {
+        const data: { types?: string[]; customFields?: Prisma.InputJsonValue } = {}
+        if (u.types) data.types = u.types
+        if (u.customFields !== undefined) data.customFields = u.customFields
+        return prisma.contact.update({ where: { id: u.id }, data })
+      }),
     )
   }
 

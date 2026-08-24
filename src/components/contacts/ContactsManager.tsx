@@ -6,7 +6,7 @@ import { Plus, Search, Pencil, Trash2, X, Users, Inbox, ArrowRight, HandCoins, C
 import { useRouter } from "next/navigation"
 import { ContactSearchBuilder } from "@/components/contacts/ContactSearchBuilder"
 import { ContactListActions } from "@/components/contacts/ContactListActions"
-import { matchContact, conditionCount, type SearchQuery } from "@/lib/contactsSearch"
+import { matchContact, conditionCount, buildSearchFields, fieldMapOf, type SearchQuery } from "@/lib/contactsSearch"
 import { saveContactSearch, updateContactSearch, deleteContactSearch } from "@/app/contacts/searches/actions"
 
 export interface SavedSearch {
@@ -25,6 +25,7 @@ import {
 } from "@/app/contacts/actions"
 import { formatPhone, EMAIL_LABELS, PHONE_LABELS, ADDRESS_LABELS } from "@/lib/contacts"
 import { tagBadgeStyle, buildTagMap, type TagDef } from "@/lib/tags"
+import { type ContactFieldDef } from "@/lib/contactFields"
 import { AddressAutocomplete } from "@/components/contacts/AddressAutocomplete"
 import type { ParsedAddress } from "@/lib/googleMaps"
 
@@ -66,6 +67,8 @@ export interface ContactRow {
   phones: ContactPhone[]
   addresses: ContactAddress[]
   notes: ContactNote[]
+  /** Custom field values, keyed by ContactField id. */
+  customFields: Record<string, unknown>
 }
 
 function fullName(c: ContactRow) {
@@ -105,6 +108,7 @@ function lastInitial(c: ContactRow): string {
 export function ContactsManager({
   contacts,
   tags,
+  fields,
   pendingSignups,
   canImportDonors = false,
   canImport = false,
@@ -116,6 +120,8 @@ export function ContactsManager({
   contacts: ContactRow[]
   /** The committee's effective tag list (built-ins + custom). */
   tags: TagDef[]
+  /** The committee's custom contact fields. */
+  fields: ContactFieldDef[]
   pendingSignups: number
   canImportDonors?: boolean
   /** May the user bulk-load a list (contacts:create)? */
@@ -151,7 +157,8 @@ export function ContactsManager({
   // Advanced search builder (groups OR'd, conditions AND'd).
   const [advOpen, setAdvOpen] = useState(false)
   const [advQuery, setAdvQuery] = useState<SearchQuery>([])
-  const advCount = conditionCount(advQuery)
+  const searchFieldMap = useMemo(() => fieldMapOf(buildSearchFields(fields)), [fields])
+  const advCount = conditionCount(advQuery, searchFieldMap)
 
   // Saved (committee-shared) searches.
   const router = useRouter()
@@ -224,7 +231,7 @@ export function ContactsManager({
       // Multi-select: match a contact that has ANY of the selected tags.
       if (typeFilter.size > 0 && !c.types.some((t) => typeFilter.has(t))) return false
       // Advanced builder (no-op when there are no active conditions).
-      if (!matchContact(c, advQuery)) return false
+      if (!matchContact(c, advQuery, searchFieldMap)) return false
       if (!q) return true
       const hay = [
         fullName(c),
@@ -237,7 +244,7 @@ export function ContactsManager({
         .toLowerCase()
       return hay.includes(q)
     })
-  }, [contacts, query, typeFilter, advQuery])
+  }, [contacts, query, typeFilter, advQuery, searchFieldMap])
 
   // Distinct last-name initials present in the current search/type context, for the A–Z bar.
   const letters = useMemo(() => {
@@ -386,7 +393,7 @@ export function ContactsManager({
                 </span>
               )}
             </button>
-            <ContactListActions contacts={sorted} tags={tags} canDelete={canDelete} canTag={canTag} />
+            <ContactListActions contacts={sorted} tags={tags} fields={fields} canDelete={canDelete} canTag={canTag} />
           </div>
 
           {/* Advanced search builder */}
@@ -496,6 +503,7 @@ export function ContactsManager({
                 query={advQuery}
                 onChange={setAdvQuery}
                 tagOptions={tags.map((t) => ({ value: t.slug, label: t.label }))}
+                customFields={fields}
               />
             </div>
           )}
@@ -670,6 +678,7 @@ export function ContactsManager({
         <ContactDialog
           contact={editing === "new" ? null : editing}
           tags={tags}
+          fields={fields}
           onClose={() => setEditing(null)}
         />
       )}
@@ -914,15 +923,18 @@ const newAddress = (label = "Home"): AddressRow => ({
 export function ContactDialog({
   contact,
   tags,
+  fields,
   onClose,
 }: {
   contact: ContactRow | null
   tags: TagDef[]
+  fields: ContactFieldDef[]
   onClose: () => void
 }) {
   const [firstName, setFirstName] = useState(contact?.firstName ?? "")
   const [lastName, setLastName] = useState(contact?.lastName ?? "")
   const [types, setTypes] = useState<string[]>(contact?.types ?? [])
+  const [customFields, setCustomFields] = useState<Record<string, unknown>>(contact?.customFields ?? {})
   const [emails, setEmails] = useState<MethodRow[]>(
     contact?.emails.length ? contact.emails.map((e) => newRow(e.label, e.email)) : [newRow("Personal")]
   )
@@ -983,6 +995,7 @@ export function ContactDialog({
         emails: emailInput,
         phones: phoneInput,
         addresses: addressInput,
+        customFields,
         newNote,
       })
       if (!result.ok) {
@@ -1078,6 +1091,20 @@ export function ContactDialog({
           {/* Addresses */}
           <AddressEditor rows={addresses} setRows={setAddresses} />
 
+          {/* Custom fields */}
+          {fields.length > 0 && (
+            <div className="space-y-3">
+              {fields.map((f) => (
+                <CustomFieldInput
+                  key={f.id}
+                  field={f}
+                  value={customFields[f.id]}
+                  onChange={(v) => setCustomFields((prev) => ({ ...prev, [f.id]: v }))}
+                />
+              ))}
+            </div>
+          )}
+
           {/* Notes */}
           <NotesSection notes={notes} setNotes={setNotes} newNote={newNote} setNewNote={setNewNote} />
 
@@ -1102,6 +1129,102 @@ export function ContactDialog({
       </div>
     </div>
   )
+}
+
+function CustomFieldInput({
+  field,
+  value,
+  onChange,
+}: {
+  field: ContactFieldDef
+  value: unknown
+  onChange: (v: unknown) => void
+}) {
+  const labelEl = <span className="mb-1.5 block text-sm font-medium text-[#1a1a2e]">{field.label}</span>
+  switch (field.type) {
+    case "longtext":
+      return (
+        <label className="block">
+          {labelEl}
+          <textarea value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} rows={3} className={`${inputCls} resize-y`} />
+        </label>
+      )
+    case "number":
+      return (
+        <label className="block">
+          {labelEl}
+          <input type="number" value={value == null ? "" : String(value)} onChange={(e) => onChange(e.target.value)} className={inputCls} />
+        </label>
+      )
+    case "boolean":
+      return (
+        <label className="flex items-center gap-2 text-sm font-medium text-[#1a1a2e]">
+          <input type="checkbox" checked={value === true} onChange={(e) => onChange(e.target.checked)} className="accent-[#1b3a6b]" />
+          {field.label}
+        </label>
+      )
+    case "date":
+      return (
+        <label className="block">
+          {labelEl}
+          <input type="date" value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} className={inputCls} />
+        </label>
+      )
+    case "url":
+      return (
+        <label className="block">
+          {labelEl}
+          <input type="url" value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} placeholder="https://…" className={inputCls} />
+        </label>
+      )
+    case "select":
+      return (
+        <label className="block">
+          {labelEl}
+          <select value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} className={inputCls}>
+            <option value="">—</option>
+            {field.options.map((o) => (
+              <option key={o} value={o}>
+                {o}
+              </option>
+            ))}
+          </select>
+        </label>
+      )
+    case "multiselect": {
+      const sel = Array.isArray(value) ? value.map(String) : []
+      const toggle = (o: string) => onChange(sel.includes(o) ? sel.filter((x) => x !== o) : [...sel, o])
+      return (
+        <div>
+          {labelEl}
+          <div className="flex flex-wrap gap-2">
+            {field.options.map((o) => {
+              const active = sel.includes(o)
+              return (
+                <button
+                  key={o}
+                  type="button"
+                  onClick={() => toggle(o)}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                    active ? "border-[#1b3a6b] bg-[#1b3a6b] text-white" : "border-border bg-white text-muted-foreground hover:border-[#1b3a6b]/40"
+                  }`}
+                >
+                  {o}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )
+    }
+    default:
+      return (
+        <label className="block">
+          {labelEl}
+          <input value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} className={inputCls} />
+        </label>
+      )
+  }
 }
 
 function LabelSelect({

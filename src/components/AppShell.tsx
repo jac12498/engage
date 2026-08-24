@@ -112,7 +112,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         activeCampaignId={campaign?.id ?? null}
         canAddCandidate={canAddCandidate}
         multiCandidate={multiCandidate}
-        sectionGates={{ volunteerSignups: hasVolunteerForm, manageTags: permissions.has("contacts:update") }}
+        sectionGates={{ volunteerSignups: hasVolunteerForm, manageTags: permissions.has("contacts:update"), manageFields: permissions.has("contacts:update") }}
       />
       <div className="md:pl-60">
         {impersonation && (

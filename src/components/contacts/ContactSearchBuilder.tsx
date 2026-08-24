@@ -3,18 +3,19 @@
 import { useMemo } from "react"
 import { Plus, X, Trash2 } from "lucide-react"
 import {
-  FIELDS,
-  FIELD_BY_KEY,
   OPERATORS,
+  buildSearchFields,
+  fieldMapOf,
   newGroup,
   newCondition,
   defaultOpFor,
   type SearchQuery,
   type Group,
   type Condition,
-  type FieldKey,
+  type FieldDef,
   type Operator,
 } from "@/lib/contactsSearch"
+import { type ContactFieldDef } from "@/lib/contactFields"
 
 const ctrl =
   "rounded-md border border-border bg-white px-2 py-1.5 text-sm text-[#1a1a2e] outline-none transition-colors focus:border-[#1b3a6b]"
@@ -23,20 +24,26 @@ export function ContactSearchBuilder({
   query,
   onChange,
   tagOptions = [],
+  customFields = [],
 }: {
   query: SearchQuery
   onChange: (q: SearchQuery) => void
   /** Choices for the "tags" field (committee tags), injected at render. */
   tagOptions?: { value: string; label: string }[]
+  /** The committee's custom fields — added to the searchable field list. */
+  customFields?: ContactFieldDef[]
 }) {
+  const allFields = useMemo(() => buildSearchFields(customFields), [customFields])
+  const fieldMap = useMemo(() => fieldMapOf(allFields), [allFields])
+
   // Field <select> options grouped by their section.
   const fieldGroups = useMemo(() => {
-    const m = new Map<string, typeof FIELDS>()
-    for (const f of FIELDS) (m.get(f.group) ?? m.set(f.group, []).get(f.group)!).push(f)
+    const m = new Map<string, FieldDef[]>()
+    for (const f of allFields) (m.get(f.group) ?? m.set(f.group, []).get(f.group)!).push(f)
     return [...m.entries()]
-  }, [])
+  }, [allFields])
 
-  const groups = query.length ? query : [newGroup()]
+  const groups = query.length ? query : [newGroup(fieldMap)]
 
   function setGroups(next: Group[]) {
     onChange(next)
@@ -44,12 +51,12 @@ export function ContactSearchBuilder({
   function updateCondition(gi: number, ci: number, patch: Partial<Condition>) {
     setGroups(groups.map((g, i) => (i !== gi ? g : { ...g, conditions: g.conditions.map((c, j) => (j === ci ? { ...c, ...patch } : c)) })))
   }
-  function changeField(gi: number, ci: number, field: FieldKey) {
+  function changeField(gi: number, ci: number, field: string) {
     // Reset operator + value when the field's category may have changed.
-    updateCondition(gi, ci, { field, op: defaultOpFor(field), value: FIELD_BY_KEY[field].category === "boolean" ? "yes" : "", value2: "", values: [] })
+    updateCondition(gi, ci, { field, op: defaultOpFor(field, fieldMap), value: fieldMap.get(field)?.category === "boolean" ? "yes" : "", value2: "", values: [] })
   }
   function addCondition(gi: number) {
-    setGroups(groups.map((g, i) => (i !== gi ? g : { ...g, conditions: [...g.conditions, newCondition()] })))
+    setGroups(groups.map((g, i) => (i !== gi ? g : { ...g, conditions: [...g.conditions, newCondition("lastName", fieldMap)] })))
   }
   function removeCondition(gi: number, ci: number) {
     setGroups(
@@ -59,7 +66,7 @@ export function ContactSearchBuilder({
     )
   }
   function addGroup() {
-    setGroups([...groups, newGroup()])
+    setGroups([...groups, newGroup(fieldMap)])
   }
   function removeGroup(gi: number) {
     const next = groups.filter((_, i) => i !== gi)
@@ -97,10 +104,11 @@ export function ContactSearchBuilder({
 
             <div className="space-y-2">
               {g.conditions.map((cond, ci) => {
-                const def = FIELD_BY_KEY[cond.field]
+                const def = fieldMap.get(cond.field)
+                if (!def) return null
                 return (
                   <div key={cond.id} className="flex flex-wrap items-start gap-2">
-                    <select value={cond.field} onChange={(e) => changeField(gi, ci, e.target.value as FieldKey)} className={`${ctrl} w-40`}>
+                    <select value={cond.field} onChange={(e) => changeField(gi, ci, e.target.value)} className={`${ctrl} w-40`}>
                       {fieldGroups.map(([group, fields]) => (
                         <optgroup key={group} label={group}>
                           {fields.map((f) => (
@@ -122,6 +130,7 @@ export function ContactSearchBuilder({
 
                     <ValueInput
                       cond={cond}
+                      def={def}
                       tagOptions={tagOptions}
                       onChange={(patch) => updateCondition(gi, ci, patch)}
                     />
@@ -162,14 +171,15 @@ export function ContactSearchBuilder({
 
 function ValueInput({
   cond,
+  def,
   tagOptions,
   onChange,
 }: {
   cond: Condition
+  def: FieldDef
   tagOptions: { value: string; label: string }[]
   onChange: (patch: Partial<Condition>) => void
 }) {
-  const def = FIELD_BY_KEY[cond.field]
   const opDef = OPERATORS[def.category].find((o) => o.value === cond.op)
   if (opDef?.valueless) return null
 
@@ -179,6 +189,20 @@ function ValueInput({
         <option value="yes">Yes</option>
         <option value="no">No</option>
       </select>
+    )
+  }
+
+  if (def.category === "number") {
+    return (
+      <div className="flex items-center gap-1.5">
+        <input type="number" value={cond.value} onChange={(e) => onChange({ value: e.target.value })} className={`${ctrl} w-28`} />
+        {cond.op === "between" && (
+          <>
+            <span className="text-sm text-muted-foreground">and</span>
+            <input type="number" value={cond.value2 ?? ""} onChange={(e) => onChange({ value2: e.target.value })} className={`${ctrl} w-28`} />
+          </>
+        )}
+      </div>
     )
   }
 

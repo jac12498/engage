@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma"
 import { requirePrivilege } from "@/lib/context"
 import { detectDuplicateClusters } from "@/lib/contactsDuplicates"
 import { getCommitteeTags } from "@/lib/committeeTags"
+import { getContactFields } from "@/lib/committeeFields"
 import type { SearchQuery } from "@/lib/contactsSearch"
 import { ContactsManager, type ContactRow } from "@/components/contacts/ContactsManager"
 
@@ -47,6 +48,7 @@ export default async function ContactsPage() {
       body: n.body,
       createdAt: n.createdAt.toISOString(),
     })),
+    customFields: (c.customFields as Record<string, unknown> | null) ?? {},
   }))
 
   // Pending signups across every campaign website in the committee.
@@ -74,11 +76,13 @@ export default async function ContactsPage() {
   })
   const savedSearches = savedSearchRows.map((s) => ({ id: s.id, name: s.name, query: s.query as unknown as SearchQuery }))
   const tags = await getCommitteeTags(committee.id)
+  const fields = await getContactFields(committee.id)
 
   return (
     <ContactsManager
       contacts={contacts}
       tags={tags}
+      fields={fields}
       pendingSignups={pendingSignups}
       canImportDonors={canImportDonors}
       canImport={permissions.has("contacts:create")}

@@ -6,17 +6,20 @@ import { Download, Printer, Phone, Mail, Copy, Check, ChevronDown, ChevronRight,
 import { toCsv, labelsHtml, phoneListHtml, emailListEntries, mailingAddress, LABEL_FORMATS, type ExportContact } from "@/lib/contactExport"
 import { bulkDeleteContacts, bulkUpdateTags } from "@/app/contacts/actions"
 import { type TagDef } from "@/lib/tags"
+import { type ContactFieldDef } from "@/lib/contactFields"
 import Link from "next/link"
 
 /** Actions that operate on the current (filtered) list of contacts. */
 export function ContactListActions({
   contacts,
   tags,
+  fields = [],
   canDelete = false,
   canTag = false,
 }: {
   contacts: ExportContact[]
   tags: TagDef[]
+  fields?: ContactFieldDef[]
   canDelete?: boolean
   canTag?: boolean
 }) {
@@ -58,7 +61,7 @@ export function ContactListActions({
   function exportCsv() {
     close()
     const tagLabels = Object.fromEntries(tags.map((t) => [t.slug, t.label]))
-    const blob = new Blob([toCsv(contacts, tagLabels)], { type: "text/csv;charset=utf-8;" })
+    const blob = new Blob([toCsv(contacts, tagLabels, fields)], { type: "text/csv;charset=utf-8;" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
