@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation"
 import { prisma } from "@/lib/prisma"
 import { requireActiveCampaign } from "@/lib/context"
+import { allowsMultipleCandidates } from "@/lib/committeeTypes"
 import { toPlanId } from "@/lib/entitlements"
-import type { Medium } from "@/lib/comms/prompts"
+import { mediumAllowed, type Medium } from "@/lib/comms/prompts"
 
 function usedThisMonth(used: number, periodStart: Date): number {
   const now = new Date()
@@ -16,19 +17,25 @@ function usedThisMonth(used: number, periodStart: Date): number {
 export async function loadMediumData(medium: Medium) {
   const { campaign: active, committee } = await requireActiveCampaign()
 
-  const campaign = await prisma.campaign.findUnique({
-    where: { id: active.id },
-    include: {
-      topics: { orderBy: { updatedAt: "desc" } },
-      generations: { where: { medium }, orderBy: { createdAt: "desc" }, take: 50 },
-    },
-  })
-  if (!campaign) redirect("/onboarding")
+  // A multi-candidate committee doesn't do speeches — guard the route.
+  if (!mediumAllowed(medium, allowsMultipleCandidates(committee.committeeType))) {
+    redirect("/communications")
+  }
+
+  // Topics are committee-level grounding; generations belong to the active run.
+  const [topics, generations] = await Promise.all([
+    prisma.topic.findMany({ where: { committeeId: committee.id }, orderBy: { updatedAt: "desc" } }),
+    prisma.generation.findMany({
+      where: { campaignId: active.id, medium },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    }),
+  ])
 
   return {
     plan: toPlanId(committee.plan),
     creditsUsed: usedThisMonth(committee.creditsThisMonth, committee.billingPeriodStart),
-    topics: campaign.topics.map((t) => ({
+    topics: topics.map((t) => ({
       id: t.id,
       title: t.title,
       keyMessage: t.keyMessage,
@@ -36,7 +43,7 @@ export async function loadMediumData(medium: Medium) {
       occasion: t.occasion,
       talkingPoints: t.talkingPoints,
     })),
-    generations: campaign.generations.map((g) => ({
+    generations: generations.map((g) => ({
       id: g.id,
       type: g.type,
       title: g.title,

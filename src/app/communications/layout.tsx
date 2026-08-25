@@ -9,7 +9,7 @@ export const metadata = { title: "Communications · Engage" }
 export default async function CommunicationsLayout({ children }: { children: React.ReactNode }) {
   const ctx = await requireActiveCampaign()
   if (!ctx.permissions.has("ai-communications:read")) redirect("/dashboard")
-  const setup = moduleSetupRequirement("ai-communications", campaignProfile(ctx.candidate, ctx.campaign))
+  const setup = moduleSetupRequirement("ai-communications", campaignProfile(ctx.committee, ctx.candidate, ctx.campaign))
   return (
     <AppShell>
       {setup ? <ModuleSetupGate moduleName="Communications" requirement={setup} /> : children}

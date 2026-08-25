@@ -56,7 +56,7 @@ export function TopicsManager({ topics }: { topics: TopicDTO[] }) {
             key={t.id}
             className="flex items-start justify-between gap-3 rounded-xl border border-border bg-white p-4 transition-colors hover:border-[#1b3a6b]/40"
           >
-            <Link href={`/communications/topics/${t.id}`} className="group min-w-0 flex-1">
+            <Link href={`/settings/topics/${t.id}`} className="group min-w-0 flex-1">
               <h3 className="inline-flex items-center gap-1 font-semibold text-[#1a1a2e]">
                 {t.title}
                 <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />

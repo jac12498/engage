@@ -25,7 +25,7 @@ export async function POST(req: Request) {
 
   const { committee, campaign, candidate } = ctx
   if (!campaign || !candidate) return new Response("No campaign found", { status: 404 })
-  const profile = campaignProfile(candidate, campaign)
+  const profile = campaignProfile(committee, candidate, campaign)
 
   const plan = toPlanId(committee.plan)
 
@@ -43,7 +43,7 @@ export async function POST(req: Request) {
   // Same scope-based context as generation: general + the piece's topic.
   const contextItems = await prisma.contextItem.findMany({
     where: {
-      campaignId: campaign.id,
+      committeeId: committee.id,
       OR: [{ topicId: null }, ...(body.topicId ? [{ topicId: body.topicId }] : [])],
     },
     orderBy: [{ type: "asc" }, { order: "asc" }, { createdAt: "asc" }],

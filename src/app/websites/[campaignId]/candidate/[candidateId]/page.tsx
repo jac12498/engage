@@ -15,34 +15,34 @@ export const dynamic = "force-dynamic"
  * isn't in this committee.
  */
 async function loadCandidate(committeeId: string, candidateId: string) {
-  const candidate = await prisma.candidate.findFirst({
-    where: { id: candidateId, committeeId },
-    select: {
-      id: true,
-      candidateName: true,
-      bio: true,
-      whyRunning: true,
-      headshotMime: true,
-      logoMime: true,
-      tagline: true,
-      website: true,
-      actblueUrl: true,
-      campaigns: {
-        orderBy: { cycle: "desc" },
-        take: 1,
-        select: {
-          id: true,
-          office: true,
-          party: true,
-          contextItems: {
-            where: { type: "position" },
-            orderBy: [{ order: "asc" }, { createdAt: "asc" }],
-            select: { id: true, title: true, body: true, keyPoints: true },
-          },
+  // Grounding (whyRunning) + positions are committee-level (Phase 1); the person's
+  // identity + their latest run stay on the candidate.
+  const [candidate, committee, positions] = await Promise.all([
+    prisma.candidate.findFirst({
+      where: { id: candidateId, committeeId },
+      select: {
+        id: true,
+        candidateName: true,
+        bio: true,
+        headshotMime: true,
+        logoMime: true,
+        tagline: true,
+        website: true,
+        actblueUrl: true,
+        campaigns: {
+          orderBy: { cycle: "desc" },
+          take: 1,
+          select: { id: true, office: true, party: true },
         },
       },
-    },
-  })
+    }),
+    prisma.committee.findUnique({ where: { id: committeeId }, select: { whyRunning: true } }),
+    prisma.contextItem.findMany({
+      where: { committeeId, type: "position" },
+      orderBy: [{ order: "asc" }, { createdAt: "asc" }],
+      select: { id: true, title: true, body: true, keyPoints: true },
+    }),
+  ])
   if (!candidate) return null
 
   const campaign = candidate.campaigns[0] ?? null
@@ -59,7 +59,7 @@ async function loadCandidate(committeeId: string, candidateId: string) {
       })
     : []
 
-  return { candidate, campaign, news }
+  return { candidate, committee, campaign, positions, news }
 }
 
 export async function generateMetadata({
@@ -91,7 +91,7 @@ export default async function CandidateProfilePage({
   ])
   if (!site || !site.published || !data) notFound()
 
-  const { candidate, campaign, news } = data
+  const { candidate, committee, campaign, positions, news } = data
   const font = FONT_STACK[site.fontTheme] ?? FONT_STACK.classic
   const themeVars = {
     "--site-primary": site.primaryColor,
@@ -99,7 +99,7 @@ export default async function CandidateProfilePage({
     fontFamily: font,
   } as CSSProperties
   const homeHref = `/websites/${site.committeeId}`
-  const positions = campaign?.contextItems ?? []
+  const whyRunning = committee?.whyRunning ?? null
   // The candidate's own donate link wins; else the committee/site donate link.
   const donateHref = candidate.actblueUrl || site.donateUrl
 
@@ -179,7 +179,7 @@ export default async function CandidateProfilePage({
       </section>
 
       {/* About */}
-      {(candidate.bio || candidate.whyRunning) && (
+      {(candidate.bio || whyRunning) && (
         <section className="mx-auto max-w-3xl px-6 py-16">
           <h2 className="text-3xl font-bold" style={{ color: "var(--site-primary)" }}>
             About {candidate.candidateName}
@@ -188,7 +188,7 @@ export default async function CandidateProfilePage({
             {paragraphs(candidate.bio).map((p, i) => (
               <p key={`bio-${i}`}>{p}</p>
             ))}
-            {paragraphs(candidate.whyRunning).map((p, i) => (
+            {paragraphs(whyRunning).map((p, i) => (
               <p key={`why-${i}`}>{p}</p>
             ))}
           </div>

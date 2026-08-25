@@ -1,4 +1,3 @@
-import { AppShell } from "@/components/AppShell"
 import { prisma } from "@/lib/prisma"
 import { requireActiveCampaign } from "@/lib/context"
 import { allowsMultipleCandidates } from "@/lib/committeeTypes"
@@ -32,8 +31,7 @@ export default async function SettingsPage() {
   }))
 
   return (
-    <AppShell>
-      <div className="mx-auto max-w-2xl">
+    <div className="mx-auto max-w-2xl">
         <div>
           <h1 className="text-2xl font-bold text-[#1a1a2e]">Candidate settings</h1>
           <p className="mt-1 text-muted-foreground">
@@ -86,7 +84,6 @@ export default async function SettingsPage() {
             }}
           />
         </div>
-      </div>
-    </AppShell>
+    </div>
   )
 }

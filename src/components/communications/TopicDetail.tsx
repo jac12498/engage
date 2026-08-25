@@ -48,7 +48,7 @@ export function TopicDetail({
     <div className="space-y-8">
       <div>
         <Link
-          href="/communications/topics"
+          href="/settings/topics"
           className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-[#1a1a2e]"
         >
           <ArrowLeft className="h-4 w-4" /> All topics

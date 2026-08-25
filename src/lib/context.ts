@@ -6,16 +6,51 @@ import type { Committee, Candidate, Campaign } from "@/generated/prisma/client"
 import { permissionsForLegacyRole, type PermissionKey } from "@/lib/permissions"
 
 /**
- * A merged view of a candidate (the person) + one of their campaigns (a run) — the
- * shape the render/prompt/newsletter code consumes, so those functions keep reading a
- * single object with both person fields (candidateName, bio, headshot) and run fields
- * (office, party, district). `id` is the CANDIDATE id (headshot + public-site routes
- * key on it); use the Campaign row's own id for per-campaign relation queries.
+ * The committee-level AI grounding (voice + interview knowledge) that Phase 1 moved
+ * up from the Candidate. Folded into the merged profile so prompt/render/newsletter
+ * code keeps reading a single object — these fields now resolve to the committee.
  */
-export type CampaignProfile = Candidate & Campaign
+type CommitteeGrounding = Pick<
+  Committee,
+  | "whyRunning"
+  | "experience"
+  | "education"
+  | "coreValues"
+  | "politicalLean"
+  | "voiceTone"
+  | "interview"
+  | "interviewUpdatedAt"
+>
 
-export function campaignProfile(candidate: Candidate, campaign: Campaign): CampaignProfile {
-  return { ...campaign, ...candidate }
+/**
+ * A merged view of the committee's grounding + a candidate (the person) + one of
+ * their campaigns (a run) — the shape the render/prompt/newsletter code consumes, so
+ * those functions keep reading a single object with grounding (whyRunning, voiceTone,
+ * interview…), person fields (candidateName, bio, headshot), and run fields (office,
+ * party, district). `id` is the CANDIDATE id (headshot + public-site routes key on
+ * it); use the Campaign row's own id for per-campaign relation queries, and the
+ * committee for grounding/topic/context queries.
+ */
+export type CampaignProfile = Candidate & Campaign & CommitteeGrounding
+
+export function campaignProfile(
+  committee: Committee,
+  candidate: Candidate,
+  campaign: Campaign,
+): CampaignProfile {
+  return {
+    ...campaign,
+    ...candidate,
+    // Grounding always comes from the committee (Phase 1, committee-first).
+    whyRunning: committee.whyRunning,
+    experience: committee.experience,
+    education: committee.education,
+    coreValues: committee.coreValues,
+    politicalLean: committee.politicalLean,
+    voiceTone: committee.voiceTone,
+    interview: committee.interview,
+    interviewUpdatedAt: committee.interviewUpdatedAt,
+  }
 }
 
 /**

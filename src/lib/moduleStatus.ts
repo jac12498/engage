@@ -2,6 +2,7 @@ import "server-only"
 import type { LucideIcon } from "lucide-react"
 import type { CampaignProfile } from "@/lib/context"
 import { NAV_MODULES, navModuleUnlocked, navUnlockPlan } from "@/lib/nav"
+import { isDevEnv } from "@/lib/appEnv"
 import type { PlanId } from "@/lib/entitlements"
 
 /**
@@ -88,7 +89,10 @@ export function computeModuleStatuses(
   plan: PlanId,
   permissions: ReadonlySet<string>,
 ): ModuleStatus[] {
+  const dev = isDevEnv()
   return NAV_MODULES
+    // Dev-only modules (e.g. the website generator being reworked) are hidden in prod.
+    .filter((m) => !(m.devOnly && !dev))
     // Module-based access: only surface modules the member can read. Plan-locked
     // (but readable) modules still appear as "Upgrade to use".
     .filter((m) => permissions.has(`${m.key}:read`))

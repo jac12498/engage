@@ -29,10 +29,16 @@ export default async function NewsletterEditorPage({
       mailingState: true,
       mailingZip: true,
       newsletterTemplate: true,
-      topics: { orderBy: { updatedAt: "desc" }, select: { id: true, title: true } },
     },
   })
   if (!campaign) redirect("/onboarding")
+
+  // Topics are committee-level grounding (Phase 1).
+  const topics = await prisma.topic.findMany({
+    where: { committeeId: committee.id },
+    orderBy: { updatedAt: "desc" },
+    select: { id: true, title: true },
+  })
 
   // Website + subscribers are per-candidate in 2a (public routes key on the candidate id).
   const site = await prisma.website.findUnique({
@@ -79,7 +85,7 @@ export default async function NewsletterEditorPage({
       defaultModel={resolveModel(committee.aiModel)}
       activeSubscribers={activeSubscribers}
       hasMailingAddress={hasMailingAddress}
-      topics={campaign.topics}
+      topics={topics}
       commsArticles={commsArticles}
       campaign={{
         candidateName: candidate.candidateName,

@@ -1,4 +1,4 @@
-import { notFound, redirect } from "next/navigation"
+import { notFound } from "next/navigation"
 import { prisma } from "@/lib/prisma"
 import { requireActiveCampaign } from "@/lib/context"
 import { toPlanId } from "@/lib/entitlements"
@@ -19,24 +19,22 @@ export default async function TopicDetailPage({
 }) {
   const { topicId } = await params
 
-  const { campaign: active, committee } = await requireActiveCampaign()
+  const { committee } = await requireActiveCampaign()
 
-  const campaign = await prisma.campaign.findUnique({
-    where: { id: active.id },
-    select: {
-      id: true,
-      topics: { orderBy: { title: "asc" }, select: { id: true, title: true } },
-    },
-  })
-  if (!campaign) redirect("/onboarding")
-
-  const topic = await prisma.topic.findFirst({
-    where: { id: topicId, campaignId: campaign.id },
-    include: {
-      contextItems: { orderBy: [{ type: "asc" }, { createdAt: "asc" }] },
-      generations: { orderBy: { createdAt: "desc" }, take: 50 },
-    },
-  })
+  const [topicsList, topic] = await Promise.all([
+    prisma.topic.findMany({
+      where: { committeeId: committee.id },
+      orderBy: { title: "asc" },
+      select: { id: true, title: true },
+    }),
+    prisma.topic.findFirst({
+      where: { id: topicId, committeeId: committee.id },
+      include: {
+        contextItems: { orderBy: [{ type: "asc" }, { createdAt: "asc" }] },
+        generations: { orderBy: { createdAt: "desc" }, take: 50 },
+      },
+    }),
+  ])
   if (!topic) notFound()
 
   return (
@@ -49,7 +47,7 @@ export default async function TopicDetailPage({
         occasion: topic.occasion,
         talkingPoints: topic.talkingPoints,
       }}
-      topics={campaign.topics}
+      topics={topicsList}
       contextItems={topic.contextItems.map((c) => ({
         id: c.id,
         type: c.type,

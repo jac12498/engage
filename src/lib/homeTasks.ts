@@ -1,5 +1,6 @@
 import "server-only"
 import { prisma } from "@/lib/prisma"
+import { isDevEnv } from "@/lib/appEnv"
 
 export interface HomeTask {
   id: string
@@ -29,9 +30,15 @@ export async function computeHomeTasks(
 ): Promise<HomeData | null> {
   const candidate = await prisma.candidate.findUnique({
     where: { id: candidateId },
-    select: { candidateName: true, bio: true, whyRunning: true, headshotMime: true },
+    select: { candidateName: true, bio: true, headshotMime: true },
   })
   if (!candidate) return null
+
+  // `whyRunning` is committee-level grounding (Phase 1).
+  const committee = await prisma.committee.findUnique({
+    where: { id: committeeId },
+    select: { whyRunning: true },
+  })
 
   const campaign = await prisma.campaign.findUnique({
     where: { id: campaignId },
@@ -51,7 +58,7 @@ export async function computeHomeTasks(
     prisma.newsletter.count({ where: { campaignId } }),
   ])
 
-  const hasProfile = Boolean(candidate.bio?.trim() && candidate.whyRunning?.trim())
+  const hasProfile = Boolean(candidate.bio?.trim() && committee?.whyRunning?.trim())
   const hasAddress = Boolean(
     campaign?.mailingStreet?.trim() &&
       campaign?.mailingCity?.trim() &&
@@ -123,9 +130,12 @@ export async function computeHomeTasks(
     },
   ]
 
-  // Incomplete first (preserving relative order), completed after.
-  tasks.sort((a, b) => Number(a.done) - Number(b.done))
-  const doneCount = tasks.filter((t) => t.done).length
+  // The website builder is dev-only while it's reworked — drop its task in prod.
+  const visible = isDevEnv() ? tasks : tasks.filter((t) => t.id !== "website")
 
-  return { candidateName: candidate.candidateName, tasks, doneCount, total: tasks.length }
+  // Incomplete first (preserving relative order), completed after.
+  visible.sort((a, b) => Number(a.done) - Number(b.done))
+  const doneCount = visible.filter((t) => t.done).length
+
+  return { candidateName: candidate.candidateName, tasks: visible, doneCount, total: visible.length }
 }

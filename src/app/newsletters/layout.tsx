@@ -9,7 +9,7 @@ export const metadata = { title: "Newsletter · Engage" }
 export default async function NewsletterLayout({ children }: { children: React.ReactNode }) {
   const ctx = await requireActiveCampaign()
   if (!ctx.permissions.has("newsletter:read")) redirect("/dashboard")
-  const setup = moduleSetupRequirement("newsletter", campaignProfile(ctx.candidate, ctx.campaign))
+  const setup = moduleSetupRequirement("newsletter", campaignProfile(ctx.committee, ctx.candidate, ctx.campaign))
   return (
     <AppShell>
       {setup ? <ModuleSetupGate moduleName="Newsletter" requirement={setup} /> : children}

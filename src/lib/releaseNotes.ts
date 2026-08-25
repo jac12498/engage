@@ -10,7 +10,7 @@
  * capability, not the code.
  */
 
-export const APP_VERSION = "1.5"
+export const APP_VERSION = "1.6"
 
 export type ChangeKind = "New" | "Improved" | "Fixed"
 
@@ -31,6 +31,30 @@ export interface Release {
 }
 
 export const RELEASES: Release[] = [
+  {
+    version: "1.6",
+    date: "2026-08-25",
+    title: "Communications, organized around your committee",
+    summary:
+      "The voice and knowledge that ground your AI drafts now live with your committee, and Communications is simpler to set up.",
+    sections: [
+      {
+        kind: "New",
+        items: [
+          "Committee voice: your Interview, Topics, and Context now live in Settings and belong to the committee — one shared voice and platform across your candidates. (A single-candidate committee sees them under Candidate Settings.) Every draft is grounded in them.",
+          "AI Assistant: a new menu area gathering the Writing Guide and the model comparison, so the how-to lives in one place.",
+          "The Communications overview now shows a clear setup checklist — exactly what to fill in, and what's still missing, for great drafts.",
+        ],
+      },
+      {
+        kind: "Improved",
+        items: [
+          "Communications is framed around your committee (or your candidate, for a single-candidate committee) rather than a single campaign.",
+          "The guided interview asks about the committee for a multi-candidate committee, and about you for a candidate — and the pages read the right way in both.",
+        ],
+      },
+    ],
+  },
   {
     version: "1.5",
     date: "2026-08-24",

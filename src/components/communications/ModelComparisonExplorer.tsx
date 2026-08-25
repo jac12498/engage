@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { FORMAT_EXAMPLES, MODELS } from "@/app/communications/models/samples"
+import { FORMAT_EXAMPLES, MODELS } from "@/app/ai/models/samples"
 
 const MODEL_BY_ID = Object.fromEntries(MODELS.map((m) => [m.id, m]))
 

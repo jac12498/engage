@@ -137,9 +137,23 @@ model Committee {
   mailingState   String?
   mailingZip     String?
 
+  // AI Communications grounding — the committee's voice + interview knowledge, the
+  // durable base every generation is grounded in (moved up from Candidate). Topics +
+  // ContextItems (below) hold the committee's messaging topics and reference material.
+  whyRunning         String?   @db.Text
+  experience         String?   @db.Text
+  education          String?   @db.Text
+  coreValues         String?   @db.Text
+  politicalLean      String?   @db.Text // short narrative summary of the committee's lean/positions
+  voiceTone          String? // preferred tone, e.g. "warm and plainspoken"
+  interview          Json? // raw structured interview answers
+  interviewUpdatedAt DateTime?
+
   members   CommitteeMembership[]
   candidates Candidate[]
   contacts  Contact[]
+  topics       Topic[] // committee messaging topics (AI Communications grounding)
+  contextItems ContextItem[] // committee reference material (AI Communications grounding)
   newsletterSubscribers NewsletterSubscriber[] // committee-wide newsletter list (2b-1)
   site      Website? // one committee website (2b-2)
   roleTypes RoleType[] // committee-scoped custom roles (module-based access)
@@ -265,16 +279,8 @@ model Candidate {
   website       String? // the candidate's external/website link
   actblueUrl    String? // the candidate's ActBlue / donate link
 
-  // Candidate knowledge — gathered via the guided interview. The richer this is,
-  // the better-grounded every generated communication (and, later, the website).
-  education          String? @db.Text
-  experience         String? @db.Text
-  whyRunning         String? @db.Text
-  coreValues         String? @db.Text
-  politicalLean      String? @db.Text // short narrative summary of the candidate's lean/positions
-  voiceTone          String? // preferred tone, e.g. "warm and plainspoken"
-  interview          Json? // raw structured interview answers (e.g. the lean questionnaire)
-  interviewUpdatedAt DateTime?
+  // AI Communications grounding (interview knowledge + voice) moved UP to the
+  // Committee (Phase 1, committee-first). A per-candidate overlay returns in Phase 3.
 
   // Runs for office — one Campaign per cycle. Per-race content (communications, news,
   // newsletter issues) and the run profile (office, ballot line, district, "Paid for
@@ -326,9 +332,7 @@ model Campaign {
   districtVoterCount  Int?
 
   // Per-race outputs.
-  topics            Topic[]
   generations       Generation[]
-  contextItems      ContextItem[]
   newsClips         NewsClip[]
   newsletters       Newsletter[]
   newsletterImages  NewsletterImage[]
@@ -398,8 +402,8 @@ model GenerationVersion {
 // a generation targets (distinct from the candidate's standing Issue positions).
 model Topic {
   id             String       @id @default(cuid())
-  campaignId     String
-  campaign       Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  committeeId    String
+  committee      Committee    @relation(fields: [committeeId], references: [id], onDelete: Cascade)
   title          String
   keyMessage     String?       @db.Text
   targetAudience String?
@@ -410,7 +414,7 @@ model Topic {
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
-  @@index([campaignId])
+  @@index([committeeId])
   @@schema("engagecampaign")
 }
 
@@ -421,11 +425,11 @@ model Topic {
 //           that Topic is used (mirrors v10.3's CampaignIntelligence.commTopicId).
 // Auto-injected by scope: general items + the selected topic's items.
 model ContextItem {
-  id         String   @id @default(cuid())
-  campaignId String
-  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  topicId    String?
-  topic      Topic?   @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  id          String    @id @default(cuid())
+  committeeId String
+  committee   Committee @relation(fields: [committeeId], references: [id], onDelete: Cascade)
+  topicId     String?
+  topic       Topic?    @relation(fields: [topicId], references: [id], onDelete: Cascade)
 
   type      String   @default("note")
   title     String? // position: issue name; reference: headline; note: optional label
@@ -439,7 +443,7 @@ model ContextItem {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([campaignId])
+  @@index([committeeId])
   @@index([topicId])
   @@schema("engagecampaign")
 }

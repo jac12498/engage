@@ -23,7 +23,7 @@ export async function POST(req: Request) {
 
   const { committee, campaign, candidate } = ctx
   if (!campaign || !candidate) return new Response("No campaign found", { status: 404 })
-  const profile = campaignProfile(candidate, campaign)
+  const profile = campaignProfile(committee, candidate, campaign)
 
   const plan = toPlanId(committee.plan)
 
@@ -34,7 +34,7 @@ export async function POST(req: Request) {
 
   if (body.topicId) {
     const t = await prisma.topic.findFirst({
-      where: { id: body.topicId, campaignId: campaign.id },
+      where: { id: body.topicId, committeeId: committee.id },
     })
     if (t) {
       const tp = t.talkingPoints.length ? ` Talking points: ${t.talkingPoints.join("; ")}.` : ""
@@ -66,7 +66,7 @@ export async function POST(req: Request) {
   // Auto-inject context by scope: general (topicId null) + the selected topic's items.
   const contextItems = await prisma.contextItem.findMany({
     where: {
-      campaignId: campaign.id,
+      committeeId: committee.id,
       OR: [{ topicId: null }, ...(body.topicId ? [{ topicId: body.topicId }] : [])],
     },
     orderBy: [{ type: "asc" }, { order: "asc" }, { createdAt: "asc" }],

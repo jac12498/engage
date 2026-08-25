@@ -16,9 +16,10 @@ export default async function WebsitePreview({
 }: {
   params: Promise<{ slug?: string[] }>
 }) {
-  const { campaign } = await requireActiveCampaign()
+  // The website is committee-owned (2b-2): loadPublicSite keys on the committee id.
+  const { committee } = await requireActiveCampaign()
 
-  const site = await loadPublicSite(campaign.id)
+  const site = await loadPublicSite(committee.id)
   if (!site) notFound()
 
   const { slug } = await params

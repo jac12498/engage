@@ -51,7 +51,7 @@ export function CreateSitePanel({
         {thinProfile && (
           <p className="mx-auto mt-4 max-w-md rounded-lg border border-[#c4910a]/30 bg-[#f0b429]/10 px-4 py-2.5 text-sm text-[#7a5a00]">
             Tip: your profile is still thin. Finishing the{" "}
-            <Link href="/communications/interview" className="font-semibold underline">
+            <Link href="/settings/voice" className="font-semibold underline">
               interview
             </Link>{" "}
             first will produce a much stronger site — but you can generate now and refine either way.

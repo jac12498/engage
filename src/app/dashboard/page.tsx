@@ -21,7 +21,7 @@ export default async function HomePage() {
   }
 
   const plan = toPlanId(committee.plan)
-  const modules = computeModuleStatuses(campaignProfile(candidate, campaign), plan, permissions)
+  const modules = computeModuleStatuses(campaignProfile(committee, candidate, campaign), plan, permissions)
 
   // Modules the plan includes (usable or needing setup) vs. those to unlock.
   const available = modules.filter((m) => m.status !== "locked")

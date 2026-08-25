@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import { type Prisma } from "@/generated/prisma/client"
 import { getActiveContext } from "@/lib/context"
+import { allowsMultipleCandidates } from "@/lib/committeeTypes"
 import { generateWebsiteDraft } from "@/lib/website/generate"
 import { draftToHomeBlocks, type BlockInput } from "@/lib/website/draftToBlocks"
 import { slugify } from "@/lib/website/slug"
@@ -38,42 +39,50 @@ function blockCreateData(blocks: BlockInput[]) {
 
 /** Draft the committee home from its candidates + their positions/topics. */
 async function draftForCommittee(committeeId: string, committeeName: string) {
-  const candidates = await prisma.candidate.findMany({
-    where: { committeeId },
-    orderBy: { createdAt: "asc" },
-    select: {
-      candidateName: true,
-      bio: true,
-      whyRunning: true,
-      coreValues: true,
-      campaigns: { orderBy: [{ cycle: "desc" }], take: 1, select: { id: true, office: true, party: true } },
-    },
-  })
-  const campaignIds = candidates.map((c) => c.campaigns[0]?.id).filter((x): x is string => Boolean(x))
-  const [positions, topics] = await Promise.all([
+  // Grounding (whyRunning/coreValues) + positions + topics are committee-level (Phase 1).
+  const [committee, candidates, positions, topics] = await Promise.all([
+    prisma.committee.findUnique({
+      where: { id: committeeId },
+      select: { whyRunning: true, coreValues: true, committeeType: true },
+    }),
+    prisma.candidate.findMany({
+      where: { committeeId },
+      orderBy: { createdAt: "asc" },
+      select: {
+        candidateName: true,
+        bio: true,
+        campaigns: { orderBy: [{ cycle: "desc" }], take: 1, select: { id: true, office: true, party: true } },
+      },
+    }),
     prisma.contextItem.findMany({
-      where: { campaignId: { in: campaignIds }, type: "position" },
+      where: { committeeId, type: "position" },
       orderBy: [{ order: "asc" }, { createdAt: "asc" }],
     }),
-    prisma.topic.findMany({ where: { campaignId: { in: campaignIds } }, orderBy: { updatedAt: "desc" } }),
+    prisma.topic.findMany({ where: { committeeId }, orderBy: { updatedAt: "desc" } }),
   ])
+  // A committee is a "party" site by its TYPE (party/multi-candidate), not by how
+  // many candidates it has entered yet — a multi-candidate committee with one
+  // candidate should still get the committee-focused site.
+  const multiCandidate = allowsMultipleCandidates(committee?.committeeType)
+
   const draft = await generateWebsiteDraft(
     {
       committeeName,
+      multiCandidate,
       candidates: candidates.map((c) => ({
         candidateName: c.candidateName,
         office: c.campaigns[0]?.office ?? "",
         party: c.campaigns[0]?.party ?? null,
         bio: c.bio,
-        whyRunning: c.whyRunning,
-        coreValues: c.coreValues,
+        whyRunning: committee?.whyRunning ?? null,
+        coreValues: committee?.coreValues ?? null,
       })),
     },
     positions.map((p) => ({ title: p.title ?? "", body: p.body, keyPoints: p.keyPoints })),
     topics.map((t) => ({ title: t.title, keyMessage: t.keyMessage, talkingPoints: t.talkingPoints }))
   )
   draft.heroHeadline = draft.heroHeadline || committeeName
-  return { draft, multiCandidate: candidates.length > 1 }
+  return { draft, multiCandidate }
 }
 
 // ─── First-run generation ────────────────────────────────────────────────────

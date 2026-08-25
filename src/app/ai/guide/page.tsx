@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { ArrowRight, Check, X } from "lucide-react"
 
-export const metadata = { title: "Writing guide · Communications" }
+export const metadata = { title: "Writing guide · AI Assistant" }
 
 const STEPS = [
   {
@@ -11,7 +11,7 @@ const STEPS = [
       <>
         Every draft is grounded in what the tool knows about you. Before you generate anything, fill out
         the{" "}
-        <Link href="/communications/interview" className="font-medium text-[#c4910a] hover:underline">
+        <Link href="/settings/voice" className="font-medium text-[#c4910a] hover:underline">
           Interview
         </Link>{" "}
         — your background, why you&apos;re running, your core values, and the tone you want to sound like.
@@ -26,11 +26,11 @@ const STEPS = [
     body: (
       <>
         Add your issue positions and reference material on the{" "}
-        <Link href="/communications/context" className="font-medium text-[#c4910a] hover:underline">
+        <Link href="/settings/context" className="font-medium text-[#c4910a] hover:underline">
           Context
         </Link>{" "}
         page, and set up recurring subjects on the{" "}
-        <Link href="/communications/topics" className="font-medium text-[#c4910a] hover:underline">
+        <Link href="/settings/topics" className="font-medium text-[#c4910a] hover:underline">
           Topics
         </Link>{" "}
         page (each with a key message and priority talking points). When you generate on a topic, that
@@ -71,7 +71,7 @@ const STEPS = [
       <>
         Draft and explore quickly on Haiku, then regenerate the pieces that matter on a stronger model.
         See the{" "}
-        <Link href="/communications/models" className="font-medium text-[#c4910a] hover:underline">
+        <Link href="/ai/models" className="font-medium text-[#c4910a] hover:underline">
           model comparison
         </Link>{" "}
         for the same speech written by each — and what you get for the extra credits.
@@ -161,13 +161,13 @@ export default function WritingGuidePage() {
 
       <div className="flex flex-wrap gap-3">
         <Link
-          href="/communications/models"
+          href="/ai/models"
           className="inline-flex items-center gap-1.5 rounded-lg bg-[#1b3a6b] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#1b3a6b]/90"
         >
           Compare the models <ArrowRight className="h-4 w-4" />
         </Link>
         <Link
-          href="/communications/interview"
+          href="/settings/voice"
           className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white px-4 py-2.5 text-sm font-medium text-[#1a1a2e] transition-colors hover:border-[#1b3a6b]/40"
         >
           Start with the interview

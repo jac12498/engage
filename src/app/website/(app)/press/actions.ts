@@ -46,7 +46,7 @@ export async function findPressCoverage(keywords?: string): Promise<FindResult> 
   const ctx = await requireContext()
   if (!ctx) return { ok: false, error: "You must be signed in." }
   const { candidate, campaign, committee } = ctx
-  const profile = campaignProfile(candidate, campaign)
+  const profile = campaignProfile(committee, candidate, campaign)
 
   const usage = await consumeNewsSearch(toPlanId(committee.plan), committee)
   if (!usage.ok) {

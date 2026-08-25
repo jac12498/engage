@@ -3,8 +3,16 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, LogOut, Lock, Menu, X, Sparkles, Users, UserRound, Megaphone, Building2, ShieldCheck, History, type LucideIcon } from "lucide-react"
-import { NAV_MODULES, navModuleUnlocked, navUnlockPlan, activeModuleKey } from "@/lib/nav"
+import { LayoutDashboard, LogOut, Lock, Menu, X, Sparkles, Users, UserRound, Megaphone, Building2, ShieldCheck, History, Bot, type LucideIcon } from "lucide-react"
+import {
+  NAV_MODULES,
+  navModuleUnlocked,
+  navUnlockPlan,
+  activeModuleKey,
+  GROUNDING_SECTIONS,
+  AI_ASSISTANT_SECTIONS,
+  type NavSubItem,
+} from "@/lib/nav"
 import { APP_VERSION } from "@/lib/releaseNotes"
 import { PLAN_LABELS, type PlanId } from "@/lib/entitlements"
 import { signOutAction } from "@/app/actions/auth"
@@ -76,8 +84,15 @@ export function AppSidebar({
   // privilege that makes their destination usable.
   const isCommitteeAdmin = role === "owner" || role === "admin"
   const canEditProfile = perms.has("ai-communications:update") || perms.has("candidate-websites:update")
+  const canEditGrounding = perms.has("ai-communications:update")
   const canManageCampaigns = perms.has("campaigns:manage")
   const canManageBilling = perms.has("billing:manage")
+  // Grounding pages live at canonical /settings/* URLs; the sidebar shows them under
+  // Committee Settings (multi-candidate) or Candidate Settings (single-candidate).
+  const onGrounding =
+    pathname.startsWith("/settings/voice") ||
+    pathname.startsWith("/settings/topics") ||
+    pathname.startsWith("/settings/context")
   const close = () => setOpen(false)
 
   function isActive(href: string, exact?: boolean) {
@@ -157,6 +172,8 @@ export function AppSidebar({
             // grants no read privilege on it. Plan-locked-but-readable modules
             // still show as an upsell below.
             if (!perms.has(`${m.key}:read`)) return null
+            // Dev-only modules (e.g. the website generator being reworked) are hidden in prod.
+            if (m.devOnly && !isDev) return null
             // The website is committee-owned; a party/multi-candidate committee sees
             // it as the "Committee Website", a single-candidate committee as theirs.
             const name =
@@ -193,15 +210,45 @@ export function AppSidebar({
               </div>
             )
           })}
+
+          {/* AI Assistant — reference for AI-assisted writing (visible to all). */}
+          <div className="pt-3" />
+          <NavGroup
+            href="/ai/guide"
+            label="AI Assistant"
+            icon={Bot}
+            active={pathname === "/ai" || pathname.startsWith("/ai/")}
+            onClick={close}
+            isActive={isActive}
+            sections={AI_ASSISTANT_SECTIONS}
+          />
         </nav>
 
         {/* Footer */}
         <div className="space-y-0.5 border-t border-border px-3 py-3">
-          {isCommitteeAdmin && (
-            <Row href="/committees/settings" label="Committee Settings" icon={Building2} active={isActive("/committees/settings")} onClick={close} />
+          {(isCommitteeAdmin || (multiCandidate && canEditGrounding)) && (
+            <NavGroup
+              href="/committees/settings"
+              label="Committee Settings"
+              icon={Building2}
+              active={isActive("/committees/settings") || (multiCandidate && onGrounding)}
+              onClick={close}
+              isActive={isActive}
+              // Multi-candidate: grounding is the committee's shared voice.
+              sections={multiCandidate && canEditGrounding ? GROUNDING_SECTIONS : []}
+            />
           )}
           {canEditProfile && (
-            <Row href="/settings" label="Candidate Settings" icon={UserRound} active={isActive("/settings")} onClick={close} />
+            <NavGroup
+              href="/settings"
+              label="Candidate Settings"
+              icon={UserRound}
+              active={isActive("/settings", true) || (!multiCandidate && onGrounding)}
+              onClick={close}
+              isActive={isActive}
+              // Single-candidate: grounding reads as the candidate's own voice.
+              sections={!multiCandidate && canEditGrounding ? GROUNDING_SECTIONS : []}
+            />
           )}
           {activeCandidateId && canManageCampaigns && (
             <Row href="/campaigns" label="Campaigns" icon={Megaphone} active={isActive("/campaigns")} onClick={close} />
@@ -313,5 +360,37 @@ function Row({
       <Icon className={`h-4 w-4 shrink-0 ${active ? "text-white" : "text-muted-foreground"}`} />
       <span className="truncate">{label}</span>
     </Link>
+  )
+}
+
+/** A nav item that expands into indented sub-sections when its route tree is active. */
+function NavGroup({
+  href,
+  label,
+  icon,
+  active,
+  sections,
+  onClick,
+  isActive,
+}: {
+  href: string
+  label: string
+  icon: LucideIcon
+  active: boolean
+  sections: NavSubItem[]
+  onClick: () => void
+  isActive: (href: string, exact?: boolean) => boolean
+}) {
+  return (
+    <div>
+      <Row href={href} label={label} icon={icon} active={false} bold={active} onClick={onClick} />
+      {active && sections.length > 0 && (
+        <div className="mb-1 mt-0.5 ml-4 space-y-0.5 border-l border-border pl-3">
+          {sections.map((s) => (
+            <Row key={s.href} href={s.href} label={s.label} icon={s.icon} active={isActive(s.href, s.exact)} onClick={onClick} small />
+          ))}
+        </div>
+      )}
+    </div>
   )
 }

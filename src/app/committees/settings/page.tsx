@@ -1,4 +1,3 @@
-import { AppShell } from "@/components/AppShell"
 import { prisma } from "@/lib/prisma"
 import { requireCommittee } from "@/lib/context"
 import { committeeTypeLabel, isJurisdiction, allowsMultipleCandidates } from "@/lib/committeeTypes"
@@ -64,8 +63,7 @@ export default async function CommitteeSettingsPage() {
   })
 
   return (
-    <AppShell>
-      <div className="mx-auto max-w-2xl">
+    <div className="mx-auto max-w-2xl">
         <h1 className="text-2xl font-bold text-[#1a1a2e]">Committee settings</h1>
         <p className="mt-1 text-muted-foreground">
           Your committee&rsquo;s registration details, and the committees you belong to.
@@ -125,7 +123,6 @@ export default async function CommitteeSettingsPage() {
             />
           </div>
         </div>
-      </div>
-    </AppShell>
+    </div>
   )
 }

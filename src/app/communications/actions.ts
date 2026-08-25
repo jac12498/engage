@@ -158,15 +158,15 @@ async function requireCampaignId(perm: PermissionKey): Promise<string | null> {
   return ctx.campaign.id
 }
 
-/** The active candidate id (person-profile updates target the Candidate, not a run). */
-async function requireCandidateId(perm: PermissionKey): Promise<string | null> {
+/** The active committee id — grounding, topics, and context all live at the committee. */
+async function requireCommitteeId(perm: PermissionKey): Promise<string | null> {
   const ctx = await getActiveContext()
-  if (!ctx?.candidate) return null
+  if (!ctx) return null
   if (!ctx.permissions.has(perm)) return null
-  return ctx.candidate.id
+  return ctx.committee.id
 }
 
-// ─── Candidate interview / profile ───────────────────────────────────────────
+// ─── Committee grounding: interview / voice profile ──────────────────────────
 
 /** Free-text profile fields the interview wizard can update (any subset). */
 export interface ProfileInput {
@@ -190,17 +190,29 @@ const PROFILE_KEYS: (keyof ProfileInput)[] = [
 export async function updateCampaignProfile(
   input: ProfileInput
 ): Promise<{ ok: boolean; error?: string }> {
-  const candidateId = await requireCandidateId("ai-communications:update")
-  if (!candidateId) return { ok: false, error: "Not signed in." }
-
-  // Whitelist + normalize (empty string → null).
-  const data: Record<string, string | null> = {}
-  for (const key of PROFILE_KEYS) {
-    if (input[key] !== undefined) data[key] = input[key]?.trim() || null
+  const ctx = await getActiveContext()
+  if (!ctx?.candidate || !ctx.permissions.has("ai-communications:update")) {
+    return { ok: false, error: "Not signed in." }
   }
-  if (Object.keys(data).length === 0) return { ok: true }
 
-  await prisma.candidate.update({ where: { id: candidateId }, data })
+  // Whitelist + normalize (empty string → null). `bio` is candidate identity (the
+  // website renders it); the rest is committee-level grounding.
+  const candidateData: Record<string, string | null> = {}
+  const committeeData: Record<string, string | null> = {}
+  for (const key of PROFILE_KEYS) {
+    if (input[key] === undefined) continue
+    const value = input[key]?.trim() || null
+    if (key === "bio") candidateData[key] = value
+    else committeeData[key] = value
+  }
+
+  const ops = []
+  if (Object.keys(candidateData).length)
+    ops.push(prisma.candidate.update({ where: { id: ctx.candidate.id }, data: candidateData }))
+  if (Object.keys(committeeData).length)
+    ops.push(prisma.committee.update({ where: { id: ctx.committee.id }, data: committeeData }))
+  if (ops.length) await prisma.$transaction(ops)
+
   revalidatePath("/communications")
   return { ok: true }
 }
@@ -214,11 +226,11 @@ export async function saveInterview(input: {
   data: InterviewData
   coreValues?: string
 }): Promise<{ ok: boolean; error?: string }> {
-  const candidateId = await requireCandidateId("ai-communications:update")
-  if (!candidateId) return { ok: false, error: "Not signed in." }
+  const committeeId = await requireCommitteeId("ai-communications:update")
+  if (!committeeId) return { ok: false, error: "Not signed in." }
 
-  await prisma.candidate.update({
-    where: { id: candidateId },
+  await prisma.committee.update({
+    where: { id: committeeId },
     data: {
       interview: input.data as object,
       politicalLean: composeLeanSummary(input.data) || null,
@@ -242,8 +254,8 @@ export interface TopicInput {
 }
 
 export async function saveTopic(input: TopicInput): Promise<{ ok: boolean; error?: string }> {
-  const campaignId = await requireCampaignId("ai-communications:update")
-  if (!campaignId) return { ok: false, error: "Not signed in." }
+  const committeeId = await requireCommitteeId("ai-communications:update")
+  if (!committeeId) return { ok: false, error: "Not signed in." }
   if (!input.title.trim()) return { ok: false, error: "A title is required." }
 
   const data = {
@@ -255,20 +267,20 @@ export async function saveTopic(input: TopicInput): Promise<{ ok: boolean; error
   }
 
   if (input.id) {
-    await prisma.topic.updateMany({ where: { id: input.id, campaignId }, data })
+    await prisma.topic.updateMany({ where: { id: input.id, committeeId }, data })
   } else {
-    await prisma.topic.create({ data: { campaignId, ...data } })
+    await prisma.topic.create({ data: { committeeId, ...data } })
   }
 
-  revalidatePath("/communications/topics")
+  revalidatePath("/settings/topics")
   return { ok: true }
 }
 
 export async function deleteTopic(id: string): Promise<{ ok: boolean }> {
-  const campaignId = await requireCampaignId("ai-communications:update")
-  if (!campaignId) return { ok: false }
-  await prisma.topic.deleteMany({ where: { id, campaignId } })
-  revalidatePath("/communications/topics")
+  const committeeId = await requireCommitteeId("ai-communications:update")
+  if (!committeeId) return { ok: false }
+  await prisma.topic.deleteMany({ where: { id, committeeId } })
+  revalidatePath("/settings/topics")
   return { ok: true }
 }
 
@@ -292,17 +304,17 @@ const CONTEXT_TYPES = new Set(["note", "position", "reference"])
 export async function saveContextItem(
   input: ContextItemInput
 ): Promise<{ ok: boolean; error?: string }> {
-  const campaignId = await requireCampaignId("ai-communications:update")
-  if (!campaignId) return { ok: false, error: "Not signed in." }
+  const committeeId = await requireCommitteeId("ai-communications:update")
+  if (!committeeId) return { ok: false, error: "Not signed in." }
   if (!input.body.trim()) return { ok: false, error: "Context text is required." }
 
   const type = input.type && CONTEXT_TYPES.has(input.type) ? input.type : "note"
 
-  // Validate the topic belongs to this campaign (if provided).
+  // Validate the topic belongs to this committee (if provided).
   let topicId: string | null = null
   if (input.topicId) {
     const t = await prisma.topic.findFirst({
-      where: { id: input.topicId, campaignId },
+      where: { id: input.topicId, committeeId },
       select: { id: true },
     })
     if (!t) return { ok: false, error: "That topic could not be found." }
@@ -326,19 +338,19 @@ export async function saveContextItem(
   }
 
   if (input.id) {
-    await prisma.contextItem.updateMany({ where: { id: input.id, campaignId }, data })
+    await prisma.contextItem.updateMany({ where: { id: input.id, committeeId }, data })
   } else {
-    await prisma.contextItem.create({ data: { campaignId, ...data } })
+    await prisma.contextItem.create({ data: { committeeId, ...data } })
   }
 
-  revalidatePath("/communications/context")
+  revalidatePath("/settings/context")
   return { ok: true }
 }
 
 export async function deleteContextItem(id: string): Promise<{ ok: boolean }> {
-  const campaignId = await requireCampaignId("ai-communications:update")
-  if (!campaignId) return { ok: false }
-  await prisma.contextItem.deleteMany({ where: { id, campaignId } })
-  revalidatePath("/communications/context")
+  const committeeId = await requireCommitteeId("ai-communications:update")
+  if (!committeeId) return { ok: false }
+  await prisma.contextItem.deleteMany({ where: { id, committeeId } })
+  revalidatePath("/settings/context")
   return { ok: true }
 }

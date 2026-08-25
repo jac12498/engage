@@ -1,79 +1,64 @@
 import Link from "next/link"
-import { redirect } from "next/navigation"
 import {
   ClipboardList,
   BookOpen,
   Lightbulb,
-  ArrowRight,
   Check,
+  Circle,
   GraduationCap,
   Scale,
+  type LucideIcon,
 } from "lucide-react"
 import { prisma } from "@/lib/prisma"
 import { requireActiveCampaign } from "@/lib/context"
-import { computeKnowledge } from "@/lib/comms/interview"
-import { MEDIA, MEDIUM_LABELS } from "@/lib/comms/prompts"
+import { allowsMultipleCandidates } from "@/lib/committeeTypes"
+import { computeSetupChecklist } from "@/lib/comms/interview"
+
+const STEP_ICON: Record<string, LucideIcon> = {
+  voice: ClipboardList,
+  topics: Lightbulb,
+  context: BookOpen,
+}
 
 export default async function CommunicationsOverview() {
-  const { candidate, campaign: activeCampaign } = await requireActiveCampaign()
+  const { candidate, committee, campaign: activeCampaign } = await requireActiveCampaign()
 
-  const campaignCounts = await prisma.campaign.findUnique({
-    where: { id: activeCampaign.id },
-    select: { _count: { select: { topics: true, contextItems: true, generations: true } } },
-  })
-  if (!campaignCounts) redirect("/onboarding")
-  const counts = campaignCounts._count
+  // Multi-candidate committees frame this around the committee's shared voice; a
+  // single-candidate committee frames it around the candidate.
+  const isCommittee = allowsMultipleCandidates(committee.committeeType)
+  const voiceOwner = isCommittee ? "your committee's voice" : `${candidate.candidateName}'s voice`
 
-  const [positionCount, referenceCount] = await Promise.all([
-    prisma.contextItem.count({ where: { campaignId: activeCampaign.id, type: "position" } }),
-    prisma.contextItem.count({ where: { campaignId: activeCampaign.id, type: "reference" } }),
+  // Topics + context are committee-level grounding; generations belong to the run.
+  const [topicsCount, generationsCount, positionCount, referenceCount] = await Promise.all([
+    prisma.topic.count({ where: { committeeId: committee.id } }),
+    prisma.generation.count({ where: { campaignId: activeCampaign.id } }),
+    prisma.contextItem.count({ where: { committeeId: committee.id, type: "position" } }),
+    prisma.contextItem.count({ where: { committeeId: committee.id, type: "reference" } }),
   ])
 
-  const knowledge = computeKnowledge({
+  const checklist = computeSetupChecklist({
+    isCommittee,
+    whyRunning: committee.whyRunning,
     bio: candidate.bio,
-    whyRunning: candidate.whyRunning,
-    experience: candidate.experience,
-    education: candidate.education,
-    coreValues: candidate.coreValues,
-    politicalLean: candidate.politicalLean,
-    voiceTone: candidate.voiceTone,
-    issuesCount: positionCount,
-    newsCount: referenceCount,
+    experience: committee.experience,
+    coreValues: committee.coreValues,
+    politicalLean: committee.politicalLean,
+    voiceTone: committee.voiceTone,
+    topicsCount,
+    positionCount,
+    referenceCount,
   })
-
-  const setup = [
-    {
-      href: "/communications/interview",
-      icon: ClipboardList,
-      label: "Interview",
-      desc: "Who you are, your values, your voice",
-      meta: `${knowledge.score}% complete`,
-    },
-    {
-      href: "/communications/topics",
-      icon: Lightbulb,
-      label: "Topics",
-      desc: "Hot topics you want to write about",
-      meta: `${counts.topics} topic${counts.topics === 1 ? "" : "s"}`,
-    },
-    {
-      href: "/communications/context",
-      icon: BookOpen,
-      label: "Context",
-      desc: "Notes, positions & references that ground your drafts",
-      meta: `${counts.contextItems} item${counts.contextItems === 1 ? "" : "s"}`,
-    },
-  ]
+  const complete = checklist.score >= 100
 
   const learn = [
     {
-      href: "/communications/guide",
+      href: "/ai/guide",
       icon: GraduationCap,
       label: "Writing Guide",
       desc: "Get the most out of AI-assisted writing in five steps",
     },
     {
-      href: "/communications/models",
+      href: "/ai/models",
       icon: Scale,
       label: "Choosing a Model",
       desc: "The same speech from each model — and what the credits buy",
@@ -85,86 +70,66 @@ export default async function CommunicationsOverview() {
       <div>
         <h1 className="text-2xl font-bold text-[#1a1a2e]">Communications</h1>
         <p className="mt-1 text-muted-foreground">
-          Draft speeches, letters, social posts, and print — in {candidate.candidateName}&apos;s voice.
+          Draft speeches, letters, social posts, and print — in {voiceOwner}.
         </p>
       </div>
 
-      {/* Knowledge meter — hidden once campaign knowledge is fully complete */}
-      {knowledge.score < 100 && (
-      <div className="rounded-2xl border border-border bg-white p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-[#c4910a]">
-              Campaign knowledge
-            </h2>
-            <p className="mt-1 text-2xl font-bold text-[#1a1a2e]">{knowledge.score}% complete</p>
-          </div>
-          <p className="max-w-xs text-sm text-muted-foreground">
-            The more we know, the more every draft sounds like you — not a generic politician.
-          </p>
-        </div>
-        <div className="mt-4 h-2.5 w-full overflow-hidden rounded-full bg-muted">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-[#f0b429] to-[#c4910a] transition-all"
-            style={{ width: `${knowledge.score}%` }}
-          />
-        </div>
-      </div>
-      )}
-
-      {/* Set up */}
+      {/* Set up — a transparent checklist of what grounds generation */}
       <div>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Set up
-        </h2>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Set up</h2>
+          <span className="text-xs font-medium text-muted-foreground">
+            {complete ? "All set" : `${checklist.doneCount} of ${checklist.total} complete`}
+          </span>
+        </div>
+
+        {complete ? (
+          <p className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-[#1e6b3a]">
+            <Check className="h-4 w-4" /> Setup complete — you&rsquo;re ready to generate great content.
+          </p>
+        ) : (
+          <>
+            <p className="mb-3 text-sm text-muted-foreground">
+              To help produce content, complete the setup steps below.
+            </p>
+            <div className="mb-4 h-2 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-[#f0b429] to-[#c4910a] transition-all"
+                style={{ width: `${checklist.score}%` }}
+              />
+            </div>
+          </>
+        )}
+
         <div className="grid gap-3 sm:grid-cols-3">
-          {setup.map((s) => {
-            const Icon = s.icon
+          {checklist.steps.map((step) => {
+            const Icon = STEP_ICON[step.id]
             return (
-              <Link
-                key={s.href}
-                href={s.href}
-                className="group rounded-xl border border-border bg-white p-5 transition-colors hover:border-[#1b3a6b]/40"
-              >
-                <Icon className="h-5 w-5 text-[#1b3a6b]" />
-                <h3 className="mt-3 font-semibold text-[#1a1a2e]">{s.label}</h3>
-                <p className="mt-0.5 text-sm text-muted-foreground">{s.desc}</p>
-                <p className="mt-2 text-xs font-medium text-[#c4910a]">{s.meta}</p>
-              </Link>
+              <div key={step.id} className="rounded-xl border border-border bg-white p-5">
+                <Link href={step.href} className="group inline-flex items-center gap-2">
+                  <Icon className="h-5 w-5 text-[#1b3a6b]" />
+                  <h3 className="font-semibold text-[#1a1a2e] group-hover:text-[#1b3a6b] group-hover:underline">
+                    {step.label}
+                  </h3>
+                </Link>
+                <ul className="mt-3 space-y-1.5">
+                  {step.items.map((item) => (
+                    <li key={item.label} className="flex items-start gap-2 text-sm">
+                      {item.done ? (
+                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#1e6b3a]" />
+                      ) : (
+                        <Circle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/40" />
+                      )}
+                      <span className={item.done ? "text-[#1a1a2e]" : "text-muted-foreground"}>
+                        {item.label}
+                        {item.optional && <span className="text-muted-foreground/70"> (optional)</span>}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )
           })}
-        </div>
-      </div>
-
-      {/* Create */}
-      <div>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Create
-        </h2>
-        {!knowledge.ready && (
-          <p className="mb-3 rounded-lg border border-[#c4910a]/30 bg-[#f0b429]/10 px-4 py-2.5 text-sm text-[#7a5a00]">
-            Tip: finish the{" "}
-            <Link href="/communications/interview" className="font-semibold underline">
-              interview
-            </Link>{" "}
-            and add an issue or two in{" "}
-            <Link href="/communications/context" className="font-semibold underline">
-              Context
-            </Link>{" "}
-            for much stronger drafts.
-          </p>
-        )}
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {MEDIA.map((m) => (
-            <Link
-              key={m}
-              href={`/communications/${m === "social" ? "social" : m}`}
-              className="group flex items-center justify-between rounded-xl border border-border bg-white p-5 transition-colors hover:border-[#1b3a6b]/40"
-            >
-              <span className="font-semibold text-[#1a1a2e]">{MEDIUM_LABELS[m]}</span>
-              <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-            </Link>
-          ))}
         </div>
       </div>
 
@@ -195,10 +160,10 @@ export default async function CommunicationsOverview() {
         </div>
       </div>
 
-      {counts.generations > 0 && (
+      {generationsCount > 0 && (
         <p className="text-sm text-muted-foreground">
           <Check className="mr-1 inline h-4 w-4 text-[#1e6b3a]" />
-          {counts.generations} saved communication{counts.generations === 1 ? "" : "s"} across your media pages.
+          {generationsCount} saved communication{generationsCount === 1 ? "" : "s"} across your media pages.
         </p>
       )}
     </div>

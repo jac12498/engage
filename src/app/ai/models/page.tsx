@@ -3,7 +3,7 @@ import { Sparkles, ArrowRight } from "lucide-react"
 import { ModelComparisonExplorer } from "@/components/communications/ModelComparisonExplorer"
 import { MODELS } from "./samples"
 
-export const metadata = { title: "Choosing a model · Communications" }
+export const metadata = { title: "Choosing a model · AI Assistant" }
 
 export default async function ModelComparisonPage({
   searchParams,
@@ -80,7 +80,7 @@ export default async function ModelComparisonPage({
           A good habit: draft and explore on Haiku, then regenerate your finalists on Opus. New to the
           workflow?{" "}
           <Link
-            href="/communications/guide"
+            href="/ai/guide"
             className="inline-flex items-center gap-1 font-medium text-[#c4910a] hover:underline"
           >
             Read the writing guide <ArrowRight className="h-3.5 w-3.5" />

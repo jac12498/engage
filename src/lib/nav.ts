@@ -55,6 +55,12 @@ export interface NavModule {
    * or an explicit plan for core surfaces (Voter File).
    */
   minPlan?: PlanId
+  /**
+   * Dev-only: hidden entirely in production (nav + dashboard + route), available
+   * on the dev database. Used to keep a feature in the workspace while it's still
+   * being built. Gated by isDevEnv() (server side).
+   */
+  devOnly?: boolean
 }
 
 /**
@@ -71,16 +77,11 @@ export const NAV_MODULES: NavModule[] = [
     match: "/communications",
     sections: [
       { href: "/communications", label: "Overview", icon: LayoutDashboard, exact: true },
-      { href: "/communications/interview", label: "Interview", icon: ClipboardList },
-      { href: "/communications/topics", label: "Topics", icon: Lightbulb },
-      { href: "/communications/context", label: "Context", icon: BookOpen },
-      { href: "/communications/speeches", label: "Speeches", icon: Mic },
+      { href: "/communications/speeches", label: "Speeches", icon: Mic, gate: "speeches" },
       { href: "/communications/letters", label: "Letters", icon: Mail },
       { href: "/communications/social", label: "Social Media", icon: Share2 },
       { href: "/communications/print", label: "Print Media", icon: Newspaper },
       { href: "/communications/newsletter", label: "Newsletter Articles", icon: ScrollText },
-      { href: "/communications/guide", label: "Writing Guide", icon: GraduationCap },
-      { href: "/communications/models", label: "Choosing a Model", icon: Scale },
     ],
   },
   {
@@ -89,6 +90,8 @@ export const NAV_MODULES: NavModule[] = [
     href: "/website",
     icon: Globe,
     match: "/website",
+    // Dev-only while the committee-website generator is being reworked — hidden in prod.
+    devOnly: true,
     sections: [
       { href: "/website", label: "Builder", icon: Sparkles, exact: true },
       { href: "/website/settings", label: "Site settings", icon: Settings },
@@ -162,6 +165,25 @@ export const NAV_MODULES: NavModule[] = [
     match: "/slate",
     sections: [],
   },
+]
+
+/**
+ * The committee-level AI grounding sub-items. Data always lives on the committee,
+ * but the pages sit at canonical /settings/* URLs and the sidebar places them under
+ * **Committee Settings** for a multi-candidate committee (the committee's shared
+ * voice) or **Candidate Settings** for a single-candidate committee (reads as the
+ * candidate's) — see AppSidebar. Gated on ai-communications:update.
+ */
+export const GROUNDING_SECTIONS: NavSubItem[] = [
+  { href: "/settings/voice", label: "Voice & Interview", icon: ClipboardList },
+  { href: "/settings/topics", label: "Topics", icon: Lightbulb },
+  { href: "/settings/context", label: "Context", icon: BookOpen },
+]
+
+/** AI Assistant sub-items — reference for AI-assisted writing (visible to all). */
+export const AI_ASSISTANT_SECTIONS: NavSubItem[] = [
+  { href: "/ai/guide", label: "Writing Guide", icon: GraduationCap },
+  { href: "/ai/models", label: "Choosing a Model", icon: Scale },
 ]
 
 const planRank = (p: PlanId) => PLAN_ORDER.indexOf(p)

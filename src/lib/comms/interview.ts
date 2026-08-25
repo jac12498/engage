@@ -65,53 +65,90 @@ export const VOICE_TONES: string[] = [
   "Optimistic and inspiring",
 ]
 
-// ─── Knowledge completeness ──────────────────────────────────────────────────
-
-export interface KnowledgeInput {
-  bio?: string | null
-  whyRunning?: string | null
-  experience?: string | null
-  education?: string | null
-  coreValues?: string | null
-  politicalLean?: string | null
-  voiceTone?: string | null
-  issuesCount: number
-  newsCount: number
-}
-
-export type SectionId = "about" | "values" | "issues" | "press" | "voice"
-
-export interface KnowledgeResult {
-  score: number // 0–100
-  sections: Record<SectionId, boolean>
-  /** Enough to generate decent copy. */
-  ready: boolean
-}
+// ─── Setup checklist ─────────────────────────────────────────────────────────
+// A transparent, per-step checklist of exactly what grounds generation — so the
+// user can see what's provided and what's still needed (replaces the old opaque
+// weighted "knowledge" score). Optional items are shown but don't gate 100%.
 
 const has = (s: string | null | undefined) => !!s && s.trim().length > 0
 
-// Section weights sum to 100; issues weigh most (they drive generation quality).
-const WEIGHTS: Record<SectionId, number> = {
-  about: 25,
-  values: 20,
-  issues: 30,
-  press: 10,
-  voice: 15,
+export interface SetupItem {
+  label: string
+  done: boolean
+  /** Shown but not counted toward the score (a nice-to-have). */
+  optional?: boolean
 }
 
-export function computeKnowledge(input: KnowledgeInput): KnowledgeResult {
-  const sections: Record<SectionId, boolean> = {
-    about: has(input.whyRunning) && (has(input.bio) || has(input.experience)),
-    values: has(input.politicalLean) || has(input.coreValues),
-    issues: input.issuesCount >= 2,
-    press: input.newsCount >= 1,
-    voice: has(input.voiceTone),
-  }
-  const score = (Object.keys(WEIGHTS) as SectionId[]).reduce(
-    (sum, id) => sum + (sections[id] ? WEIGHTS[id] : 0),
-    0
-  )
-  // "Ready" once the essentials are in place: a reason for running and an issue.
-  const ready = sections.about && input.issuesCount >= 1
-  return { score, sections, ready }
+export interface SetupStep {
+  id: "voice" | "topics" | "context"
+  label: string
+  href: string
+  items: SetupItem[]
+}
+
+export interface SetupChecklist {
+  steps: SetupStep[]
+  doneCount: number // completed REQUIRED items
+  total: number // total REQUIRED items
+  score: number // 0–100 over required items
+}
+
+export interface SetupInput {
+  /** Multi-candidate committee → committee-framed labels + no person bio. */
+  isCommittee: boolean
+  whyRunning?: string | null
+  bio?: string | null
+  experience?: string | null
+  coreValues?: string | null
+  politicalLean?: string | null
+  voiceTone?: string | null
+  topicsCount: number
+  positionCount: number
+  referenceCount: number
+}
+
+/** What grounds generation, grouped by setup step, with per-item done flags. */
+export function computeSetupChecklist(input: SetupInput): SetupChecklist {
+  // Person has a bio; a committee describes itself through its history/background.
+  const background = input.isCommittee
+    ? has(input.experience)
+    : has(input.bio) || has(input.experience)
+
+  const steps: SetupStep[] = [
+    {
+      id: "voice",
+      label: "Voice & Interview",
+      href: "/settings/voice",
+      items: [
+        {
+          label: input.isCommittee ? "What the committee stands for" : "Why you're running",
+          done: has(input.whyRunning),
+        },
+        { label: input.isCommittee ? "History & background" : "Bio or background", done: background },
+        { label: "Core values or political lean", done: has(input.coreValues) || has(input.politicalLean) },
+        { label: "Preferred voice & tone", done: has(input.voiceTone) },
+      ],
+    },
+    {
+      id: "topics",
+      label: "Topics",
+      href: "/settings/topics",
+      items: [{ label: "At least one topic to write about", done: input.topicsCount >= 1 }],
+    },
+    {
+      id: "context",
+      label: "Context",
+      href: "/settings/context",
+      items: [
+        { label: "At least one position on an issue", done: input.positionCount >= 1 },
+        { label: "A reference or news item", done: input.referenceCount >= 1, optional: true },
+      ],
+    },
+  ]
+
+  const required = steps.flatMap((s) => s.items).filter((i) => !i.optional)
+  const doneCount = required.filter((i) => i.done).length
+  const total = required.length
+  const score = total === 0 ? 100 : Math.round((doneCount / total) * 100)
+  return { steps, doneCount, total, score }
 }

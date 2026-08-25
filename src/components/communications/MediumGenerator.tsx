@@ -403,7 +403,7 @@ export function MediumGenerator({
                 </p>
               )}
               <Link
-                href={`/communications/models?format=${EXAMPLE_FORMAT[medium]}`}
+                href={`/ai/models?format=${EXAMPLE_FORMAT[medium]}`}
                 className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-[#c4910a] hover:underline"
               >
                 See examples of each model

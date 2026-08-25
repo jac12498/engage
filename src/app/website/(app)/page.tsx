@@ -26,9 +26,10 @@ export default async function WebsitePage() {
 
   if (!website) {
     const person = candidate
-      ? await prisma.candidate.findUnique({ where: { id: candidate.id }, select: { bio: true, whyRunning: true } })
+      ? await prisma.candidate.findUnique({ where: { id: candidate.id }, select: { bio: true } })
       : null
-    return <CreateSitePanel committeeName={committee.name} thinProfile={!person?.bio && !person?.whyRunning} />
+    // `whyRunning` is committee-level grounding (Phase 1).
+    return <CreateSitePanel committeeName={committee.name} thinProfile={!person?.bio && !committee.whyRunning} />
   }
 
   const s = website

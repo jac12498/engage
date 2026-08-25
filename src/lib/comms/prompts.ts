@@ -110,6 +110,18 @@ export function mediumForType(type: ContentType): Medium {
   return "print"
 }
 
+/**
+ * The media available to a committee. A multi-candidate (party/committee) committee
+ * doesn't do speeches — a candidate gives a speech, the committee doesn't.
+ */
+export function mediaForCommittee(multiCandidate: boolean): Medium[] {
+  return multiCandidate ? MEDIA.filter((m) => m !== "speeches") : MEDIA
+}
+
+export function mediumAllowed(medium: Medium, multiCandidate: boolean): boolean {
+  return mediaForCommittee(multiCandidate).includes(medium)
+}
+
 // Models where thinking is ON by default (the "5" generation). Communications is
 // short-form drafting streamed into an editor, so we disable thinking on those:
 // it keeps time-to-first-token low and lets the whole max_tokens budget fund the
