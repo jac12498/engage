@@ -27,14 +27,36 @@ const DEST_ENV = "D:/EngageCampaign/.env" // dev
 const DEV_REF = "wkjelsyxeeflslibuinq"
 const PROD_REF = "heypcbktgbpxppkqfrax"
 
-const src = dotenv.parse(fs.readFileSync(SOURCE_ENV))
+// Source connection. Prefer an explicit SOURCE_URL from the environment so the
+// production credential never has to be written to a file; fall back to
+// version10.3's .env, which is where it lives once that repo is set up again.
+//
+//   PowerShell:  $env:SOURCE_URL="postgresql://..."; node scripts/dev/copy-public-districts.mjs
+//   bash:        SOURCE_URL="postgresql://..." node scripts/dev/copy-public-districts.mjs
+let srcUrl = process.env.SOURCE_URL || ""
+if (!srcUrl) {
+  if (!fs.existsSync(SOURCE_ENV)) {
+    throw new Error(
+      "No source connection available.\n" +
+        `  Set SOURCE_URL in the environment (production DIRECT_URL), or restore ${SOURCE_ENV}.`,
+    )
+  }
+  const src = dotenv.parse(fs.readFileSync(SOURCE_ENV))
+  srcUrl = src.DIRECT_URL || src.DATABASE_URL || ""
+}
+if (!srcUrl) throw new Error("Source connection string is empty — aborting.")
+
 const dst = dotenv.parse(fs.readFileSync(DEST_ENV))
-const srcUrl = src.DIRECT_URL || src.DATABASE_URL
 const dstUrl = dst.DIRECT_URL || dst.DATABASE_URL
 
 if (srcUrl === dstUrl) throw new Error("Source and destination are identical — aborting.")
 if (dstUrl.includes(PROD_REF)) throw new Error("Destination looks like PROD — aborting.")
 if (!dstUrl.includes(DEV_REF)) throw new Error("Destination is not the known DEV ref — aborting.")
+
+// Echo which projects are in play (refs only, never credentials) so a mistake is
+// visible before anything is written.
+const refOf = (u) => u.match(/postgres\.([a-z0-9]+)/)?.[1] ?? "unknown"
+console.log(`source ref ${refOf(srcUrl)} (read-only)  ->  dest ref ${refOf(dstUrl)} (dev)`)
 
 const source = new Pool({ connectionString: srcUrl, max: 4 })
 const dest = new Pool({ connectionString: dstUrl, max: 4 })
