@@ -205,29 +205,32 @@ export async function executeTool(campaignId: string, name: string, input: Input
   }
 }
 
+/** The props shape of each block type, for prompting the model to produce valid props. */
+export const BLOCK_PROP_SHAPES: Record<string, string> = {
+  hero: "{ headline: string, subhead?: string, showHeadshot?: boolean, imageUrl?: string (banner image URL), primaryCta?: {label,href}, secondaryCta?: {label,href} }",
+  richText: "{ heading?: string, body: string (plain text; a blank line starts a new paragraph), cta?: {label,href} }",
+  image: "{ url: string (image URL), alt?: string, caption?: string }",
+  issuesGrid: "{ heading?: string, intro?: string, items: [{title, body}] (max 12) }",
+  volunteerForm: "{ heading?: string, intro?: string }  (the signup form itself is automatic)",
+  newsletterSignup:
+    "{ heading?: string, intro?: string, buttonLabel?: string }  (the email-newsletter signup form is automatic; visitors double opt-in via a confirmation email)",
+  cta: "{ heading?: string, text?: string, buttonLabel: string, href: string }",
+  endorsements: "{ heading?: string, intro?: string, items: [{name, role?, quote?}] (max 24) }",
+  newsFeed:
+    "{ heading?: string, intro?: string, types?: string[] subset of [press_release, op_ed, event_announcement, letter_to_editor], limit?: number }  — DYNAMIC: automatically lists the candidate's PUBLISHED AI-Communications pieces; it has no manual items.",
+  pressMentions:
+    "{ heading?: string, intro?: string, limit?: number }  — DYNAMIC: automatically lists APPROVED external press coverage about the candidate (managed in the Press coverage manager); it has no manual items. Use this for an 'In the news' / press-clips section.",
+  newsletterArchive:
+    "{ heading?: string, intro?: string, limit?: number }  — DYNAMIC: automatically lists the candidate's PUBLISHED newsletters (managed in the Newsletters manager); it has no manual items. Use this for a newsletter archive / past-issues section.",
+  events: "{ heading?: string, intro?: string, items: [{title, date?, location?, description?}] (max 24) }",
+  faq: "{ heading?: string, intro?: string, items: [{q, a}] (max 24) }",
+}
+
 /** Human-readable block vocabulary for the system prompt so the model produces valid props. */
 export function describeBlockVocabulary(): string {
-  const shapes: Record<string, string> = {
-    hero: "{ headline: string, subhead?: string, showHeadshot?: boolean, primaryCta?: {label,href}, secondaryCta?: {label,href} }",
-    richText: "{ heading?: string, body: string (plain text; a blank line starts a new paragraph), cta?: {label,href} }",
-    issuesGrid: "{ heading?: string, intro?: string, items: [{title, body}] (max 12) }",
-    volunteerForm: "{ heading?: string, intro?: string }  (the signup form itself is automatic)",
-    newsletterSignup:
-      "{ heading?: string, intro?: string, buttonLabel?: string }  (the email-newsletter signup form is automatic; visitors double opt-in via a confirmation email)",
-    cta: "{ heading?: string, text?: string, buttonLabel: string, href: string }",
-    endorsements: "{ heading?: string, intro?: string, items: [{name, role?, quote?}] (max 24) }",
-    newsFeed:
-      "{ heading?: string, intro?: string, types?: string[] subset of [press_release, op_ed, event_announcement, letter_to_editor], limit?: number }  — DYNAMIC: automatically lists the candidate's PUBLISHED AI-Communications pieces; it has no manual items.",
-    pressMentions:
-      "{ heading?: string, intro?: string, limit?: number }  — DYNAMIC: automatically lists APPROVED external press coverage about the candidate (managed in the Press coverage manager); it has no manual items. Use this for an 'In the news' / press-clips section.",
-    newsletterArchive:
-      "{ heading?: string, intro?: string, limit?: number }  — DYNAMIC: automatically lists the candidate's PUBLISHED newsletters (managed in the Newsletters manager); it has no manual items. Use this for a newsletter archive / past-issues section.",
-    events: "{ heading?: string, intro?: string, items: [{title, date?, location?, description?}] (max 24) }",
-    faq: "{ heading?: string, intro?: string, items: [{q, a}] (max 24) }",
-  }
   const lines = BLOCK_ORDER.map((t) => {
     const spec = BLOCK_SPECS[t]
-    return `- ${t} (${spec.tier}): ${spec.description}\n    props: ${shapes[t]}`
+    return `- ${t} (${spec.tier}): ${spec.description}\n    props: ${BLOCK_PROP_SHAPES[t]}`
   })
   return lines.join("\n")
 }

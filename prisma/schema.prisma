@@ -529,6 +529,45 @@ model Block {
   @@schema("engagecampaign")
 }
 
+// A reusable website blueprint — a validated SitePrototype (pages + blocks + theme)
+// stored as JSON. `committeeId` null = a UNIVERSAL/global template (starter library);
+// set = a template PRIVATE to that committee (imported from another site, or "saved as
+// template" from their own). `source` records provenance ("saved" | "import:<host>" |
+// "seed"). `appliesTo` filters relevance by committee type ("party"|"candidate"|"any").
+// See lib/website/prototype.ts for the JSON shape + validation.
+model SiteTemplate {
+  id          String   @id @default(cuid())
+  committeeId String? // null = universal/global; set = private to that committee
+  name        String
+  description String?
+  appliesTo   String   @default("any") // "party" | "candidate" | "any"
+  source      String? // provenance: "saved" | "import:<host>" | "seed"
+  prototype   Json // the validated SitePrototype
+  createdBy   String? // user id who created it
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([committeeId])
+  @@schema("engagecampaign")
+}
+
+// An image used on a committee's website — stored in-DB (like committee logos) and
+// served publicly via /api/website/image/[id]. Blocks reference it by that URL.
+// Populated by website import (downloaded from the source site) or by upload in the
+// builder. `sourceUrl` records the original URL for imported images.
+model WebsiteImage {
+  id          String   @id @default(cuid())
+  committeeId String
+  data        Bytes
+  mime        String
+  alt         String?
+  sourceUrl   String?
+  createdAt   DateTime @default(now())
+
+  @@index([committeeId])
+  @@schema("engagecampaign")
+}
+
 // Raw intake from the public website volunteer form. Acts as a moderation queue:
 // signups arrive `pending`, then a reviewer Accepts (promotes to a Contact) or
 // Rejects. Kept separate from Contact so unauthenticated/spam input never lands
