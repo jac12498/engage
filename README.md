@@ -60,7 +60,13 @@ npm run build && npm start
 
 - [x] Contacts / CRM — import, search, duplicate merge, tags, donations
 - [x] AI Communications and newsletters
-- [x] Candidate websites (page/block builder)
+- [x] Basic Website Builder implementation — page/block editor, per-section AI,
+  scaffold-or-scratch site creation, page manager, templates, and website import
+  (manually walked through 2026-10-22)
+- [ ] **Visual website builder** — improve the builder from a page/block list into a more
+  visual, WYSIWYG-style editor (live preview, click-to-edit on the page, drag-and-drop
+  layout, visual theming). Not aiming to re-implement Squarespace or Wix — just a much
+  more visual editing experience than blocks alone.
 - [ ] Voter Outreach pillar
 - [ ] Fundraising pillar
 - [ ] Field Tools pillar
