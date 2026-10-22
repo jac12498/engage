@@ -173,7 +173,7 @@ function parseDraft(text: string): WebsiteDraft {
  * (which are invalid JSON — the multi-paragraph aboutBody is the usual offender).
  * Returns the parsed value, or null if it still can't be parsed.
  */
-export function extractJson(text: string): unknown {
+function extractJson(text: string): unknown {
   let t = text.trim()
   const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i)
   if (fence) t = fence[1]

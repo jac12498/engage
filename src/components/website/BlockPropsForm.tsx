@@ -1,11 +1,9 @@
 "use client"
 
-import { useRef, useState } from "react"
-import { Loader2, Check, Plus, Trash2, ArrowUp, ArrowDown, Sparkles, Upload } from "lucide-react"
+import { useState } from "react"
+import { Loader2, Check, Plus, Trash2, ArrowUp, ArrowDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { updateBlockProps } from "@/app/website/blocks-actions"
-import { aiWriteBlockAction } from "@/app/website/ai-actions"
-import { uploadWebsiteImage } from "@/app/website/import-actions"
 import { WEBSITE_NEWS_TYPES } from "@/lib/website/blocks"
 import { CONTENT_TYPE_LABELS, type ContentType } from "@/lib/comms/prompts"
 
@@ -69,88 +67,6 @@ function AreaField({
       <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={rows} className={inputCls} />
       {hint && <span className="mt-1 block text-xs text-muted-foreground">{hint}</span>}
     </label>
-  )
-}
-
-/** Image picker: preview + upload (stored server-side) + paste-URL + remove. */
-function ImageField({
-  label,
-  url,
-  onChange,
-}: {
-  label: string
-  url: string
-  onChange: (url: string) => void
-}) {
-  const inputRef = useRef<HTMLInputElement>(null)
-  const [uploading, setUploading] = useState(false)
-  const [err, setErr] = useState<string | null>(null)
-
-  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (inputRef.current) inputRef.current.value = ""
-    if (!file) return
-    setUploading(true)
-    setErr(null)
-    try {
-      const fd = new FormData()
-      fd.append("file", file)
-      const res = await uploadWebsiteImage(fd)
-      if (res.ok) onChange(res.url)
-      else setErr(res.error)
-    } catch {
-      setErr("Upload failed. Please try again.")
-    } finally {
-      setUploading(false)
-    }
-  }
-
-  return (
-    <div className="block">
-      <span className="mb-1 block text-sm font-medium text-[#1a1a2e]">{label}</span>
-      {url && (
-        <div className="mb-2 overflow-hidden rounded-lg border border-border">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={url} alt="" className="max-h-40 w-full object-cover" />
-        </div>
-      )}
-      <div className="flex flex-wrap items-center gap-2">
-        <input ref={inputRef} type="file" accept="image/*" onChange={onFile} className="hidden" />
-        <Button
-          size="sm"
-          variant="outline"
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          disabled={uploading}
-        >
-          {uploading ? (
-            <>
-              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Uploading…
-            </>
-          ) : (
-            <>
-              <Upload className="mr-1.5 h-4 w-4" /> {url ? "Replace" : "Upload image"}
-            </>
-          )}
-        </Button>
-        {url && (
-          <button
-            type="button"
-            onClick={() => onChange("")}
-            className="text-xs text-muted-foreground hover:text-red-600"
-          >
-            Remove
-          </button>
-        )}
-      </div>
-      <input
-        value={url}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="or paste an image URL"
-        className={`${inputCls} mt-2`}
-      />
-      {err && <p className="mt-1 text-sm text-red-600">{err}</p>}
-    </div>
   )
 }
 
@@ -275,7 +191,6 @@ function Fields({ type, p, set }: { type: string; p: Props; set: (patch: Props) 
             <input type="checkbox" checked={!!p.showHeadshot} onChange={(e) => set({ showHeadshot: e.target.checked })} />
             Show headshot
           </label>
-          <ImageField label="Banner image (optional)" url={s(p.imageUrl)} onChange={(v) => set({ imageUrl: v })} />
           <CtaField title="Primary button" cta={p.primaryCta as Item} onChange={(cta) => set({ primaryCta: cta })} />
           <CtaField title="Secondary button" cta={p.secondaryCta as Item} onChange={(cta) => set({ secondaryCta: cta })} />
         </>
@@ -322,25 +237,6 @@ function Fields({ type, p, set }: { type: string; p: Props; set: (patch: Props) 
               </>
             )}
           />
-        </>
-      )
-    case "image":
-      return (
-        <>
-          <ImageField label="Image" url={s(p.url)} onChange={(v) => set({ url: v })} />
-          <TextField label="Alt text (for accessibility)" value={s(p.alt)} onChange={(v) => set({ alt: v })} />
-          <TextField label="Caption (optional)" value={s(p.caption)} onChange={(v) => set({ caption: v })} />
-        </>
-      )
-    case "candidates":
-      return (
-        <>
-          <p className="rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-            Automatic — lists your committee&apos;s candidates, each linking to their own profile page. Add or
-            remove candidates in your committee to change who appears.
-          </p>
-          <TextField label="Heading" value={s(p.heading)} onChange={(v) => set({ heading: v })} />
-          <AreaField label="Intro" value={s(p.intro)} onChange={(v) => set({ intro: v })} rows={2} />
         </>
       )
     case "volunteerForm":
@@ -564,7 +460,7 @@ function NewsFeedFields({ p, set }: { p: Props; set: (patch: Props) => void }) {
           Only published pieces of these types appear. Publish a piece from Communications to show it here.
         </p>
       </div>
-      <label className="block max-w-40">
+      <label className="block max-w-[10rem]">
         <span className="mb-1 block text-sm font-medium text-[#1a1a2e]">Max items</span>
         <input
           type="number"
@@ -581,37 +477,12 @@ function NewsFeedFields({ p, set }: { p: Props; set: (patch: Props) => void }) {
 
 // ─── Form wrapper ────────────────────────────────────────────────────────────
 
-/** Is the block's primary content field still empty? Drives Write vs Improve. */
-function primaryEmpty(type: string, p: Props): boolean {
-  switch (type) {
-    case "hero":
-      return !s(p.headline)
-    case "richText":
-      return !s(p.body)
-    case "cta":
-      return !s(p.heading) && !s(p.text)
-    case "issuesGrid":
-    case "endorsements":
-    case "events":
-    case "faq":
-      return arr(p.items).length === 0
-    default:
-      return !s(p.heading) && !s(p.intro)
-  }
-}
-
 export function BlockPropsForm({ block, onSaved }: { block: EditorBlock; onSaved: () => void }) {
   const [props, setProps] = useState<Props>(() => ({ ...block.props }))
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  // AI write/improve
-  const [aiBusy, setAiBusy] = useState(false)
-  const [aiError, setAiError] = useState<string | null>(null)
-  const [showInstruction, setShowInstruction] = useState(false)
-  const [instruction, setInstruction] = useState("")
 
   function set(patch: Props) {
     setProps((prev) => ({ ...prev, ...patch }))
@@ -633,73 +504,9 @@ export function BlockPropsForm({ block, onSaved }: { block: EditorBlock; onSaved
     }
   }
 
-  const empty = primaryEmpty(block.type, props)
-
-  async function runAi() {
-    setAiBusy(true)
-    setAiError(null)
-    const res = await aiWriteBlockAction({
-      type: block.type,
-      mode: empty ? "write" : "improve",
-      props,
-      instruction: instruction.trim() || undefined,
-    })
-    setAiBusy(false)
-    if (res.ok) {
-      // Replace the form's props with the AI draft; the user reviews and saves.
-      setProps({ ...res.props })
-      setDirty(true)
-      setSaved(false)
-      setShowInstruction(false)
-      setInstruction("")
-    } else {
-      setAiError(res.error)
-    }
-  }
-
   return (
     <div className="space-y-3">
       <Fields type={block.type} p={props} set={set} />
-
-      {/* AI write / improve — not for the image block (no copy to write). */}
-      {block.type !== "image" && (
-      <div className="rounded-lg border border-[#c4910a]/25 bg-[#c4910a]/5 p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" variant="outline" onClick={runAi} disabled={aiBusy}>
-            {aiBusy ? (
-              <>
-                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> Writing…
-              </>
-            ) : (
-              <>
-                <Sparkles className="mr-1.5 h-4 w-4 text-[#c4910a]" />
-                {empty ? "Write with AI" : "Improve with AI"}
-              </>
-            )}
-          </Button>
-          <button
-            onClick={() => setShowInstruction((v) => !v)}
-            className="text-xs font-medium text-muted-foreground hover:text-[#1a1a2e]"
-          >
-            {showInstruction ? "Hide instructions" : "Add instructions"}
-          </button>
-          <span className="text-xs text-muted-foreground">
-            Draws from your committee voice, positions, and topics.
-          </span>
-        </div>
-        {showInstruction && (
-          <textarea
-            value={instruction}
-            onChange={(e) => setInstruction(e.target.value)}
-            rows={2}
-            placeholder="Optional: tell the AI what to emphasize or change (e.g. “focus on housing and keep it under 3 sentences”)."
-            className={`${inputCls} mt-2`}
-          />
-        )}
-        {aiError && <p className="mt-2 text-sm text-red-600">{aiError}</p>}
-      </div>
-      )}
-
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex items-center gap-2">
         <Button size="sm" onClick={save} disabled={!dirty || saving}>

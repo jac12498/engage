@@ -20,10 +20,10 @@ interface ChatMessage {
 }
 
 const SUGGESTIONS = [
-  "Rewrite my home page to focus on housing and public safety",
-  "Draft a full Issues page from my positions",
-  "Reorganize my site: Home, About, Issues, Get Involved",
-  "Make the tone across my whole site warmer and more personal",
+  "Add an endorsements section to my home page",
+  "Write me an About page",
+  "Change my colors to navy and gold",
+  "Add a news & updates section",
 ]
 
 export function WebsiteAgent({
@@ -281,9 +281,8 @@ export function WebsiteAgent({
           {messages.length === 0 && (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                Best for bigger changes across your site — rewrite a page, draft a new one, restructure your
-                navigation, or shift the tone everywhere at once. (For quick, single edits, the <b>Pages</b> tab
-                is often faster.) Try:
+                Tell me what you&apos;d like to change and I&apos;ll build it — add sections and pages, rewrite copy,
+                adjust your colors. Try:
               </p>
               <div className="flex flex-wrap gap-2">
                 {SUGGESTIONS.map((s) => (

@@ -5,10 +5,8 @@ import { prisma } from "@/lib/prisma"
 import { type Prisma } from "@/generated/prisma/client"
 import { getActiveContext } from "@/lib/context"
 import { allowsMultipleCandidates } from "@/lib/committeeTypes"
-import { BLOCK_SPECS } from "@/lib/website/blocks"
 import { generateWebsiteDraft } from "@/lib/website/generate"
 import { draftToHomeBlocks, type BlockInput } from "@/lib/website/draftToBlocks"
-import { loadSiteGrounding, type SiteGrounding } from "@/lib/website/aiActions"
 import { slugify } from "@/lib/website/slug"
 
 /** The active committee (editor role required — website work is a mutation). The site
@@ -87,106 +85,9 @@ async function draftForCommittee(committeeId: string, committeeName: string) {
   return { draft, multiCandidate }
 }
 
-// ─── First-run: two starting points ──────────────────────────────────────────
+// ─── First-run generation ────────────────────────────────────────────────────
 
-interface ScaffoldPage {
-  title: string
-  slug: string
-  blocks: BlockInput[]
-}
-
-/**
- * Extra pages beyond Home, seeded deterministically from the committee's grounding
- * (bio / mission / values / positions) — real content, no extra model calls. The
- * Home page carries the AI-drafted copy; these give a genuine multi-page starting
- * point the user then refines (per-section) with the Phase C AI actions.
- */
-function scaffoldExtraPages(g: SiteGrounding, multi: boolean): ScaffoldPage[] {
-  const pages: ScaffoldPage[] = []
-
-  // About — committee mission/values, or the candidate's bio.
-  const aboutBody = multi
-    ? [g.whyRunning, g.coreValues].filter((v) => v && v.trim()).join("\n\n")
-    : (g.candidates[0]?.bio || g.whyRunning || "").trim()
-  if (aboutBody.trim()) {
-    pages.push({
-      title: "About",
-      slug: "about",
-      blocks: [
-        {
-          type: "richText",
-          props: BLOCK_SPECS.richText.validate({
-            heading: multi ? "About the committee" : "About",
-            body: aboutBody,
-          }),
-        },
-      ],
-    })
-  }
-
-  // Issues — one card per standing position.
-  const issueItems = g.positions
-    .map((p) => ({ title: p.title, body: p.body || p.keyPoints.join(" ") }))
-    .filter((i) => i.title && i.body)
-  if (issueItems.length) {
-    pages.push({
-      title: "Issues",
-      slug: "issues",
-      blocks: [
-        {
-          type: "issuesGrid",
-          props: BLOCK_SPECS.issuesGrid.validate({
-            heading: multi ? "What we stand for" : "Where I stand",
-            items: issueItems,
-          }),
-        },
-      ],
-    })
-  }
-
-  // Get involved — volunteer form + newsletter signup (donate band added once a
-  // donate link exists on the site).
-  pages.push({
-    title: "Get involved",
-    slug: "get-involved",
-    blocks: [
-      {
-        type: "volunteerForm",
-        props: BLOCK_SPECS.volunteerForm.validate({
-          heading: "Get involved",
-          intro: "Join us — knock doors, make calls, or host an event.",
-        }),
-      },
-      {
-        type: "newsletterSignup",
-        props: BLOCK_SPECS.newsletterSignup.validate({
-          heading: "Stay connected",
-          intro: "Get news, events, and ways to help — right in your inbox.",
-        }),
-      },
-    ],
-  })
-
-  return pages
-}
-
-function pageCreateData(page: { slug: string; title: string; isHome: boolean }, navOrder: number, blocks: BlockInput[]) {
-  return {
-    slug: page.slug,
-    title: page.title,
-    navOrder,
-    showInNav: true,
-    published: true,
-    isHome: page.isHome,
-    blocks: { create: blockCreateData(blocks) },
-  }
-}
-
-/**
- * Scaffold a starter site with AI: an AI-drafted Home page plus About / Issues /
- * Get-involved pages seeded from the committee's grounding. The user then refines.
- */
-export async function scaffoldSite(): Promise<{ ok: true; slug: string } | { ok: false; error: string }> {
+export async function generateSite(): Promise<{ ok: true; slug: string } | { ok: false; error: string }> {
   const committee = await currentCommittee()
   if (!committee) return { ok: false, error: "No committee found." }
 
@@ -203,10 +104,7 @@ export async function scaffoldSite(): Promise<{ ok: true; slug: string } | { ok:
     return { ok: false, error: e instanceof Error ? e.message : "Generation failed." }
   }
 
-  const homeBlocks = draftToHomeBlocks(result.draft, { donateUrl: null, multiCandidate: result.multiCandidate })
-  const grounding = await loadSiteGrounding(committee.id)
-  const extra = scaffoldExtraPages(grounding, result.multiCandidate)
-
+  const blocks = draftToHomeBlocks(result.draft, { donateUrl: null, multiCandidate: result.multiCandidate })
   const slug = await uniqueSlug(committee.name)
   await prisma.website.create({
     data: {
@@ -215,10 +113,15 @@ export async function scaffoldSite(): Promise<{ ok: true; slug: string } | { ok:
       paidForBy: committee.name,
       slug,
       pages: {
-        create: [
-          pageCreateData({ slug: "home", title: "Home", isHome: true }, 0, homeBlocks),
-          ...extra.map((p, i) => pageCreateData({ slug: p.slug, title: p.title, isHome: false }, i + 1, p.blocks)),
-        ],
+        create: {
+          slug: "home",
+          title: "Home",
+          navOrder: 0,
+          showInNav: true,
+          published: true,
+          isHome: true,
+          blocks: { create: blockCreateData(blocks) },
+        },
       },
     },
   })
@@ -227,37 +130,58 @@ export async function scaffoldSite(): Promise<{ ok: true; slug: string } | { ok:
   return { ok: true, slug }
 }
 
-/** Start from scratch: an empty site with a single Home page (one hero to edit). */
-export async function createBlankSite(): Promise<{ ok: true; slug: string } | { ok: false; error: string }> {
+/**
+ * Re-run the AI draft, replacing the Home page's blocks but keeping theme, slug, site
+ * links, publish state, and any pages/blocks the candidate added manually.
+ */
+export async function regenerateSite(): Promise<{ ok: true } | { ok: false; error: string }> {
   const committee = await currentCommittee()
   if (!committee) return { ok: false, error: "No committee found." }
-
-  const existing = await prisma.website.findUnique({
+  const site = await prisma.website.findUnique({
     where: { committeeId: committee.id },
+    select: { id: true, donateUrl: true },
+  })
+  if (!site) return { ok: false, error: "No website to regenerate." }
+
+  let result
+  try {
+    result = await draftForCommittee(committee.id, committee.name)
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Generation failed." }
+  }
+
+  const blocks = draftToHomeBlocks(result.draft, { donateUrl: site.donateUrl, multiCandidate: result.multiCandidate })
+  const home = await prisma.page.findFirst({
+    where: { websiteId: site.id, isHome: true },
     select: { id: true },
   })
-  if (existing) return { ok: false, error: "A website already exists for this committee." }
 
-  const hero: BlockInput = {
-    type: "hero",
-    props: BLOCK_SPECS.hero.validate({ headline: committee.name, showHeadshot: true }),
+  if (home) {
+    await prisma.$transaction([
+      prisma.block.deleteMany({ where: { pageId: home.id } }),
+      prisma.block.createMany({
+        data: blockCreateData(blocks).map((b) => ({ ...b, pageId: home.id })),
+      }),
+    ])
+  } else {
+    // Defensive: a site with no Home page (shouldn't happen post-backfill) — recreate it.
+    await prisma.page.create({
+      data: {
+        websiteId: site.id,
+        slug: "home",
+        title: "Home",
+        isHome: true,
+        blocks: { create: blockCreateData(blocks) },
+      },
+    })
   }
-  const slug = await uniqueSlug(committee.name)
-  await prisma.website.create({
-    data: {
-      committeeId: committee.id,
-      siteTitle: committee.name,
-      paidForBy: committee.name,
-      slug,
-      pages: { create: pageCreateData({ slug: "home", title: "Home", isHome: true }, 0, [hero]) },
-    },
-  })
 
   revalidatePath("/website")
-  return { ok: true, slug }
+  revalidatePath(`/websites/${committee.id}`)
+  return { ok: true }
 }
 
-// ─── Publish toggle ──────────────────────────────────────────────────────────
+// ─── Publish toggle (kept) ───────────────────────────────────────────────────
 
 export async function setPublished(published: boolean): Promise<{ ok: true } | { ok: false; error: string }> {
   const committee = await currentCommittee()

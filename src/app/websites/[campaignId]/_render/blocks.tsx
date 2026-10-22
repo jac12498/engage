@@ -6,7 +6,6 @@ import {
   BLOCK_SPECS,
   isBlockType,
   type HeroProps,
-  type ImageProps,
   type RichTextProps,
   type IssuesGridProps,
   type CandidatesProps,
@@ -57,59 +56,31 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
 // ─── Core blocks ─────────────────────────────────────────────────────────────
 
 function Hero({ props }: { props: HeroProps; ctx: RenderCtx }) {
-  const text = (
-    <div>
-      <h1 className="max-w-3xl text-4xl font-extrabold leading-tight sm:text-5xl">{props.headline}</h1>
-      {props.subhead && <p className="mt-4 max-w-xl text-lg text-white/85">{props.subhead}</p>}
-      <div className="mt-7 flex flex-wrap gap-3">
-        {props.primaryCta && (
-          <CtaAnchor
-            href={props.primaryCta.href}
-            className="rounded-full px-6 py-3 text-sm font-semibold text-white"
-            style={{ backgroundColor: accent }}
-          >
-            {props.primaryCta.label}
-          </CtaAnchor>
-        )}
-        {props.secondaryCta && (
-          <CtaAnchor
-            href={props.secondaryCta.href}
-            className="rounded-full border border-white/40 px-6 py-3 text-sm font-semibold text-white hover:bg-white/10"
-          >
-            {props.secondaryCta.label}
-          </CtaAnchor>
-        )}
-      </div>
-    </div>
-  )
   return (
     <section id="top" style={{ backgroundColor: primary }} className="text-white">
       <div className="mx-auto max-w-5xl px-6 py-20">
-        {props.imageUrl ? (
-          <div className="grid items-center gap-10 md:grid-cols-2">
-            {text}
-            <div className="order-first md:order-last">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={props.imageUrl} alt="" className="w-full rounded-2xl object-cover shadow-lg" />
-            </div>
-          </div>
-        ) : (
-          text
-        )}
+        <h1 className="max-w-3xl text-4xl font-extrabold leading-tight sm:text-5xl">{props.headline}</h1>
+        {props.subhead && <p className="mt-4 max-w-xl text-lg text-white/85">{props.subhead}</p>}
+        <div className="mt-7 flex flex-wrap gap-3">
+          {props.primaryCta && (
+            <CtaAnchor
+              href={props.primaryCta.href}
+              className="rounded-full px-6 py-3 text-sm font-semibold text-white"
+              style={{ backgroundColor: accent }}
+            >
+              {props.primaryCta.label}
+            </CtaAnchor>
+          )}
+          {props.secondaryCta && (
+            <CtaAnchor
+              href={props.secondaryCta.href}
+              className="rounded-full border border-white/40 px-6 py-3 text-sm font-semibold text-white hover:bg-white/10"
+            >
+              {props.secondaryCta.label}
+            </CtaAnchor>
+          )}
+        </div>
       </div>
-    </section>
-  )
-}
-
-function ImageBlock({ props }: { props: ImageProps; ctx: RenderCtx }) {
-  if (!props.url) return null
-  return (
-    <section className="mx-auto max-w-4xl px-6 py-10">
-      <figure>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={props.url} alt={props.alt ?? ""} className="w-full rounded-2xl object-cover shadow-sm" />
-        {props.caption && <figcaption className="mt-2 text-center text-sm text-[#666]">{props.caption}</figcaption>}
-      </figure>
     </section>
   )
 }
@@ -488,7 +459,6 @@ type BlockComponent = (args: {
 const BLOCK_RENDERERS: Record<string, BlockComponent> = {
   hero: Hero as BlockComponent,
   richText: RichText as BlockComponent,
-  image: ImageBlock as BlockComponent,
   issuesGrid: IssuesGrid as BlockComponent,
   candidates: Candidates as BlockComponent,
   volunteerForm: VolunteerFormBlock as BlockComponent,

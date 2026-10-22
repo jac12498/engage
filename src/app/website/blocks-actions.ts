@@ -7,8 +7,6 @@ import {
   svcUpdatePage,
   svcDeletePage,
   svcReorderPages,
-  svcSetHomePage,
-  svcDuplicatePage,
   svcAddBlock,
   svcUpdateBlockProps,
   svcMoveBlock,
@@ -57,12 +55,6 @@ export async function deletePage(id: string) {
 }
 export async function reorderPages(orderedIds: string[]) {
   return withCampaign((cid) => svcReorderPages(cid, orderedIds))
-}
-export async function setHomePage(id: string) {
-  return withCampaign((cid) => svcSetHomePage(cid, id))
-}
-export async function duplicatePage(id: string) {
-  return withCampaign((cid) => svcDuplicatePage(cid, id))
 }
 
 // ─── Blocks ──────────────────────────────────────────────────────────────────
