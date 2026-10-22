@@ -51,7 +51,7 @@ Railway volume on boot from the `engage-data` Supabase Storage bucket. See
 
 - [ ] Apply migrations to the prod DB before/at deploy (hand-written SQL under
       `prisma/migrations/` via `prisma db execute`, then `prisma generate`).
-- [ ] **Website builder:** confirm prod's `engagecampaign._prisma_migrations` has
+- [x] **Website builder:** prod's `engagecampaign._prisma_migrations` now has
       `20260828120000_add_site_template` and `20260828130000_add_website_image` (both
-      only create tables: `SiteTemplate`, `WebsiteImage`). Apply them to prod BEFORE
+      only create tables: `SiteTemplate`, `WebsiteImage`) — applied 2026-10-22 before
       deploying the builder code.

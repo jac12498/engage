@@ -4,8 +4,8 @@
 > **Basic Website Builder implementation**. Replayed in `ea4f222` and briefly merged to
 > `master`, which auto-deployed to production before prod had the two new tables, so it was
 > reverted on `master` (`19c3ab7`) and lived on `recover/website-builder` / the dev DB.
-> To ship: apply the two migrations to prod, then `git revert 19c3ab7` on `master`, then
-> push. Next: a more visual builder (see the README roadmap).
+> **Shipped 2026-10-22:** both migrations were applied to prod, then the revert was
+> reverted on `master` and deployed. Next: a more visual builder (see the README roadmap).
 
 Recovering EngageCampaign work lost in the 2026-09 D-drive crash. Written 2026-09-08.
 
