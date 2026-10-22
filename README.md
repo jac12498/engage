@@ -70,6 +70,12 @@ npm run build && npm start
 - [ ] Voter Outreach pillar
 - [ ] Fundraising pillar
 - [ ] Field Tools pillar
+- [ ] **Campaign print & merch ordering** — let users design and order campaign signs
+  (yard signs, placards), palm cards, flyers, and swag (shirts, hats, buttons, stickers,
+  car magnets) without leaving Engage. Orders would be paid in-app (Stripe) and submitted
+  to print vendors by API (shipping directly to the customer). Vendors are still being
+  evaluated (candidates: SinaLite for signs and printed materials; Printful for
+  stickers, magnets, buttons, and apparel); details will be refined once vendors are chosen.
 - [ ] Plan-based entitlements backed by the database (currently a stub in
   `src/lib/entitlements.ts`)
 - [ ] First production deploy — see [docs/DEPLOY_CHECKLIST.md](docs/DEPLOY_CHECKLIST.md)
