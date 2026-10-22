@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Loader2, Check, Copy, ExternalLink, Sparkles, SlidersHorizontal, Newspaper, Settings } from "lucide-react"
+import { Loader2, Check, Copy, ExternalLink, Sparkles, SlidersHorizontal, Newspaper, Settings, LayoutTemplate } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { setPublished } from "@/app/website/actions"
 import { WebsiteAgent } from "./WebsiteAgent"
@@ -29,7 +29,8 @@ export function WebsiteWorkspace({
   defaultModel: string
 }) {
   const router = useRouter()
-  const [mode, setMode] = useState<Mode>("assistant")
+  // The structured builder is primary; the assistant is for bigger, conversational asks.
+  const [mode, setMode] = useState<Mode>("advanced")
   const [publishing, startPublishing] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [origin, setOrigin] = useState("")
@@ -61,7 +62,7 @@ export function WebsiteWorkspace({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-[#1a1a2e]">{multiCandidate ? "Committee Website" : "Candidate Website"}</h1>
-          <p className="mt-1 text-muted-foreground">Chat to build your site, or edit the blocks by hand.</p>
+          <p className="mt-1 text-muted-foreground">Build your site page by page, or ask the assistant for bigger changes.</p>
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
             <Link
               href="/website/settings"
@@ -77,9 +78,24 @@ export function WebsiteWorkspace({
               <Newspaper className="h-4 w-4" />
               Press coverage
             </Link>
+            <Link
+              href="/website/templates"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-[#1b3a6b] hover:underline"
+            >
+              <LayoutTemplate className="h-4 w-4" />
+              Templates
+            </Link>
           </div>
         </div>
         <div className="inline-flex rounded-lg border border-border bg-white p-0.5">
+          <button
+            onClick={() => setMode("advanced")}
+            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium ${
+              mode === "advanced" ? "bg-[#1b3a6b] text-white" : "text-muted-foreground hover:text-[#1a1a2e]"
+            }`}
+          >
+            <SlidersHorizontal className="h-4 w-4" /> Pages
+          </button>
           <button
             onClick={() => setMode("assistant")}
             className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium ${
@@ -87,14 +103,6 @@ export function WebsiteWorkspace({
             }`}
           >
             <Sparkles className="h-4 w-4" /> Assistant
-          </button>
-          <button
-            onClick={() => setMode("advanced")}
-            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium ${
-              mode === "advanced" ? "bg-[#1b3a6b] text-white" : "text-muted-foreground hover:text-[#1a1a2e]"
-            }`}
-          >
-            <SlidersHorizontal className="h-4 w-4" /> Edit blocks
           </button>
         </div>
       </div>

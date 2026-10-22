@@ -122,6 +122,73 @@ export async function svcReorderPages(committeeId: string, orderedIds: string[])
   return { ok: true }
 }
 
+/**
+ * Make `id` the home page: exactly one page per site carries `isHome` (served at
+ * the site root). The former home becomes an ordinary page; the new home is forced
+ * live + in-nav so the root is never a draft/hidden page.
+ */
+export async function svcSetHomePage(committeeId: string, id: string): Promise<SvcResult> {
+  const page = await ownedPage(committeeId, id)
+  if (!page) return { ok: false, error: "Page not found." }
+  if (page.isHome) return { ok: true }
+
+  const currentHome = await prisma.page.findFirst({
+    where: { websiteId: page.websiteId, isHome: true },
+    select: { id: true },
+  })
+  await prisma.$transaction([
+    ...(currentHome ? [prisma.page.update({ where: { id: currentHome.id }, data: { isHome: false } })] : []),
+    prisma.page.update({
+      where: { id: page.id },
+      data: { isHome: true, published: true, showInNav: true },
+    }),
+  ])
+  return { ok: true }
+}
+
+/** Copy a page (title "… (copy)", fresh slug, never home) and all of its blocks. */
+export async function svcDuplicatePage(
+  committeeId: string,
+  id: string
+): Promise<SvcResult<{ pageId: string }>> {
+  const page = await prisma.page.findFirst({
+    where: { id, website: { committeeId } },
+    select: {
+      websiteId: true,
+      title: true,
+      showInNav: true,
+      published: true,
+      blocks: { orderBy: { order: "asc" }, select: { type: true, order: true, props: true } },
+    },
+  })
+  if (!page) return { ok: false, error: "Page not found." }
+
+  const title = safeStr(`${page.title} (copy)`, 100) ?? "Page (copy)"
+  const slug = await uniquePageSlug(page.websiteId, title)
+  const max = await prisma.page.aggregate({ where: { websiteId: page.websiteId }, _max: { navOrder: true } })
+
+  const created = await prisma.page.create({
+    data: {
+      websiteId: page.websiteId,
+      slug,
+      title,
+      navOrder: (max._max.navOrder ?? 0) + 1,
+      showInNav: page.showInNav,
+      published: page.published,
+      isHome: false,
+      blocks: {
+        create: page.blocks.map((b) => ({
+          type: b.type,
+          order: b.order,
+          props: (b.props ?? {}) as Prisma.InputJsonValue,
+        })),
+      },
+    },
+    select: { id: true },
+  })
+  return { ok: true, pageId: created.id }
+}
+
 // ─── Blocks ──────────────────────────────────────────────────────────────────
 
 export async function svcAddBlock(
