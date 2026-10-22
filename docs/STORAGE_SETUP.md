@@ -24,7 +24,7 @@ local `data/` — a 1:1 mapping keeps upload and seed in lockstep.
 
 ## Bucket
 
-- Project: `heypcbktgbpxppkqfrax` (Engage Development)
+- Project: `<PROD_DB_REF>` (Engage Development)
 - Bucket: **`engage-data`** — public, per-file size limit ≥ largest file
 - Object layout mirrors `data/`, e.g. `campaign_finance/fec/indiv_2024.parquet`
 

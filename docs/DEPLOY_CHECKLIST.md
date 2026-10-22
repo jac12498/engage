@@ -39,7 +39,7 @@ Railway volume on boot from the `engage-data` Supabase Storage bucket. See
 
 ## Environment variables (Railway)
 
-- [ ] `NEXT_PUBLIC_SUPABASE_URL` = `https://heypcbktgbpxppkqfrax.supabase.co`
+- [ ] `NEXT_PUBLIC_SUPABASE_URL` = `https://<PROD_DB_REF>.supabase.co`
       (public; needed by seed-volume at boot and build).
 - [ ] **Do NOT set `SUPABASE_SERVICE_ROLE_KEY` in Railway** — it's for local
       `data:upload` only. The public bucket needs no key to download.

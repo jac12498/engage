@@ -4,8 +4,8 @@
  * into the DEV db.
  *
  * Why this exists: EngageCampaign PRODUCTION shares one Supabase project with the
- * version10.3 app (ref heypcbktgbpxppkqfrax) — production gets `public.districts`
- * for free from that app. The separate DEV project (ref wkjelsyxeeflslibuinq) is
+ * version10.3 app — production gets `public.districts`
+ * for free from that app. The separate DEV project is
  * built by `prisma db push`, which only creates the isolated `engagecampaign`
  * schema — so the `public` district tables must be copied in, or the district
  * picker (/candidates/new) fails with `relation "public.districts" does not exist`.
@@ -24,8 +24,6 @@ const { Pool } = pg
 
 const SOURCE_ENV = "D:/OneDegree/version10.3/.env" // owns public.districts (= EngageCampaign prod)
 const DEST_ENV = "D:/EngageCampaign/.env" // dev
-const DEV_REF = "wkjelsyxeeflslibuinq"
-const PROD_REF = "heypcbktgbpxppkqfrax"
 
 // Source connection. Prefer an explicit SOURCE_URL from the environment so the
 // production credential never has to be written to a file; fall back to
@@ -48,6 +46,12 @@ if (!srcUrl) throw new Error("Source connection string is empty — aborting.")
 
 const dst = dotenv.parse(fs.readFileSync(DEST_ENV))
 const dstUrl = dst.DIRECT_URL || dst.DATABASE_URL
+
+// Supabase project refs come from the environment (see .env.example) so the guards
+// below can tell dev from prod without hard-coding project identifiers in git.
+const DEV_REF = dst.DEV_DB_REF || process.env.DEV_DB_REF || ""
+const PROD_REF = dst.PROD_DB_REF || process.env.PROD_DB_REF || ""
+if (!DEV_REF || !PROD_REF) throw new Error("Set DEV_DB_REF and PROD_DB_REF (see .env.example) — aborting.")
 
 if (srcUrl === dstUrl) throw new Error("Source and destination are identical — aborting.")
 if (dstUrl.includes(PROD_REF)) throw new Error("Destination looks like PROD — aborting.")

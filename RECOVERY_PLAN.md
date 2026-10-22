@@ -15,7 +15,7 @@ session transcript, which lived on C: and survived.
 ## Source of truth
 
 ```
-C:\Users\jeffe\.claude\projects\d--OneDegree-version10-3\e038e2cc-5a04-4539-8436-b2c9391e79e6.jsonl
+C:\Users\<you>\.claude\projects\d--OneDegree-version10-3\<session-id>.jsonl
 ```
 
 45 MB JSONL. Each `tool_use` block of type `Write` carries the complete file content in
@@ -74,7 +74,7 @@ Checked against the transcript and the `36c64bc` tree. All clean:
    - `prisma/migrations/20260828120000_add_site_template/migration.sql`
    - `prisma/migrations/20260828130000_add_website_image/migration.sql`
 
-   **Verified 2026-09-11** against the DEV project (`wkjelsyxeeflslibuinq`, us-east-2) by
+   **Verified 2026-09-11** against the DEV project (`<DEV_DB_REF>`, us-east-2) by
    querying `engagecampaign._prisma_migrations` directly:
 
    - local migration files: **7**
@@ -101,7 +101,7 @@ Checked against the transcript and the `36c64bc` tree. All clean:
    unexpected and generate DROP statements.
 
    **PRODUCTION has not been checked.** Only dev was verified. The website-builder work was
-   never committed, so prod (`heypcbktgbpxppkqfrax`) almost certainly does *not* have these
+   never committed, so prod (`<PROD_DB_REF>`) almost certainly does *not* have these
    tables — meaning that when this eventually merges and deploys, prod **will** need both
    migrations run for real. Confirm against prod's `_prisma_migrations` before deploying.
    (Per the database notes, Jeff runs prod migration steps himself.)

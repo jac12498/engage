@@ -110,4 +110,4 @@ WHERE "roleTypeId" IS NULL;
 
 -- ── Seed the Overall System Administrator ────────────────────────────────────
 
-UPDATE "User" SET "isSystemAdmin" = true WHERE lower("email") = 'jeffery.a.collins@gmail.com';
+UPDATE "User" SET "isSystemAdmin" = true WHERE lower("email") = 'admin@example.com';

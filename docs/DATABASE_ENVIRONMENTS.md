@@ -6,7 +6,7 @@ go back to that.
 
 | | Production | Development |
 |---|---|---|
-| Supabase ref | `heypcbktgbpxppkqfrax` | `wkjelsyxeeflslibuinq` |
+| Supabase ref | `<PROD_DB_REF>` | `<DEV_DB_REF>` |
 | Region | us-west-1 | us-east-2 |
 | Pooler host | `aws-1-us-west-1.pooler.supabase.com` | `aws-0-us-east-2.pooler.supabase.com` |
 | `DATABASE_URL` | prod, port `6543` (transaction) | dev, port `6543` |
@@ -17,6 +17,10 @@ Both use the non-default **`engagecampaign`** schema (set via `@@schema` in
 `schema.prisma`; `search_path` is set in `src/lib/prisma.ts`).
 
 ## Getting connection strings
+
+Also set `DEV_DB_REF` (dev project ref) in local `.env`, and `PROD_DB_REF` when running
+`scripts/dev/copy-public-districts.mjs`. `DEV_DB_REF` makes the app show its "development"
+banner; leave it unset in production.
 
 Supabase dashboard → the project → top-bar **Connect** button → **ORMs → Prisma** tab.
 Copy `DATABASE_URL` and `DIRECT_URL` **verbatim** (only fill in the DB password) — hand-
@@ -50,7 +54,7 @@ make a dev account a system admin, set `User.isSystemAdmin = true` after first s
 EngageCampaign reads the district hierarchy from `public.districts` +
 `public.district_types` cross-schema (see `src/lib/districts.ts`). **Production
 shares one Supabase project with the version10.3 app** (ref
-`heypcbktgbpxppkqfrax`), so prod gets those tables for free. The **dev** project is
+`<PROD_DB_REF>`), so prod gets those tables for free. The **dev** project is
 built by `prisma db push`, which only creates the `engagecampaign` schema — so the
 `public` district tables are absent and the district picker (`/candidates/new`)
 fails with `relation "public.districts" does not exist`.
