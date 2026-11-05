@@ -1,7 +1,9 @@
 import { Check } from "lucide-react"
 import { requireCommittee } from "@/lib/context"
 import { toPlanId, PLAN_LABELS, PLAN_ORDER, type PlanId } from "@/lib/entitlements"
+import { isDevEnv } from "@/lib/appEnv"
 import { AppShell } from "@/components/AppShell"
+import { setDevPlan } from "./actions"
 
 export const dynamic = "force-dynamic"
 export const metadata = { title: "Plans · Engage" }
@@ -40,6 +42,7 @@ const rank = (p: PlanId) => PLAN_ORDER.indexOf(p)
 export default async function PlansPage() {
   const { committee } = await requireCommittee()
   const plan = toPlanId(committee.plan)
+  const dev = isDevEnv()
 
   return (
     <AppShell>
@@ -49,6 +52,13 @@ export default async function PlansPage() {
           You&rsquo;re on the <span className="font-medium text-[#1a1a2e]">{PLAN_LABELS[plan]}</span> plan.
           Upgrade any time to unlock more of the platform.
         </p>
+        {dev && (
+          <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
+            <span className="font-semibold">Development database.</span> You can switch this committee to any plan
+            below to build and test gated features (for example the Voter File, which unlocks at Campaign). This
+            switch does not exist in production.
+          </p>
+        )}
       </div>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-3">
@@ -90,6 +100,16 @@ export default async function PlansPage() {
                   <div className="rounded-lg border border-border px-4 py-2.5 text-center text-sm font-medium text-muted-foreground">
                     Current plan
                   </div>
+                ) : dev ? (
+                  <form action={setDevPlan}>
+                    <input type="hidden" name="plan" value={tier.plan} />
+                    <button
+                      type="submit"
+                      className="w-full cursor-pointer rounded-lg border border-amber-400 bg-amber-50 px-4 py-2.5 text-center text-sm font-semibold text-amber-900 hover:bg-amber-100"
+                    >
+                      Switch to {PLAN_LABELS[tier.plan]} (dev only)
+                    </button>
+                  </form>
                 ) : isUpgrade ? (
                   <a
                     href={`mailto:hello@engageamplify.com?subject=Upgrade to ${PLAN_LABELS[tier.plan]}`}

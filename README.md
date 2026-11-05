@@ -1,13 +1,14 @@
 # Engage Campaign
 
-The non-partisan campaign platform — a unified shell over a shared core, with five
+The non-partisan campaign platform — a unified shell over a shared core, with six
 modular pillars gated by plan:
 
 1. **AI Communications**
 2. **Candidate Websites**
-3. **Voter Outreach**
-4. **Fundraising**
-5. **Field Tools**
+3. **Voter File**
+4. **Voter Outreach**
+5. **Fundraising**
+6. **Field Tools**
 
 ## Who it's for
 
@@ -18,11 +19,11 @@ website, with AI to speed up the writing. The product is non-partisan.
 
 ## Architecture
 
-- **Platform core** (always on): account/committee, **Contacts (CRM)**, and the
-  **voter file & search**. The shared data substrate every pillar reads and writes.
-- **Modules**: the five pillars, unlocked by plan via the entitlements model in
+- **Platform core** (always on): account/committee and **Contacts (CRM)**. The shared
+  data substrate every pillar reads and writes.
+- **Modules**: the six pillars, unlocked by plan via the entitlements model in
   `src/lib/entitlements.ts` (currently a stub; later backed by the account's plan in
-  the database and enforced server-side).
+  the database and enforced server-side). The Voter File unlocks at the Campaign plan.
 
 This is a fresh, modern build. The existing `app.engage.democrat` app stays live and
 untouched for the Democratic market; the data engine (voter files, campaign-finance
@@ -46,6 +47,10 @@ npx prisma migrate deploy
 npm run dev              # http://localhost:3000
 ```
 
+On the development database, the Plans page has a "Switch to … (dev only)" button, so you can
+put your committee on any plan to build and test gated features (the Voter File unlocks at
+Campaign). The switch is checked on the server and does nothing in production.
+
 All keys in `.env.example` are placeholders. Large datasets (voter file, full
 campaign-finance parquets) are not in the repo; see
 [docs/STORAGE_SETUP.md](docs/STORAGE_SETUP.md). The small NY committee registry
@@ -67,6 +72,16 @@ npm run build && npm start
   visual, WYSIWYG-style editor (live preview, click-to-edit on the page, drag-and-drop
   layout, visual theming). Not aiming to re-implement Squarespace or Wix — just a much
   more visual editing experience than blocks alone.
+- [ ] **Voter File pillar** — a voter database scoped to each committee's district
+  (unlocks at the Campaign plan). The build order:
+  - [ ] **Voter database** — a database of voters, loaded from the state Board of Elections
+    voter file (upload supported).
+  - [ ] **District-scoped access** — a committee can see **only** the voters in its own
+    district, enforced on the server for every query.
+  - [ ] **Voter lookup** — the first user-facing page: a simple search by name and address,
+    built once the database and upload are in place.
+  - [ ] **TODO refresh** — update this list with the next voter-file features once the above
+    is built.
 - [ ] Voter Outreach pillar
 - [ ] Fundraising pillar
 - [ ] Field Tools pillar
